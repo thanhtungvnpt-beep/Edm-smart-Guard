@@ -8,6 +8,7 @@ import {
   Smartphone,
   BookOpen,
   Brain,
+  Users,
   Wifi,
   Radio,
   Zap,
@@ -24,6 +25,8 @@ interface HeaderProps {
   handleRequestPush: () => void;
   onOpenSimulator: () => void;
   onOpenPhoneView: () => void;
+  onOpenTechStatus: () => void;
+  onDutyTechCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,6 +39,8 @@ export const Header: React.FC<HeaderProps> = ({
   handleRequestPush,
   onOpenSimulator,
   onOpenPhoneView,
+  onOpenTechStatus,
+  onDutyTechCount,
 }) => {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md">
@@ -109,6 +114,21 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Smartphone className="h-4 w-4 text-indigo-400" />
             <span className="hidden sm:inline">Điện thoại KTV</span>
+          </button>
+
+          {/* Technician Status & Dispatch Sidebar Button */}
+          <button
+            onClick={onOpenTechStatus}
+            title="Bảng theo dõi trạng thái trực ca và tải phân công của kỹ thuật viên"
+            className="flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition shadow-sm"
+          >
+            <Users className="h-4 w-4 text-purple-400" />
+            <span className="hidden sm:inline">Trực Ca KTV</span>
+            {onDutyTechCount !== undefined && (
+              <span className="ml-0.5 rounded-full bg-purple-500/20 px-1.5 py-0.2 text-[10px] font-mono font-bold text-purple-300">
+                {onDutyTechCount}
+              </span>
+            )}
           </button>
 
           {/* Simulate EDM Breakdown Button */}

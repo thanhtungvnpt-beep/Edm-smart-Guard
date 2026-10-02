@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   AlertTriangle,
+  CalendarClock,
   CheckCircle2,
   Clock,
   Gauge,
+  History,
   Phone,
   Sparkles,
   User,
@@ -13,6 +15,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { Device } from '../types';
+import { calculatePredictedMaintenance } from '../utils/maintenancePrediction';
 
 interface DeviceCardProps {
   device: Device;
@@ -21,6 +24,7 @@ interface DeviceCardProps {
   onTriggerAlarm: (deviceId: string) => void;
   onAcknowledge: (deviceId: string) => void;
   onOpenPhoneViewWithIncident: (device: Device) => void;
+  onOpenMachineDetails?: (device: Device) => void;
 }
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({
@@ -30,10 +34,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   onTriggerAlarm,
   onAcknowledge,
   onOpenPhoneViewWithIncident,
+  onOpenMachineDetails,
 }) => {
   const isAlarm = device.status === 'ALARM_STOPPED';
   const isRunning = device.status === 'RUNNING';
   const isIdle = device.status === 'IDLE';
+
+  // Heuristic calculation of Predicted Next Maintenance Date based on 30-day performance
+  const prediction = useMemo(() => calculatePredictedMaintenance(device), [device]);
 
   return (
     <div
@@ -47,13 +55,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     >
       {/* Top Header Strip */}
       <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3 bg-slate-950/40">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 font-mono text-xs font-bold text-amber-400 border border-slate-700">
+        <div
+          onClick={() => onOpenMachineDetails && onOpenMachineDetails(device)}
+          title="Bấm để xem chi tiết máy & lịch sử các lần bảo dưỡng hoàn thành"
+          className="flex items-center gap-2.5 cursor-pointer group/title"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 font-mono text-xs font-bold text-amber-400 border border-slate-700 group-hover/title:border-amber-500 group-hover/title:bg-amber-500/10 transition">
             {device.code}
           </span>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-bold text-white text-sm sm:text-base leading-tight">
+              <h3 className="font-bold text-white text-sm sm:text-base leading-tight group-hover/title:text-amber-400 transition">
                 {device.name}
               </h3>
             </div>
@@ -241,6 +253,65 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           </div>
         </div>
 
+        {/* PREDICTED NEXT MAINTENANCE DATE (Heuristic based on 30-day performance) */}
+        <div
+          onClick={() => onOpenMachineDetails && onOpenMachineDetails(device)}
+          title="Bấm để xem lịch sử bảo dưỡng và dự báo chi tiết của thiết bị này"
+          className={`rounded-xl border p-2.5 text-xs transition cursor-pointer hover:border-amber-500/60 ${
+            prediction.urgencyLevel === 'IMMEDIATE'
+              ? 'border-red-500/70 bg-red-950/40 text-red-200 ring-1 ring-red-500/50'
+              : prediction.urgencyLevel === 'URGENT'
+              ? 'border-amber-500/60 bg-amber-950/30 text-amber-200'
+              : prediction.urgencyLevel === 'UPCOMING'
+              ? 'border-cyan-500/40 bg-cyan-950/20 text-cyan-200'
+              : 'border-slate-800 bg-slate-950/50 text-slate-300'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 font-semibold min-w-0">
+              <CalendarClock
+                className={`h-4 w-4 shrink-0 ${
+                  prediction.urgencyLevel === 'IMMEDIATE'
+                    ? 'text-red-400 animate-pulse'
+                    : prediction.urgencyLevel === 'URGENT'
+                    ? 'text-amber-400'
+                    : prediction.urgencyLevel === 'UPCOMING'
+                    ? 'text-cyan-400'
+                    : 'text-emerald-400'
+                }`}
+              />
+              <span className="text-slate-300 text-[11px] truncate">Dự đoán bảo dưỡng:</span>
+              <span className="font-mono font-bold text-amber-400">
+                {prediction.predictedDateStr}
+              </span>
+            </div>
+
+            {/* Days remaining urgency badge */}
+            <span
+              className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                prediction.urgencyLevel === 'IMMEDIATE'
+                  ? 'bg-red-500 text-white animate-pulse'
+                  : prediction.urgencyLevel === 'URGENT'
+                  ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
+                  : prediction.urgencyLevel === 'UPCOMING'
+                  ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300'
+                  : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+              }`}
+            >
+              {prediction.daysRemaining === 0 ? 'Khẩn Cấp' : `Còn ${prediction.daysRemaining} ngày`}
+            </span>
+          </div>
+
+          <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60 pt-1.5">
+            <span className="truncate pr-2 text-slate-300 text-[10px]" title={prediction.primaryMaintenanceTask}>
+              🛠️ {prediction.primaryMaintenanceTask}
+            </span>
+            <span className="font-mono text-[10px] text-slate-400 shrink-0">
+              Độ bền: <strong className="text-white font-bold">{prediction.healthScore}%</strong>
+            </span>
+          </div>
+        </div>
+
         {/* ACTION BUTTONS */}
         <div className="flex flex-wrap items-center gap-2 pt-1">
           {isAlarm ? (
@@ -272,8 +343,20 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 title="Báo cáo hoàn thành sửa máy và nạp tri thức cho AI"
               >
                 <Wrench className="h-4 w-4" />
-                <span>Nghiệm Thu & Dạy AI</span>
+                <span>Nghiệm Thu</span>
               </button>
+
+              {/* Maintenance History */}
+              {onOpenMachineDetails && (
+                <button
+                  onClick={() => onOpenMachineDetails(device)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 py-2.5 px-3 text-xs font-semibold text-amber-300 transition"
+                  title="Xem lịch sử các đợt bảo dưỡng của máy này"
+                >
+                  <History className="h-4 w-4" />
+                  <span>Lịch Sử</span>
+                </button>
+              )}
             </>
           ) : (
             <>
@@ -283,8 +366,20 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700/80 py-2 px-3 text-xs font-medium text-slate-200 transition"
               >
                 <Sparkles className="h-3.5 w-3.5 text-purple-400" />
-                <span>Chẩn Đoán Sức Khỏe AI</span>
+                <span>Chẩn Đoán AI</span>
               </button>
+
+              {/* Maintenance History Button */}
+              {onOpenMachineDetails && (
+                <button
+                  onClick={() => onOpenMachineDetails(device)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 py-2 px-3 text-xs font-semibold text-amber-300 transition"
+                  title="Xem lịch sử các đợt bảo dưỡng và hồ sơ chi tiết thiết bị"
+                >
+                  <History className="h-3.5 w-3.5" />
+                  <span>Lịch Sử Bảo Dưỡng</span>
+                </button>
+              )}
 
               {/* Quick Trigger Breakdown Simulation on this specific machine */}
               <button

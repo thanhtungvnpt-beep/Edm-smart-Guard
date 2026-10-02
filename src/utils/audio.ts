@@ -128,6 +128,28 @@ class SoundManager {
     }
   }
 
+  // Play quick crisp barcode/QR scanner beep
+  public playBeep() {
+    if (this.isMuted) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1760, now); // A6 high crisp scanner beep
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.14);
+    } catch (e) {
+      console.warn('Audio beep error:', e);
+    }
+  }
+
   public stopAlarm() {
     this.activeOscillators.forEach((osc) => {
       try {

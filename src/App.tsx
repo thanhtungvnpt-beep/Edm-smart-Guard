@@ -12,6 +12,7 @@ import {
   FileText,
   Filter,
   Layers,
+  QrCode,
   Radio,
   RefreshCw,
   Search,
@@ -36,6 +37,11 @@ import { AILearningsTab } from './components/AILearningsTab';
 import { DocumentsTab } from './components/DocumentsTab';
 import { NotificationsTab } from './components/NotificationsTab';
 import { EdmSimulatorModal } from './components/EdmSimulatorModal';
+import { PerformanceAnalytics } from './components/PerformanceAnalytics';
+import { FacilitySummaryCard } from './components/FacilitySummaryCard';
+import { MachineDetailsModal } from './components/MachineDetailsModal';
+import { TechnicianStatusSidebar } from './components/TechnicianStatusSidebar';
+import { QRCodeScannerModal } from './components/QRCodeScannerModal';
 import { soundManager } from './utils/audio';
 import {
   getPushPermissionStatus,
@@ -67,7 +73,10 @@ export default function App() {
   const [diagnosisDevice, setDiagnosisDevice] = useState<Device | null>(null);
   const [phoneDevice, setPhoneDevice] = useState<Device | null>(null);
   const [repairDevice, setRepairDevice] = useState<Device | null>(null);
+  const [detailsDevice, setDetailsDevice] = useState<Device | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
+  const [showTechSidebar, setShowTechSidebar] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
 
   // Success Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -80,19 +89,75 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4500);
   };
 
+  const handleQRScanSuccess = (device: Device) => {
+    setDetailsDevice(device);
+    showToast(`Đã nhận diện mã QR máy ${device.code}! Mở hồ sơ kỹ thuật & lịch sử chẩn đoán.`);
+  };
+
+  // Supervisor actions: Update technician shift status & reassign machine load
+  const handleUpdateTechStatus = async (techId: string, status: Technician['activeStatus']) => {
+    setTechnicians((prev) =>
+      prev.map((t) => (t.id === techId ? { ...t, activeStatus: status } : t))
+    );
+    try {
+      await fetch(`/api/technicians/${techId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeStatus: status }),
+      });
+    } catch (err) {
+      console.error('Failed to update technician status on server:', err);
+    }
+    const tech = technicians.find((t) => t.id === techId);
+    showToast(`Đã chuyển trạng thái KTV ${tech?.name || techId} sang "${status}"`);
+  };
+
+  const handleReassignDevice = async (deviceId: string, techId: string) => {
+    const targetTech = technicians.find((t) => t.id === techId);
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === deviceId
+          ? { ...d, assignedTechnicianId: techId, assignedTechnician: targetTech }
+          : d
+      )
+    );
+    try {
+      await fetch(`/api/devices/${deviceId}/assign-technician`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ technicianId: techId }),
+      });
+    } catch (err) {
+      console.error('Failed to reassign device technician:', err);
+    }
+    const dev = devices.find((d) => d.id === deviceId);
+    showToast(`Đã điều phối máy ${dev?.code || deviceId} cho KTV ${targetTech?.name || techId}!`);
+  };
+
+  // Helper for safe fetch without crashing on network hiccup
+  const safeFetchJson = async (url: string) => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return { success: false };
+      return await res.json();
+    } catch {
+      return { success: false };
+    }
+  };
+
   // --- FETCH DATA ---
   const fetchAllData = async () => {
     try {
       const [devRes, statRes, docRes, learnRes, notifRes, techRes] = await Promise.all([
-        fetch('/api/devices').then((r) => r.json()),
-        fetch('/api/stats').then((r) => r.json()),
-        fetch('/api/documents').then((r) => r.json()),
-        fetch('/api/ai/learnings').then((r) => r.json()),
-        fetch('/api/notifications').then((r) => r.json()),
-        fetch('/api/technicians').then((r) => r.json()),
+        safeFetchJson('/api/devices'),
+        safeFetchJson('/api/stats'),
+        safeFetchJson('/api/documents'),
+        safeFetchJson('/api/ai/learnings'),
+        safeFetchJson('/api/notifications'),
+        safeFetchJson('/api/technicians'),
       ]);
 
-      if (devRes.success) {
+      if (devRes && devRes.success && Array.isArray(devRes.data)) {
         setDevices(devRes.data);
 
         // Check for new alarms
@@ -121,13 +186,13 @@ export default function App() {
         previousAlarmIdsRef.current = activeAlarmIds;
       }
 
-      if (statRes.success) setStats(statRes.data);
-      if (docRes.success) setDocuments(docRes.data);
-      if (learnRes.success) setLearnings(learnRes.data);
-      if (notifRes.success) setNotifications(notifRes.data);
-      if (techRes.success) setTechnicians(techRes.data);
+      if (statRes && statRes.success && statRes.data) setStats(statRes.data);
+      if (docRes && docRes.success && Array.isArray(docRes.data)) setDocuments(docRes.data);
+      if (learnRes && learnRes.success && Array.isArray(learnRes.data)) setLearnings(learnRes.data);
+      if (notifRes && notifRes.success && Array.isArray(notifRes.data)) setNotifications(notifRes.data);
+      if (techRes && techRes.success && Array.isArray(techRes.data)) setTechnicians(techRes.data);
     } catch (err) {
-      console.error('Fetch error:', err);
+      console.warn('Fetch sync warning:', err);
     }
   };
 
@@ -252,6 +317,8 @@ export default function App() {
         handleRequestPush={handleRequestPush}
         onOpenSimulator={() => setShowSimulator(true)}
         onOpenPhoneView={() => setPhoneDevice(devices[0] || null)}
+        onOpenTechStatus={() => setShowTechSidebar(true)}
+        onDutyTechCount={technicians.filter((t) => t.activeStatus === 'ON_DUTY').length}
       />
 
       {/* Main Content Area */}
@@ -267,6 +334,16 @@ export default function App() {
         {/* TAB 1: REAL-TIME DEVICES & TELEMETRY */}
         {activeTab === 'devices' && (
           <div className="space-y-6">
+            {/* Facility Key Performance Indicators (Total Active, Average Efficiency, Urgent Repairs) */}
+            <FacilitySummaryCard
+              devices={devices}
+              activeFilter={deviceFilter}
+              onSelectFilter={(f) => setDeviceFilter(f)}
+            />
+
+            {/* 30-Day Machine Uptime Trends & Recharts Analytics Dashboard */}
+            <PerformanceAnalytics devices={devices} />
+
             {/* Filter and Search Bar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl bg-slate-900/60 border border-slate-800 p-3">
               <div className="relative w-full sm:w-80">
@@ -280,8 +357,17 @@ export default function App() {
                 />
               </div>
 
-              {/* Status Filter Buttons */}
+              {/* Status Filter Buttons and QR Scanner */}
               <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+                <button
+                  onClick={() => setShowQRScanner(true)}
+                  className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 px-3 py-1 text-xs font-bold text-slate-950 shadow-md shadow-amber-500/20 transition active:scale-95 shrink-0"
+                  title="Quét mã QR dán trên thân máy để mở ngay chi tiết & chẩn đoán"
+                >
+                  <QrCode className="h-3.5 w-3.5" />
+                  <span>Quét QR Máy</span>
+                </button>
+
                 <button
                   onClick={() => setDeviceFilter('ALL')}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
@@ -346,6 +432,7 @@ export default function App() {
                   onTriggerAlarm={(id) => handleTriggerAlarm(id)}
                   onAcknowledge={(id) => handleAcknowledge(id)}
                   onOpenPhoneViewWithIncident={(d) => setPhoneDevice(d)}
+                  onOpenMachineDetails={(d) => setDetailsDevice(d)}
                 />
               ))}
             </div>
@@ -428,6 +515,36 @@ export default function App() {
           onTriggerAlarm={(deviceId, code, title) => handleTriggerAlarm(deviceId, code, title)}
         />
       )}
+
+      {/* 6. Machine Details & Maintenance History Modal */}
+      {detailsDevice && (
+        <MachineDetailsModal
+          device={detailsDevice}
+          onClose={() => setDetailsDevice(null)}
+          onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+          onTriggerAlarm={(id) => handleTriggerAlarm(id)}
+        />
+      )}
+
+      {/* 7. Technician Status & Dispatch Sidebar */}
+      <TechnicianStatusSidebar
+        isOpen={showTechSidebar}
+        onClose={() => setShowTechSidebar(false)}
+        technicians={technicians}
+        devices={devices}
+        onUpdateTechStatus={handleUpdateTechStatus}
+        onReassignDevice={handleReassignDevice}
+        onOpenPhoneView={(d) => setPhoneDevice(d)}
+        onOpenMachineDetails={(d) => setDetailsDevice(d)}
+      />
+
+      {/* 8. QR Code Scanner Modal for Physical Machine Stickers */}
+      <QRCodeScannerModal
+        isOpen={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        devices={devices}
+        onScanSuccess={handleQRScanSuccess}
+      />
     </div>
   );
 }

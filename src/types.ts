@@ -141,3 +141,22 @@ export interface FactoryStats {
   mttrMinutes: number;
   mtbfHours: number;
 }
+
+export interface MaintenanceRecord {
+  id: string;
+  deviceId: string;
+  taskTitle: string;
+  taskType: 'PREVENTIVE' | 'CORRECTIVE' | 'PARTS_REPLACEMENT' | 'CALIBRATION' | 'OVERHAUL';
+  completedAt: string;
+  technicianName: string;
+  technicianRole?: string;
+  durationMinutes: number;
+  partsReplaced: string[];
+  findingsAndActions: string;
+  technicianNotes?: string;
+  operatingHoursAtMaintenance: number;
+  qualityPassed: boolean;
+  costEstimateVND?: number;
+  aiVerified?: boolean;
+}
+

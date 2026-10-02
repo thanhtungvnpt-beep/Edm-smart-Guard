@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -628,6 +628,16 @@ app.get('/api/devices/:id', (req, res) => {
 // 3. Get technicians
 app.get('/api/technicians', (req, res) => {
   res.json({ success: true, data: technicians });
+});
+
+// 3.1 Update technician shift or status
+app.post('/api/technicians/:id/status', (req, res) => {
+  const { activeStatus, shift } = req.body;
+  const tech = technicians.find((t) => t.id === req.params.id);
+  if (!tech) return res.status(404).json({ success: false, message: 'Technician not found' });
+  if (activeStatus) tech.activeStatus = activeStatus;
+  if (shift) tech.shift = shift;
+  res.json({ success: true, data: tech, message: `Đã cập nhật trạng thái KTV ${tech.name}` });
 });
 
 // 4. Update technician assignment
