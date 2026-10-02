@@ -1,0 +1,7 @@
+{
+  "name": "EDM SmartGuard - Hệ Thống Giám Sát & AI Trợ Lý Khắc Phục Sự Cố Thiết Bị",
+  "description": "Nền tảng giám sát vận hành máy móc kết nối EDM thời gian thực, phát thông báo đẩy dừng máy khẩn cấp tới kỹ thuật viên, AI chẩn đoán sự cố, học hỏi kinh nghiệm sửa chữa và cập nhật tài liệu kỹ thuật.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
