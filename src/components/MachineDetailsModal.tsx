@@ -12,6 +12,7 @@ import {
   Cpu,
   DollarSign,
   FileCheck2,
+  FileDown,
   FileText,
   Filter,
   Flame,
@@ -21,6 +22,7 @@ import {
   Plus,
   Printer,
   QrCode,
+  Radio,
   ShieldCheck,
   Sparkles,
   Tag,
@@ -36,6 +38,10 @@ import {
   saveMaintenanceRecord,
 } from '../utils/maintenanceHistoryData';
 import { generateMachineQRDataUrl } from '../utils/qrCodeHelper';
+import { PredictiveInsightPanel } from './PredictiveInsightPanel';
+import { HardwareWearComponent } from '../utils/hardwarePrediction';
+import { TelemetrySparklineCard } from './TelemetrySparklineCard';
+import { MachinePdfReportModal } from './MachinePdfReportModal';
 
 interface MachineDetailsModalProps {
   device: Device;
@@ -57,7 +63,76 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
   const [filterType, setFilterType] = useState<string>('ALL');
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   const [showQRTag, setShowQRTag] = useState<boolean>(false);
+  const [showPdfReport, setShowPdfReport] = useState<boolean>(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  // Live Telemetry Streaming toggle & real-time history buffer
+  const [isLiveStreamEnabled, setIsLiveStreamEnabled] = useState<boolean>(true);
+
+  const [liveTelemetry, setLiveTelemetry] = useState(() => ({
+    dischargeVoltage: device.telemetry?.dischargeVoltage || 45,
+    peakCurrent: device.telemetry?.peakCurrent || 22,
+    dielectricPressure: device.telemetry?.dielectricPressure || 1.2,
+    dielectricTemp: device.telemetry?.dielectricTemp || 24.5,
+    vibration: device.telemetry?.vibration || 0.8,
+    wireTension: device.telemetry?.wireTension || 12.5,
+    oee: device.telemetry?.oee || 88.5,
+  }));
+
+  const [telemetryHistory, setTelemetryHistory] = useState(() => {
+    const v = device.telemetry?.dischargeVoltage || 45;
+    const c = device.telemetry?.peakCurrent || 22;
+    const p = device.telemetry?.dielectricPressure || 1.2;
+    const t = device.telemetry?.dielectricTemp || 24.5;
+    const vib = device.telemetry?.vibration || 0.8;
+
+    return {
+      dischargeVoltage: [v - 1.2, v - 0.8, v + 0.4, v - 0.2, v + 0.6, v - 0.5, v + 0.3, v - 0.1, v],
+      peakCurrent: [c - 0.8, c - 0.4, c + 0.6, c - 0.3, c + 0.2, c - 0.1, c + 0.5, c - 0.2, c],
+      dielectricPressure: [p + 0.05, p + 0.03, p - 0.02, p - 0.04, p + 0.02, p - 0.01, p + 0.03, p - 0.02, p],
+      dielectricTemp: [t - 0.4, t - 0.2, t + 0.3, t - 0.1, t + 0.2, t + 0.1, t - 0.2, t + 0.1, t],
+      vibration: [vib - 0.06, vib - 0.03, vib + 0.04, vib - 0.02, vib + 0.05, vib - 0.01, vib + 0.03, vib],
+    };
+  });
+
+  // Real-time telemetry streaming update loop with visual highlight fluctuations
+  useEffect(() => {
+    if (!isLiveStreamEnabled) return;
+
+    const interval = setInterval(() => {
+      setLiveTelemetry((prev) => {
+        const isAlarm = device.status === 'ALARM_STOPPED';
+        // Generate realistic micro-fluctuations
+        const vibDelta = isAlarm ? (Math.random() - 0.4) * 0.12 : (Math.random() - 0.5) * 0.04;
+        const pressDelta = isAlarm ? -Math.random() * 0.03 : (Math.random() - 0.5) * 0.025;
+        const voltDelta = isAlarm ? 0 : (Math.random() - 0.5) * 0.7;
+        const currDelta = isAlarm ? 0 : (Math.random() - 0.5) * 0.4;
+        const tempDelta = (Math.random() - 0.48) * 0.08;
+
+        const next = {
+          dischargeVoltage: Math.max(0, Math.round((prev.dischargeVoltage + voltDelta) * 10) / 10),
+          peakCurrent: Math.max(0, Math.round((prev.peakCurrent + currDelta) * 10) / 10),
+          dielectricPressure: Math.max(0.1, Math.round((prev.dielectricPressure + pressDelta) * 100) / 100),
+          dielectricTemp: Math.max(15, Math.round((prev.dielectricTemp + tempDelta) * 10) / 10),
+          vibration: Math.max(0.1, Math.round((prev.vibration + vibDelta) * 100) / 100),
+          wireTension: prev.wireTension,
+          oee: prev.oee,
+        };
+
+        setTelemetryHistory((hist) => ({
+          dischargeVoltage: [...hist.dischargeVoltage.slice(-13), next.dischargeVoltage],
+          peakCurrent: [...hist.peakCurrent.slice(-13), next.peakCurrent],
+          dielectricPressure: [...hist.dielectricPressure.slice(-13), next.dielectricPressure],
+          dielectricTemp: [...hist.dielectricTemp.slice(-13), next.dielectricTemp],
+          vibration: [...hist.vibration.slice(-13), next.vibration],
+        }));
+
+        return next;
+      });
+    }, 1800);
+
+    return () => clearInterval(interval);
+  }, [isLiveStreamEnabled, device.status]);
 
   useEffect(() => {
     let active = true;
@@ -97,6 +172,20 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
   const totalMinutes = useMemo(() => {
     return records.reduce((acc, r) => acc + r.durationMinutes, 0);
   }, [records]);
+
+  // Pre-fill maintenance logging task from Predictive Insight suggestion
+  const handleScheduleReplacement = (comp: HardwareWearComponent) => {
+    setActiveTab('maintenance');
+    setShowAddForm(true);
+    setNewTitle(`Thay thế phòng ngừa: ${comp.name}`);
+    setNewType('PARTS_REPLACEMENT');
+    setNewParts(`${comp.name} [SKU: ${comp.partNumber}]`);
+    setNewDuration(comp.estimatedLaborMinutes.toString());
+    setNewFindings(
+      `Linh kiện đạt mức hao mòn ${comp.wearPercentage}%. Thay thế phòng ngừa để tránh ${comp.downtimeRiskHours}h dừng máy. Hành động: ${comp.preventiveAction}`
+    );
+    setNewNotes(`Kho lưu trữ: ${comp.stockLocation}. Đã xuất kho dự trù.`);
+  };
 
   // Handle submit new maintenance record
   const handleCreateRecord = (e: React.FormEvent) => {
@@ -218,6 +307,36 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Live Telemetry Stream Toggle Button */}
+            <button
+              onClick={() => setIsLiveStreamEnabled(!isLiveStreamEnabled)}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                isLiveStreamEnabled
+                  ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-300 shadow-sm shadow-cyan-500/20'
+                  : 'border-slate-700 bg-slate-800/80 text-slate-400 hover:text-white'
+              }`}
+              title="Bật/Tắt luồng cập nhật dữ liệu cảm biến thời gian thực"
+            >
+              <Radio
+                className={`h-3.5 w-3.5 ${
+                  isLiveStreamEnabled ? 'text-cyan-400 animate-pulse' : 'text-slate-500'
+                }`}
+              />
+              <span className="hidden sm:inline">Live Stream:</span>
+              <span className="font-bold">{isLiveStreamEnabled ? 'BẬT' : 'TẮT'}</span>
+            </button>
+
+            {/* Download PDF Report Button */}
+            <button
+              onClick={() => setShowPdfReport(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:text-white transition cursor-pointer shadow-sm"
+              title="Tải & In báo cáo tổng hợp lịch sử bảo dưỡng, lỗi gần đây và yêu cầu dịch vụ (PDF)"
+            >
+              <FileDown className="h-3.5 w-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Tải Báo Cáo PDF</span>
+              <span className="sm:hidden">PDF</span>
+            </button>
+
             {/* QR Asset Tag Button */}
             <button
               onClick={() => setShowQRTag(!showQRTag)}
@@ -274,8 +393,8 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              <CalendarClock className="h-4 w-4" />
-              <span>Dự Báo Bảo Dưỡng AI</span>
+              <Sparkles className="h-4 w-4 text-amber-400" />
+              <span>Dự Báo & Linh Kiện AI (Predictive Insight)</span>
             </button>
 
             <button
@@ -716,64 +835,138 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
                   </p>
                 </div>
               </div>
+
+              {/* Hardware Component Wear & Preventive Replacement Panel */}
+              <PredictiveInsightPanel
+                device={device}
+                onScheduleReplacement={handleScheduleReplacement}
+              />
             </div>
           )}
 
-          {/* TAB 3: LIVE TELEMETRY & SPECS */}
+          {/* TAB 3: LIVE TELEMETRY & SPECS WITH REAL-TIME SPARKLINE CHARTS & ALERT THRESHOLDS */}
           {activeTab === 'telemetry' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <span className="text-xs text-slate-400 flex items-center justify-between">
-                    <span>Điện áp xung</span>
-                    <Zap className="h-3.5 w-3.5 text-amber-400" />
-                  </span>
-                  <div className="mt-1 font-mono text-xl font-bold text-white">
-                    {device.telemetry.dischargeVoltage}V
+              {/* Live Streaming Control & Alert Threshold Legend Strip */}
+              <div className="rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900 via-cyan-950/20 to-slate-950 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
+                      isLiveStreamEnabled
+                        ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400 shadow-md shadow-cyan-500/20'
+                        : 'border-slate-700 bg-slate-800/80 text-slate-500'
+                    }`}
+                  >
+                    <Radio
+                      className={`h-5 w-5 ${
+                        isLiveStreamEnabled ? 'animate-pulse text-cyan-400' : 'text-slate-500'
+                      }`}
+                    />
                   </div>
-                  <div className="text-[10px] text-slate-400">
-                    Chuẩn: {device.nominalRanges.dischargeVoltage[0]}-{device.nominalRanges.dischargeVoltage[1]}V
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <span className="text-xs text-slate-400 flex items-center justify-between">
-                    <span>Dòng đỉnh xung</span>
-                    <Activity className="h-3.5 w-3.5 text-cyan-400" />
-                  </span>
-                  <div className="mt-1 font-mono text-xl font-bold text-white">
-                    {device.telemetry.peakCurrent}A
-                  </div>
-                  <div className="text-[10px] text-slate-400">
-                    Chuẩn: {device.nominalRanges.peakCurrent[0]}-{device.nominalRanges.peakCurrent[1]}A
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <span className="text-xs text-slate-400 flex items-center justify-between">
-                    <span>Áp suất dung môi</span>
-                    <Gauge className="h-3.5 w-3.5 text-blue-400" />
-                  </span>
-                  <div className="mt-1 font-mono text-xl font-bold text-white">
-                    {device.telemetry.dielectricPressure} Bar
-                  </div>
-                  <div className="text-[10px] text-slate-400">
-                    Chuẩn: {device.nominalRanges.dielectricPressure[0]}-{device.nominalRanges.dielectricPressure[1]} Bar
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-white">
+                        Luồng Dữ Liệu Thời Gian Thực (Live Telemetry Stream)
+                      </h4>
+                      {isLiveStreamEnabled ? (
+                        <span className="rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-mono font-bold text-cyan-400 flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                          Đang Cập Nhật 1.8s
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-800 border border-slate-700 px-2 py-0.5 text-[10px] font-mono text-slate-400">
+                          Tạm Dừng
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Mô phỏng dao động tín hiệu vi mô từ cảm biến IoT theo thời gian thực kèm cảnh báo ngưỡng tới hạn
+                    </p>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <span className="text-xs text-slate-400 flex items-center justify-between">
-                    <span>Nhiệt độ dung dịch</span>
-                    <Flame className="h-3.5 w-3.5 text-rose-400" />
-                  </span>
-                  <div className="mt-1 font-mono text-xl font-bold text-white">
-                    {device.telemetry.dielectricTemp}°C
-                  </div>
-                  <div className="text-[10px] text-slate-400">
-                    Chuẩn: {device.nominalRanges.dielectricTemp[0]}-{device.nominalRanges.dielectricTemp[1]}°C
-                  </div>
+                {/* Toggle Switch */}
+                <div className="flex items-center gap-3 shrink-0">
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isLiveStreamEnabled}
+                      onChange={(e) => setIsLiveStreamEnabled(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                    <span className="ml-2.5 text-xs font-bold text-white">
+                      {isLiveStreamEnabled ? 'Bật Live' : 'Tắt Live'}
+                    </span>
+                  </label>
                 </div>
+              </div>
+
+              {/* Sparkline Cards Grid with Alert Threshold Indicators */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {/* 1. Spindle Vibration (Độ rung cơ khí trục) */}
+                <TelemetrySparklineCard
+                  title="Độ Rung Trục Chính (Spindle Vibration)"
+                  metricKey="vibration"
+                  currentValue={liveTelemetry.vibration}
+                  unit=" mm/s"
+                  history={telemetryHistory.vibration}
+                  nominalMin={device.nominalRanges.vibration[0]}
+                  nominalMax={device.nominalRanges.vibration[1]}
+                  thresholdType="UPPER"
+                  criticalThreshold={device.nominalRanges.vibration[1]}
+                  isLiveStreaming={isLiveStreamEnabled}
+                  icon={<Activity className="h-4 w-4 text-purple-400" />}
+                  lineColor="#a855f7"
+                />
+
+                {/* 2. Dielectric Pressure (Áp suất dung môi) */}
+                <TelemetrySparklineCard
+                  title="Áp Suất Dung Môi (Dielectric Pressure)"
+                  metricKey="pressure"
+                  currentValue={liveTelemetry.dielectricPressure}
+                  unit=" Bar"
+                  history={telemetryHistory.dielectricPressure}
+                  nominalMin={device.nominalRanges.dielectricPressure[0]}
+                  nominalMax={device.nominalRanges.dielectricPressure[1]}
+                  thresholdType="LOWER"
+                  criticalThreshold={device.nominalRanges.dielectricPressure[0]}
+                  isLiveStreaming={isLiveStreamEnabled}
+                  icon={<Gauge className="h-4 w-4 text-blue-400" />}
+                  lineColor="#38bdf8"
+                />
+
+                {/* 3. Dielectric Temperature (Nhiệt độ dung môi) */}
+                <TelemetrySparklineCard
+                  title="Nhiệt Độ Dung Môi (Dielectric Temp)"
+                  metricKey="temp"
+                  currentValue={liveTelemetry.dielectricTemp}
+                  unit="°C"
+                  history={telemetryHistory.dielectricTemp}
+                  nominalMin={device.nominalRanges.dielectricTemp[0]}
+                  nominalMax={device.nominalRanges.dielectricTemp[1]}
+                  thresholdType="UPPER"
+                  criticalThreshold={device.nominalRanges.dielectricTemp[1]}
+                  isLiveStreaming={isLiveStreamEnabled}
+                  icon={<Flame className="h-4 w-4 text-rose-400" />}
+                  lineColor="#fb7185"
+                />
+
+                {/* 4. Discharge Voltage (Điện áp phóng điện) */}
+                <TelemetrySparklineCard
+                  title="Điện Áp Phóng Điện (Discharge Voltage)"
+                  metricKey="voltage"
+                  currentValue={liveTelemetry.dischargeVoltage}
+                  unit="V"
+                  history={telemetryHistory.dischargeVoltage}
+                  nominalMin={device.nominalRanges.dischargeVoltage[0]}
+                  nominalMax={device.nominalRanges.dischargeVoltage[1]}
+                  thresholdType="UPPER"
+                  criticalThreshold={device.nominalRanges.dischargeVoltage[1]}
+                  isLiveStreaming={isLiveStreamEnabled}
+                  icon={<Zap className="h-4 w-4 text-amber-400" />}
+                  lineColor="#f59e0b"
+                />
               </div>
 
               {/* Technical Specifications */}
@@ -806,18 +999,36 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
         </div>
 
         {/* MODAL FOOTER */}
-        <div className="flex items-center justify-between border-t border-slate-800 bg-slate-950/90 px-5 py-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-800 bg-slate-950/90 px-5 py-3">
           <div className="text-xs text-slate-400">
-            Hồ sơ bảo trì liên kết cơ sở dữ liệu số hóa nhà máy thông minh
+            Hồ sơ bảo trì liên kết cơ sở dữ liệu số hóa nhà máy thông minh SCADA 4.0
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-white transition"
-          >
-            Đóng Cửa Sổ
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowPdfReport(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 hover:bg-indigo-500/25 px-3.5 py-2 text-xs font-bold text-indigo-300 hover:text-white transition cursor-pointer active:scale-95"
+            >
+              <FileDown className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Tải Báo Cáo PDF (Bảo Dưỡng &amp; Sự Cố)</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-white transition"
+            >
+              Đóng Cửa Sổ
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Printable PDF Report Modal */}
+      {showPdfReport && (
+        <MachinePdfReportModal
+          device={device}
+          records={records}
+          onClose={() => setShowPdfReport(false)}
+        />
+      )}
     </div>
   );
 };

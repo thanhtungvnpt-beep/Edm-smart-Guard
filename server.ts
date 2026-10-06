@@ -13,6 +13,15 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json({ limit: '10mb' }));
+app.use(express.static(path.resolve(__dirname, 'public')));
+
+// Service Worker route with root scope permission
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(path.resolve(__dirname, 'public', 'sw.js'));
+});
 
 // Initialize Google Gemini AI SDK
 const ai = new GoogleGenAI({
@@ -156,6 +165,36 @@ export interface NotificationLog {
   previewText: string;
 }
 
+export interface MobileDevice {
+  id: string;
+  deviceName: string;
+  deviceType: 'SMARTPHONE' | 'TABLET' | 'INDUSTRIAL_PDA' | 'BARCODE_TERMINAL';
+  os: 'Android' | 'iOS';
+  osVersion: string;
+  assignedTechnicianId: string;
+  assignedTechnicianName: string;
+  technicianRole: string;
+  technicianAvatar?: string;
+  phoneNumber: string;
+  status: 'ONLINE' | 'OFFLINE' | 'STANDBY';
+  lastPingTime: string;
+  batteryLevel: number;
+  isCharging: boolean;
+  appVersion: string;
+  isPWAInstalled: boolean;
+  pushStatus: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
+  fcmToken?: string;
+  offlineCacheReady: boolean;
+  cachedDevicesCount: number;
+  cachedDocsCount: number;
+  signalStrengthDbm: number;
+  currentZone: string;
+  ipAddress: string;
+  macAddress?: string;
+  registeredAt: string;
+  isLocked?: boolean;
+}
+
 // Helper to call Gemini with retry and fallback
 async function callGeminiWithFallback(prompt: string, schema?: any): Promise<string> {
   const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
@@ -234,6 +273,177 @@ const technicians: Technician[] = [
     shift: 'Ca Sáng (06:00 - 14:30)',
     activeStatus: 'ON_DUTY',
     fcmToken: 'fcm_phone_ducanh_xiaomi14',
+  },
+];
+
+// Initial Connected Mobile Devices (Technicians' smartphones, tablets, and rugged PDAs)
+let mobileDevices: MobileDevice[] = [
+  {
+    id: 'mob-01',
+    deviceName: 'Samsung Galaxy XCover Pro 6 (Rugged IP68)',
+    deviceType: 'INDUSTRIAL_PDA',
+    os: 'Android',
+    osVersion: 'Android 14 Enterprise',
+    assignedTechnicianId: 'tech-01',
+    assignedTechnicianName: 'Nguyễn Văn Hùng',
+    technicianRole: 'Kỹ sư Trưởng Điện - PLC & EDM',
+    phoneNumber: '0983.124.567',
+    status: 'ONLINE',
+    lastPingTime: new Date().toISOString(),
+    batteryLevel: 86,
+    isCharging: false,
+    appVersion: 'v2.4.1 (PWA Standalone)',
+    isPWAInstalled: true,
+    pushStatus: 'ACTIVE',
+    fcmToken: 'fcm_phone_hung_pixel8_pro',
+    offlineCacheReady: true,
+    cachedDevicesCount: 6,
+    cachedDocsCount: 6,
+    signalStrengthDbm: -52,
+    currentZone: 'Khu Vực Máy Cắt Dây EDM-W01 & W02',
+    ipAddress: '192.168.10.142',
+    macAddress: '48:5F:99:A2:3C:11',
+    registeredAt: '2026-08-10T08:00:00.000Z',
+    isLocked: false,
+  },
+  {
+    id: 'mob-02',
+    deviceName: 'iPhone 15 Pro Max (Trạm Giám Sát Ca Trực)',
+    deviceType: 'SMARTPHONE',
+    os: 'iOS',
+    osVersion: 'iOS 17.5.1',
+    assignedTechnicianId: 'tech-03',
+    assignedTechnicianName: 'Lê Hoàng Nam',
+    technicianRole: 'Chuyên viên Công nghệ Cắt Dây EDM',
+    phoneNumber: '0904.332.119',
+    status: 'ONLINE',
+    lastPingTime: new Date().toISOString(),
+    batteryLevel: 74,
+    isCharging: true,
+    appVersion: 'v2.4.1 (PWA Standalone)',
+    isPWAInstalled: true,
+    pushStatus: 'ACTIVE',
+    fcmToken: 'fcm_phone_nam_iphone15',
+    offlineCacheReady: true,
+    cachedDevicesCount: 6,
+    cachedDocsCount: 6,
+    signalStrengthDbm: -64,
+    currentZone: 'Trạm Lập Trình CAM & Đo Kiểm Phôi 3D',
+    ipAddress: '192.168.10.158',
+    macAddress: 'BC:D0:74:88:E1:9F',
+    registeredAt: '2026-08-15T09:30:00.000Z',
+    isLocked: false,
+  },
+  {
+    id: 'mob-03',
+    deviceName: 'Zebra TC58 Touch Computer (Đầu Đọc QR/RFID Kho)',
+    deviceType: 'BARCODE_TERMINAL',
+    os: 'Android',
+    osVersion: 'Android 13 AOSP Industrial',
+    assignedTechnicianId: 'tech-02',
+    assignedTechnicianName: 'Trần Minh Tuấn',
+    technicianRole: 'Kỹ sư Thủy lực & Khí nén EDM',
+    phoneNumber: '0912.876.543',
+    status: 'ONLINE',
+    lastPingTime: new Date().toISOString(),
+    batteryLevel: 92,
+    isCharging: false,
+    appVersion: 'v2.4.1 (PWA Standalone)',
+    isPWAInstalled: true,
+    pushStatus: 'ACTIVE',
+    fcmToken: 'fcm_zebra_tc58_tuan',
+    offlineCacheReady: true,
+    cachedDevicesCount: 6,
+    cachedDocsCount: 6,
+    signalStrengthDbm: -48,
+    currentZone: 'Kho Linh Kiện Lõi Lọc & Bạc Cấp Điện',
+    ipAddress: '192.168.10.165',
+    macAddress: '00:07:4D:23:45:90',
+    registeredAt: '2026-08-20T07:15:00.000Z',
+    isLocked: false,
+  },
+  {
+    id: 'mob-04',
+    deviceName: 'iPad Pro 11" M2 (Bảng SCADA Xưởng)',
+    deviceType: 'TABLET',
+    os: 'iOS',
+    osVersion: 'iPadOS 17.4',
+    assignedTechnicianId: 'tech-04',
+    assignedTechnicianName: 'Phạm Đức Anh',
+    technicianRole: 'Kỹ thuật viên Vận hành & Bảo trì 4.0',
+    phoneNumber: '0977.889.001',
+    status: 'ONLINE',
+    lastPingTime: new Date().toISOString(),
+    batteryLevel: 62,
+    isCharging: false,
+    appVersion: 'v2.4.1 (PWA Standalone)',
+    isPWAInstalled: true,
+    pushStatus: 'ACTIVE',
+    fcmToken: 'fcm_ipad_pro_ducanh',
+    offlineCacheReady: true,
+    cachedDevicesCount: 6,
+    cachedDocsCount: 6,
+    signalStrengthDbm: -59,
+    currentZone: 'Bàn Kỹ Thuật Máy Xung GF FORM E 350',
+    ipAddress: '192.168.10.177',
+    macAddress: 'F0:18:98:C3:7E:22',
+    registeredAt: '2026-09-01T10:00:00.000Z',
+    isLocked: false,
+  },
+  {
+    id: 'mob-05',
+    deviceName: 'Xiaomi Redmi Note 13 (Điện Thoại Ca Đêm)',
+    deviceType: 'SMARTPHONE',
+    os: 'Android',
+    osVersion: 'Android 14 HyperOS',
+    assignedTechnicianId: 'tech-04',
+    assignedTechnicianName: 'Phạm Đức Anh',
+    technicianRole: 'Kỹ thuật viên Vận hành & Bảo trì 4.0',
+    phoneNumber: '0977.889.001',
+    status: 'STANDBY',
+    lastPingTime: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    batteryLevel: 45,
+    isCharging: true,
+    appVersion: 'v2.4.0 (PWA Browser)',
+    isPWAInstalled: false,
+    pushStatus: 'ACTIVE',
+    fcmToken: 'fcm_redmi_nightshift',
+    offlineCacheReady: true,
+    cachedDevicesCount: 6,
+    cachedDocsCount: 6,
+    signalStrengthDbm: -78,
+    currentZone: 'Phòng Nghỉ Giữa Ca & Tủ Sạc Pin',
+    ipAddress: '192.168.10.191',
+    macAddress: '9C:28:B3:65:10:DA',
+    registeredAt: '2026-09-12T14:30:00.000Z',
+    isLocked: false,
+  },
+  {
+    id: 'mob-06',
+    deviceName: 'Honeywell ScanPal EDA52 (Máy Cầm Tay Chuyên Dụng)',
+    deviceType: 'INDUSTRIAL_PDA',
+    os: 'Android',
+    osVersion: 'Android 11 Industrial',
+    assignedTechnicianId: 'tech-02',
+    assignedTechnicianName: 'Trần Minh Tuấn',
+    technicianRole: 'Kỹ sư Thủy lực & Khí nén EDM',
+    phoneNumber: '0912.876.543',
+    status: 'OFFLINE',
+    lastPingTime: new Date(Date.now() - 95 * 60 * 1000).toISOString(),
+    batteryLevel: 19,
+    isCharging: false,
+    appVersion: 'v2.3.8',
+    isPWAInstalled: true,
+    pushStatus: 'INACTIVE',
+    offlineCacheReady: true,
+    cachedDevicesCount: 6,
+    cachedDocsCount: 5,
+    signalStrengthDbm: -92,
+    currentZone: 'Vùng Góc Khuất Hầm Thu Dung Môi Cũ',
+    ipAddress: '192.168.10.199',
+    macAddress: 'E4:A7:C5:11:82:70',
+    registeredAt: '2026-07-28T09:00:00.000Z',
+    isLocked: false,
   },
 ];
 
@@ -1217,6 +1427,139 @@ app.get('/api/stats', (req, res) => {
       mttrMinutes: 28,
       mtbfHours: 342,
     },
+  });
+});
+
+// 15. Mobile Devices Fleet Management Endpoints
+app.get('/api/mobile-devices', (req, res) => {
+  res.json({ success: true, data: mobileDevices });
+});
+
+app.post('/api/mobile-devices', (req, res) => {
+  const { deviceName, deviceType, os, osVersion, assignedTechnicianId, phoneNumber, currentZone } = req.body;
+  const tech = technicians.find((t) => t.id === assignedTechnicianId) || technicians[0];
+
+  const newMobile: MobileDevice = {
+    id: `mob-${Date.now().toString().slice(-4)}`,
+    deviceName: deviceName || 'Thiết Bị Di Động Mới',
+    deviceType: deviceType || 'SMARTPHONE',
+    os: os || 'Android',
+    osVersion: osVersion || (os === 'iOS' ? 'iOS 17' : 'Android 14'),
+    assignedTechnicianId: tech.id,
+    assignedTechnicianName: tech.name,
+    technicianRole: tech.role,
+    technicianAvatar: tech.avatar,
+    phoneNumber: phoneNumber || tech.phone,
+    status: 'ONLINE',
+    lastPingTime: new Date().toISOString(),
+    batteryLevel: Math.floor(Math.random() * 30) + 70,
+    isCharging: false,
+    appVersion: 'v2.4.1 (PWA Standalone)',
+    isPWAInstalled: true,
+    pushStatus: 'ACTIVE',
+    fcmToken: `fcm_${Date.now()}`,
+    offlineCacheReady: true,
+    cachedDevicesCount: 6,
+    cachedDocsCount: 6,
+    signalStrengthDbm: -55,
+    currentZone: currentZone || 'Xưởng Gia Công EDM Chính',
+    ipAddress: `192.168.10.${Math.floor(Math.random() * 80) + 120}`,
+    macAddress: `A8:20:66:${Math.floor(Math.random() * 89 + 10)}:${Math.floor(Math.random() * 89 + 10)}:${Math.floor(Math.random() * 89 + 10)}`,
+    registeredAt: new Date().toISOString(),
+    isLocked: false,
+  };
+
+  mobileDevices.unshift(newMobile);
+  res.json({ success: true, message: 'Đăng ký thiết bị di động mới thành công', data: newMobile });
+});
+
+app.post('/api/mobile-devices/:id/ping', (req, res) => {
+  const { id } = req.params;
+  const dev = mobileDevices.find((m) => m.id === id);
+  if (!dev) return res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị' });
+
+  dev.lastPingTime = new Date().toISOString();
+  dev.status = 'ONLINE';
+  dev.batteryLevel = Math.max(10, Math.min(100, dev.batteryLevel + (dev.isCharging ? 1 : -1)));
+  dev.signalStrengthDbm = Math.min(-40, Math.max(-95, dev.signalStrengthDbm + (Math.floor(Math.random() * 5) - 2)));
+
+  res.json({ success: true, message: `Ping thiết bị ${dev.deviceName} thành công`, data: dev });
+});
+
+app.post('/api/mobile-devices/:id/push-test', (req, res) => {
+  const { id } = req.params;
+  const dev = mobileDevices.find((m) => m.id === id);
+  if (!dev) return res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị' });
+
+  const log: NotificationLog = {
+    id: `notif-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    deviceId: 'mob-fleet',
+    deviceName: `Kiểm tra gửi tới ${dev.deviceName}`,
+    errorCode: 'MOBILE-PING',
+    recipientPhone: dev.phoneNumber,
+    recipientName: dev.assignedTechnicianName,
+    channel: 'PUSH_NOTIFICATION',
+    status: 'DELIVERED',
+    previewText: `📲 [KIỂM THỬ THIẾT BỊ DI ĐỘNG] Gửi tới ${dev.deviceName} (${dev.assignedTechnicianName}): Hệ thống SCADA kết nối thành công, Service Worker sẵn sàng hoạt động ngoại tuyến!`,
+  };
+
+  notificationLogs.unshift(log);
+
+  res.json({
+    success: true,
+    message: `Đã gửi thông báo đẩy kiểm thử tới ${dev.deviceName} (${dev.assignedTechnicianName})`,
+    data: log,
+  });
+});
+
+app.post('/api/mobile-devices/:id/toggle-lock', (req, res) => {
+  const { id } = req.params;
+  const dev = mobileDevices.find((m) => m.id === id);
+  if (!dev) return res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị' });
+
+  dev.isLocked = !dev.isLocked;
+  dev.status = dev.isLocked ? 'OFFLINE' : 'ONLINE';
+
+  res.json({
+    success: true,
+    message: dev.isLocked ? `Đã khóa quyền truy cập của ${dev.deviceName}` : `Đã mở khóa thiết bị ${dev.deviceName}`,
+    data: dev,
+  });
+});
+
+app.delete('/api/mobile-devices/:id', (req, res) => {
+  const { id } = req.params;
+  const idx = mobileDevices.findIndex((m) => m.id === id);
+  if (idx === -1) return res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị' });
+
+  const removed = mobileDevices.splice(idx, 1)[0];
+  res.json({ success: true, message: `Đã hủy liên kết thiết bị ${removed.deviceName}`, data: removed });
+});
+
+app.post('/api/mobile-devices/broadcast', (req, res) => {
+  const { messageTitle, messageBody, urgency } = req.body;
+  const activeCount = mobileDevices.filter((m) => m.status === 'ONLINE' && !m.isLocked).length;
+
+  const log: NotificationLog = {
+    id: `notif-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    deviceId: 'broadcast-all',
+    deviceName: 'Phát thanh tới toàn bộ thiết bị di động xưởng',
+    errorCode: urgency === 'CRITICAL' ? 'BROADCAST-URGENT' : 'BROADCAST-INFO',
+    recipientPhone: 'TOÀN XƯỞNG',
+    recipientName: `${activeCount} Thiết bị di động trực tuyến`,
+    channel: 'PUSH_NOTIFICATION',
+    status: 'DELIVERED',
+    previewText: `📢 [THÔNG BÁO TOÀN XƯỞNG] ${messageTitle || 'Thông báo vận hành'}: ${messageBody || 'Kỹ thuật viên chú ý kiểm tra trạm máy'}`,
+  };
+
+  notificationLogs.unshift(log);
+
+  res.json({
+    success: true,
+    message: `Đã phát thông báo tới ${activeCount} thiết bị di động đang kết nối trong xưởng`,
+    data: log,
   });
 });
 

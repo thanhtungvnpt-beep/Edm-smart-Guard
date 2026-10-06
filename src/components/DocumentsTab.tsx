@@ -112,6 +112,10 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
               <span className="rounded bg-blue-500/20 border border-blue-500/30 px-2.5 py-0.5 text-xs font-mono font-bold text-blue-300">
                 TECHNICAL DOCUMENTATION HUB
               </span>
+              <span className="rounded bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-mono font-bold text-emerald-300 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                Lưu Đệm Ngoại Tuyến (Offline Ready)
+              </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-extrabold text-white">
               Cập Nhật Tài Liệu Kỹ Thuật Cho AI

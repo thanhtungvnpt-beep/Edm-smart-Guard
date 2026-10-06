@@ -142,6 +142,36 @@ export interface FactoryStats {
   mtbfHours: number;
 }
 
+export interface MobileDevice {
+  id: string;
+  deviceName: string;
+  deviceType: 'SMARTPHONE' | 'TABLET' | 'INDUSTRIAL_PDA' | 'BARCODE_TERMINAL';
+  os: 'Android' | 'iOS';
+  osVersion: string;
+  assignedTechnicianId: string;
+  assignedTechnicianName: string;
+  technicianRole: string;
+  technicianAvatar?: string;
+  phoneNumber: string;
+  status: 'ONLINE' | 'OFFLINE' | 'STANDBY';
+  lastPingTime: string;
+  batteryLevel: number;
+  isCharging: boolean;
+  appVersion: string;
+  isPWAInstalled: boolean;
+  pushStatus: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
+  fcmToken?: string;
+  offlineCacheReady: boolean;
+  cachedDevicesCount: number;
+  cachedDocsCount: number;
+  signalStrengthDbm: number;
+  currentZone: string;
+  ipAddress: string;
+  macAddress?: string;
+  registeredAt: string;
+  isLocked?: boolean;
+}
+
 export interface MaintenanceRecord {
   id: string;
   deviceId: string;

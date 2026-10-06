@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "EDM SmartGuard SCADA - Giám Sát & Chẩn Đoán Ngoại Tuyến",
+  "short_name": "SmartGuard",
+  "description": "Nền tảng SCADA giám sát vận hành máy EDM và tra cứu chẩn đoán sự cố ngoại tuyến khi mất mạng xưởng.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "categories": ["productivity", "utilities", "business"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

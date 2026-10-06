@@ -10,15 +10,18 @@ import {
   Brain,
   Users,
   Wifi,
+  WifiOff,
   Radio,
   Zap,
+  HardDrive,
 } from 'lucide-react';
 import { FactoryStats } from '../types';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   stats: FactoryStats | null;
-  activeTab: 'devices' | 'learnings' | 'documents' | 'notifications';
-  setActiveTab: (tab: 'devices' | 'learnings' | 'documents' | 'notifications') => void;
+  activeTab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices';
+  setActiveTab: (tab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices') => void;
   isMuted: boolean;
   toggleMute: () => void;
   pushPermission: NotificationPermission;
@@ -27,6 +30,10 @@ interface HeaderProps {
   onOpenPhoneView: () => void;
   onOpenTechStatus: () => void;
   onDutyTechCount?: number;
+  isOnline?: boolean;
+  isSimulatedOffline?: boolean;
+  onToggleSimulateOffline?: () => void;
+  onlineMobileCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -41,6 +48,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPhoneView,
   onOpenTechStatus,
   onDutyTechCount,
+  isOnline = true,
+  isSimulatedOffline = false,
+  onToggleSimulateOffline,
+  onlineMobileCount = 5,
 }) => {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md">
@@ -67,15 +78,26 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Live IoT Gateway Status & Quick Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* EDM Gateway Sync Indicator */}
-          <div className="hidden md:flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-300">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-            </span>
-            <span className="font-mono text-slate-400">EDM Gateway:</span>
-            <span className="font-semibold text-emerald-400">CONNECTED (1Hz)</span>
-          </div>
+          {/* EDM Gateway & Offline Status Indicator */}
+          {isOnline ? (
+            <div className="hidden md:flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-300">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+              </span>
+              <span className="font-mono text-slate-400">EDM Gateway:</span>
+              <span className="font-semibold text-emerald-400">ONLINE (1Hz)</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-950/40 px-3 py-1.5 text-xs text-amber-300 animate-pulse shadow-sm">
+              <WifiOff className="h-3.5 w-3.5 text-amber-400" />
+              <span className="font-mono font-bold">OFFLINE CACHE</span>
+              <span className="hidden lg:inline text-[10px] text-amber-200">(Service Worker)</span>
+            </div>
+          )}
+
+          {/* In-App PWA Install Button */}
+          <PWAInstallButton />
 
           {/* Sound Alarm Toggle */}
           <button
@@ -206,6 +228,23 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Radio className="h-4 w-4 text-emerald-400" />
             <span>Nhật Ký Bắn Push</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('mobile-devices')}
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
+              activeTab === 'mobile-devices'
+                ? 'bg-slate-800 text-indigo-400 shadow-sm font-bold'
+                : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+            }`}
+          >
+            <Smartphone className="h-4 w-4 text-indigo-400" />
+            <span>Thiết Bị Di Động</span>
+            {onlineMobileCount !== undefined && (
+              <span className="flex h-4 items-center justify-center rounded-full bg-indigo-500/20 px-1.5 text-[9px] font-mono font-bold text-indigo-300">
+                {onlineMobileCount} online
+              </span>
+            )}
           </button>
         </nav>
 

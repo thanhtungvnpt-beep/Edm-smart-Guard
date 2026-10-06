@@ -26,6 +26,7 @@ import {
   TechnicalDocument,
   Technician,
   AILearning,
+  MobileDevice,
 } from './types';
 import { Header } from './components/Header';
 import { DeviceCard } from './components/DeviceCard';
@@ -36,12 +37,17 @@ import { RepairReportModal } from './components/RepairReportModal';
 import { AILearningsTab } from './components/AILearningsTab';
 import { DocumentsTab } from './components/DocumentsTab';
 import { NotificationsTab } from './components/NotificationsTab';
+import { MobileDevicesManagementTab } from './components/MobileDevicesManagementTab';
 import { EdmSimulatorModal } from './components/EdmSimulatorModal';
 import { PerformanceAnalytics } from './components/PerformanceAnalytics';
 import { FacilitySummaryCard } from './components/FacilitySummaryCard';
+import { PredictiveMaintenanceAlerts } from './components/PredictiveMaintenanceAlerts';
 import { MachineDetailsModal } from './components/MachineDetailsModal';
 import { TechnicianStatusSidebar } from './components/TechnicianStatusSidebar';
 import { QRCodeScannerModal } from './components/QRCodeScannerModal';
+import { OfflineConnectivityBanner } from './components/OfflineConnectivityBanner';
+import { useOfflineStatus } from './hooks/useOfflineStatus';
+import { cacheOfflineSnapshot, getOfflineSnapshot } from './utils/offlineManager';
 import { soundManager } from './utils/audio';
 import {
   getPushPermissionStatus,
@@ -52,13 +58,16 @@ import {
 export default function App() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [mobileDevices, setMobileDevices] = useState<MobileDevice[]>([]);
   const [stats, setStats] = useState<FactoryStats | null>(null);
   const [documents, setDocuments] = useState<TechnicalDocument[]>([]);
   const [learnings, setLearnings] = useState<AILearning[]>([]);
   const [notifications, setNotifications] = useState<NotificationLog[]>([]);
 
   // Navigation
-  const [activeTab, setActiveTab] = useState<'devices' | 'learnings' | 'documents' | 'notifications'>('devices');
+  const [activeTab, setActiveTab] = useState<
+    'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices'
+  >('devices');
 
   // Filters
   const [deviceFilter, setDeviceFilter] = useState<'ALL' | 'ALARM' | 'RUNNING' | 'WIRE_EDM' | 'SINKER_EDM'>('ALL');
@@ -80,6 +89,29 @@ export default function App() {
 
   // Success Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Fleet Maintenance Notifications Silencing State
+  const [maintenanceNotificationsEnabled, setMaintenanceNotificationsEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('smartguard_fleet_maintenance_notifications_enabled');
+      return saved !== 'false';
+    }
+    return true;
+  });
+
+  const handleToggleMaintenanceNotifications = (enabled: boolean) => {
+    setMaintenanceNotificationsEnabled(enabled);
+    localStorage.setItem('smartguard_fleet_maintenance_notifications_enabled', String(enabled));
+    if (enabled) {
+      showToast('Đã BẬT thông báo bảo dưỡng dự đoán toàn bộ hạm đội máy trong xưởng.');
+    } else {
+      showToast('Đã TẮT thông báo bảo dưỡng dự đoán toàn xưởng (Chế độ yên lặng hạm đội).');
+    }
+  };
+
+  // Offline State & Intermittent Connectivity Management
+  const { isOnline, isSimulated, cacheInfo, toggleSimulateOffline, refreshCacheInfo } =
+    useOfflineStatus();
 
   // Track previously alarmed devices to prevent redundant siren triggers
   const previousAlarmIdsRef = useRef<Set<string>>(new Set());
@@ -148,17 +180,26 @@ export default function App() {
   // --- FETCH DATA ---
   const fetchAllData = async () => {
     try {
-      const [devRes, statRes, docRes, learnRes, notifRes, techRes] = await Promise.all([
+      const [devRes, statRes, docRes, learnRes, notifRes, techRes, mobRes] = await Promise.all([
         safeFetchJson('/api/devices'),
         safeFetchJson('/api/stats'),
         safeFetchJson('/api/documents'),
         safeFetchJson('/api/ai/learnings'),
         safeFetchJson('/api/notifications'),
         safeFetchJson('/api/technicians'),
+        safeFetchJson('/api/mobile-devices'),
       ]);
 
       if (devRes && devRes.success && Array.isArray(devRes.data)) {
         setDevices(devRes.data);
+
+        // Cache fresh snapshot to Service Worker and LocalStorage for offline viewing
+        const freshDocs =
+          docRes && docRes.success && Array.isArray(docRes.data) ? docRes.data : documents;
+        const freshLearnings =
+          learnRes && learnRes.success && Array.isArray(learnRes.data) ? learnRes.data : learnings;
+        cacheOfflineSnapshot(devRes.data, freshDocs, freshLearnings);
+        refreshCacheInfo();
 
         // Check for new alarms
         const currentAlarms = devRes.data.filter((d: Device) => d.status === 'ALARM_STOPPED');
@@ -184,6 +225,18 @@ export default function App() {
         // Clean up resolved alarms from tracked set
         const activeAlarmIds = new Set<string>(currentAlarms.map((d: Device) => d.id));
         previousAlarmIdsRef.current = activeAlarmIds;
+      } else {
+        // Fallback to offline cached snapshot if server is unreachable
+        const offlineData = getOfflineSnapshot();
+        if (offlineData.devices.length > 0) {
+          setDevices((curr) => (curr.length > 0 ? curr : offlineData.devices));
+          if (offlineData.documents.length > 0) {
+            setDocuments((curr) => (curr.length > 0 ? curr : offlineData.documents));
+          }
+          if (offlineData.learnings.length > 0) {
+            setLearnings((curr) => (curr.length > 0 ? curr : offlineData.learnings));
+          }
+        }
       }
 
       if (statRes && statRes.success && statRes.data) setStats(statRes.data);
@@ -191,17 +244,141 @@ export default function App() {
       if (learnRes && learnRes.success && Array.isArray(learnRes.data)) setLearnings(learnRes.data);
       if (notifRes && notifRes.success && Array.isArray(notifRes.data)) setNotifications(notifRes.data);
       if (techRes && techRes.success && Array.isArray(techRes.data)) setTechnicians(techRes.data);
+      if (mobRes && mobRes.success && Array.isArray(mobRes.data)) setMobileDevices(mobRes.data);
     } catch (err) {
-      console.warn('Fetch sync warning:', err);
+      console.warn('Fetch sync warning (operating in offline fallback):', err);
+      // Fallback to offline cached snapshot
+      const offlineData = getOfflineSnapshot();
+      if (offlineData.devices.length > 0) {
+        setDevices((curr) => (curr.length > 0 ? curr : offlineData.devices));
+        if (offlineData.documents.length > 0) {
+          setDocuments((curr) => (curr.length > 0 ? curr : offlineData.documents));
+        }
+      }
+    }
+  };
+
+  // --- MOBILE DEVICE FLEET HANDLERS ---
+  const handleSendMobileTestPush = async (deviceId: string) => {
+    try {
+      const res = await fetch(`/api/mobile-devices/${deviceId}/push-test`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setNotifications((prev) => [data.data, ...prev]);
+        showToast(data.message || 'Đã gửi thông báo đẩy kiểm thử tới thiết bị!');
+      }
+    } catch (err) {
+      console.error('Failed to send test push to mobile device:', err);
+    }
+  };
+
+  const handlePingMobileDevice = async (deviceId: string) => {
+    try {
+      const res = await fetch(`/api/mobile-devices/${deviceId}/ping`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setMobileDevices((prev) =>
+          prev.map((m) => (m.id === deviceId ? data.data : m))
+        );
+        showToast(data.message || 'Ping phản hồi thành công!');
+      }
+    } catch (err) {
+      console.error('Failed to ping mobile device:', err);
+    }
+  };
+
+  const handleToggleLockMobileDevice = async (deviceId: string) => {
+    try {
+      const res = await fetch(`/api/mobile-devices/${deviceId}/toggle-lock`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setMobileDevices((prev) =>
+          prev.map((m) => (m.id === deviceId ? data.data : m))
+        );
+        showToast(data.message);
+      }
+    } catch (err) {
+      console.error('Failed to toggle device lock:', err);
+    }
+  };
+
+  const handleDeleteMobileDevice = async (deviceId: string) => {
+    try {
+      const res = await fetch(`/api/mobile-devices/${deviceId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMobileDevices((prev) => prev.filter((m) => m.id !== deviceId));
+        showToast(data.message);
+      }
+    } catch (err) {
+      console.error('Failed to delete mobile device:', err);
+    }
+  };
+
+  const handleRegisterMobileDevice = async (newDevData: Partial<MobileDevice>) => {
+    try {
+      const res = await fetch('/api/mobile-devices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDevData),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setMobileDevices((prev) => [data.data, ...prev]);
+        showToast(data.message || 'Đăng ký thiết bị di động mới thành công!');
+      }
+    } catch (err) {
+      console.error('Failed to register mobile device:', err);
+    }
+  };
+
+  const handleBroadcastMobile = async (
+    title: string,
+    message: string,
+    urgency: 'INFO' | 'CRITICAL'
+  ) => {
+    try {
+      const res = await fetch('/api/mobile-devices/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageTitle: title, messageBody: message, urgency }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setNotifications((prev) => [data.data, ...prev]);
+        showToast(data.message || 'Đã phát thông báo toàn xưởng thành công!');
+      }
+    } catch (err) {
+      console.error('Failed to broadcast to mobile devices:', err);
     }
   };
 
   useEffect(() => {
+    // Initial immediate rehydration from offline storage
+    const offlineData = getOfflineSnapshot();
+    if (offlineData.devices.length > 0) {
+      setDevices(offlineData.devices);
+      if (offlineData.documents.length > 0) setDocuments(offlineData.documents);
+      if (offlineData.learnings.length > 0) setLearnings(offlineData.learnings);
+    }
+
     fetchAllData();
-    // Poll telemetry every 2.5 seconds
-    const interval = setInterval(fetchAllData, 2500);
+    // Poll telemetry every 2.5 seconds when online
+    const interval = setInterval(() => {
+      if (isOnline) {
+        fetchAllData();
+      }
+    }, 2500);
     return () => clearInterval(interval);
-  }, []);
+  }, [isOnline]);
 
   // --- AUDIO & PUSH HANDLERS ---
   const toggleMute = () => {
@@ -319,6 +496,19 @@ export default function App() {
         onOpenPhoneView={() => setPhoneDevice(devices[0] || null)}
         onOpenTechStatus={() => setShowTechSidebar(true)}
         onDutyTechCount={technicians.filter((t) => t.activeStatus === 'ON_DUTY').length}
+        isOnline={isOnline}
+        isSimulatedOffline={isSimulated}
+        onToggleSimulateOffline={toggleSimulateOffline}
+        onlineMobileCount={mobileDevices.filter((m) => m.status === 'ONLINE' && !m.isLocked).length}
+      />
+
+      {/* Offline Connectivity Banner */}
+      <OfflineConnectivityBanner
+        isOnline={isOnline}
+        isSimulated={isSimulated}
+        cacheInfo={cacheInfo}
+        onToggleSimulate={toggleSimulateOffline}
+        onRefresh={fetchAllData}
       />
 
       {/* Main Content Area */}
@@ -339,6 +529,14 @@ export default function App() {
               devices={devices}
               activeFilter={deviceFilter}
               onSelectFilter={(f) => setDeviceFilter(f)}
+            />
+
+            {/* Predictive Maintenance Alerts based on machine usage hours and service interval progress */}
+            <PredictiveMaintenanceAlerts
+              devices={devices}
+              onOpenMachineDetails={(device) => setDetailsDevice(device)}
+              maintenanceNotificationsEnabled={maintenanceNotificationsEnabled}
+              onToggleMaintenanceNotifications={handleToggleMaintenanceNotifications}
             />
 
             {/* 30-Day Machine Uptime Trends & Recharts Analytics Dashboard */}
@@ -462,6 +660,21 @@ export default function App() {
               setNotifications((prev) => [newLog, ...prev]);
               showToast(`Đã bắn Push Notification tới ${newLog.recipientName} (${newLog.recipientPhone})`);
             }}
+          />
+        )}
+
+        {/* TAB 5: MOBILE FLEET & TERMINAL MANAGEMENT */}
+        {activeTab === 'mobile-devices' && (
+          <MobileDevicesManagementTab
+            mobileDevices={mobileDevices}
+            technicians={technicians}
+            onRefresh={fetchAllData}
+            onSendTestPush={handleSendMobileTestPush}
+            onPingDevice={handlePingMobileDevice}
+            onToggleLockDevice={handleToggleLockMobileDevice}
+            onDeleteDevice={handleDeleteMobileDevice}
+            onRegisterDevice={handleRegisterMobileDevice}
+            onBroadcast={handleBroadcastMobile}
           />
         )}
       </main>
