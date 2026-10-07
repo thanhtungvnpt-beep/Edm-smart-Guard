@@ -190,3 +190,24 @@ export interface MaintenanceRecord {
   aiVerified?: boolean;
 }
 
+export interface MaintenanceReminder {
+  id: string;
+  deviceId: string;
+  deviceCode: string;
+  deviceName: string;
+  componentName: string; // e.g. "Lõi lọc nước ion & giấy (Dielectric Filter)" or "Bơm nước làm mát (Coolant Pump)"
+  componentType: 'FILTER' | 'PUMP' | 'GUIDE' | 'CONTACT' | 'LUBRICATION' | 'SPINDLE' | 'CUSTOM';
+  intervalType: 'CALENDAR_DAYS' | 'OPERATING_HOURS';
+  intervalValue: number; // e.g. 14 days or 250 hours
+  lastServicedDate: string; // ISO date
+  nextDueDate: string; // ISO date
+  currentOperatingHours?: number;
+  dueOperatingHours?: number;
+  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  notificationChannel: 'PUSH_NOTIFICATION' | 'SMS' | 'AUDIO_ALARM';
+  assignedTechnicianName: string;
+  instructions: string;
+  isActive: boolean;
+  createdAt: string;
+}
+

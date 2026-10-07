@@ -46,6 +46,11 @@ import { MachineDetailsModal } from './components/MachineDetailsModal';
 import { TechnicianStatusSidebar } from './components/TechnicianStatusSidebar';
 import { QRCodeScannerModal } from './components/QRCodeScannerModal';
 import { OfflineConnectivityBanner } from './components/OfflineConnectivityBanner';
+import { DashboardCardsContainer } from './components/DashboardCardsContainer';
+import {
+  TopLevelCardId,
+  getStoredDashboardCardsOrder,
+} from './utils/dashboardLayoutStorage';
 import { useOfflineStatus } from './hooks/useOfflineStatus';
 import { cacheOfflineSnapshot, getOfflineSnapshot } from './utils/offlineManager';
 import { soundManager } from './utils/audio';
@@ -108,6 +113,11 @@ export default function App() {
       showToast('Đã TẮT thông báo bảo dưỡng dự đoán toàn xưởng (Chế độ yên lặng hạm đội).');
     }
   };
+
+  // Dashboard Top-Level Cards Layout Order (Drag-and-Drop Customizable)
+  const [dashboardCardOrder, setDashboardCardOrder] = useState<TopLevelCardId[]>(() =>
+    getStoredDashboardCardsOrder()
+  );
 
   // Offline State & Intermittent Connectivity Management
   const { isOnline, isSimulated, cacheInfo, toggleSimulateOffline, refreshCacheInfo } =
@@ -524,23 +534,37 @@ export default function App() {
         {/* TAB 1: REAL-TIME DEVICES & TELEMETRY */}
         {activeTab === 'devices' && (
           <div className="space-y-6">
-            {/* Facility Key Performance Indicators (Total Active, Average Efficiency, Urgent Repairs) */}
-            <FacilitySummaryCard
-              devices={devices}
-              activeFilter={deviceFilter}
-              onSelectFilter={(f) => setDeviceFilter(f)}
+            {/* Custom Drag-and-Drop Reorderable Top-Level Cards Container */}
+            <DashboardCardsContainer
+              cardOrder={dashboardCardOrder}
+              onOrderChange={(newOrder) => setDashboardCardOrder(newOrder)}
+              onToast={(msg) => showToast(msg)}
+              renderCard={(cardId) => {
+                switch (cardId) {
+                  case 'facility-summary':
+                    return (
+                      <FacilitySummaryCard
+                        devices={devices}
+                        activeFilter={deviceFilter}
+                        onSelectFilter={(f) => setDeviceFilter(f)}
+                      />
+                    );
+                  case 'predictive-alerts':
+                    return (
+                      <PredictiveMaintenanceAlerts
+                        devices={devices}
+                        onOpenMachineDetails={(device) => setDetailsDevice(device)}
+                        maintenanceNotificationsEnabled={maintenanceNotificationsEnabled}
+                        onToggleMaintenanceNotifications={handleToggleMaintenanceNotifications}
+                      />
+                    );
+                  case 'performance-analytics':
+                    return <PerformanceAnalytics devices={devices} />;
+                  default:
+                    return null;
+                }
+              }}
             />
-
-            {/* Predictive Maintenance Alerts based on machine usage hours and service interval progress */}
-            <PredictiveMaintenanceAlerts
-              devices={devices}
-              onOpenMachineDetails={(device) => setDetailsDevice(device)}
-              maintenanceNotificationsEnabled={maintenanceNotificationsEnabled}
-              onToggleMaintenanceNotifications={handleToggleMaintenanceNotifications}
-            />
-
-            {/* 30-Day Machine Uptime Trends & Recharts Analytics Dashboard */}
-            <PerformanceAnalytics devices={devices} />
 
             {/* Filter and Search Bar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl bg-slate-900/60 border border-slate-800 p-3">
@@ -745,10 +769,15 @@ export default function App() {
         onClose={() => setShowTechSidebar(false)}
         technicians={technicians}
         devices={devices}
+        learnings={learnings}
         onUpdateTechStatus={handleUpdateTechStatus}
         onReassignDevice={handleReassignDevice}
         onOpenPhoneView={(d) => setPhoneDevice(d)}
         onOpenMachineDetails={(d) => setDetailsDevice(d)}
+        onNavigateToLearningsTab={() => {
+          setActiveTab('learnings');
+          setShowTechSidebar(false);
+        }}
       />
 
       {/* 8. QR Code Scanner Modal for Physical Machine Stickers */}

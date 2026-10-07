@@ -553,7 +553,7 @@ let aiLearnings: AILearning[] = [
     problemStatement: 'Máy cắt dây thường xuyên bị đứt dây tại góc lượn sắc R0.15 khi cắt thép tôi dày 90mm, EDM dừng liên tục 5 lần trong ca đêm.',
     humanSolution: 'Tại trang điều khiển C-Condition: Giảm thông số IP (Peak Current) xuống 2 nấc khi dao cắt tiến vào bán kính cong R < 0.3mm, đồng thời tăng áp lực nước vòi trên lên nấc High. Dây không còn bị nhiệt quá tải tại điểm xoay trục.',
     aiSynthesizedRule: 'Khi gặp lỗi E-102 lặp lại tại biên dạng góc hẹp (Corner cutting): Giảm dòng đỉnh IP 15% và kích hoạt chế độ "Corner Slowdown" với áp lực xả nước tối đa.',
-    timesAppliedSuccessfully: 9,
+    timesAppliedSuccessfully: 12,
     verified: true,
   },
   {
@@ -566,7 +566,98 @@ let aiLearnings: AILearning[] = [
     problemStatement: 'Trục Z thỉnh thoảng báo quá tải gia số vị trí khi phóng điện xung sâu > 40mm.',
     humanSolution: 'Kiểm tra đường hồi dầu của đầu gá Chuck điện cực 3R, van 1 chiều bi sắt bị hạt phôi kẹt nhẹ khiến điện cực không rút về kịp chu kỳ xung. Tháo chốt nam châm chữ U hút sạch mạt thép là hết lỗi.',
     aiSynthesizedRule: 'Lỗi E-408 khi gia công xung sâu: Kiểm tra bi van một chiều tại đầu gá System 3R xem có dính mạt kim loại làm chậm phản ứng rụt điện cực.',
-    timesAppliedSuccessfully: 6,
+    timesAppliedSuccessfully: 8,
+    verified: true,
+  },
+  {
+    id: 'learn-04',
+    title: 'Tẩy cặn và thay thế nhanh quạt tản nhiệt biến tần IGBT tủ phát xung',
+    errorCode: 'ALARM-501',
+    machineModel: 'Makino U6 H.E.A.T',
+    discoveredBy: 'Nguyễn Văn Hùng (Kỹ sư Trưởng)',
+    learnedAt: '2026-09-08',
+    problemStatement: 'Tủ điện báo quá nhiệt khối công suất phóng tia lửa (Overheat IGBT 72°C) khi cắt thô dòng 35A liên tục trong ca trưa.',
+    humanSolution: 'Tháo tấm lọc bụi phía sau cánh tủ, thổi khí nén sạch khô ngược chiều và tra dầu silicon chịu nhiệt vào trục bi quạt Sunon 24VDC. Nhiệt độ hạ xuống 41°C ổn định.',
+    aiSynthesizedRule: 'ALARM-501 quá nhiệt khối nguồn: Làm sạch màng lọc và bảo dưỡng quạt hút cưỡng bức tủ điện trước khi can thiệp vào bo mạch công suất.',
+    timesAppliedSuccessfully: 16,
+    verified: true,
+  },
+  {
+    id: 'learn-05',
+    title: 'Hiệu chuẩn lực căng dây cắt 12N và chỉnh khe từ động cơ AWF Fanuc',
+    errorCode: 'E-105',
+    machineModel: 'Fanuc Robocut α-C600iB',
+    discoveredBy: 'Lê Hoàng Nam (Chuyên gia Cắt Dây)',
+    learnedAt: '2026-09-12',
+    problemStatement: 'Dây cắt bị võng gây góc cắt côn sai số 0.006mm khi gia công phôi hợp kim nhôm hàng không.',
+    humanSolution: 'Dùng lực kế đồng hồ căng chỉnh lại lò xo hồi vị phanh điện từ brake roller về mức chuẩn 12.2N. Cân chỉnh độ đồng tâm con lăn kéo dây thải.',
+    aiSynthesizedRule: 'Khi phôi bị sai lệch độ thẳng đứng trục U/V: Kiểm tra lực căng dây thực tế bằng lực kế trước khi bù trừ tọa độ phần mềm.',
+    timesAppliedSuccessfully: 14,
+    verified: true,
+  },
+  {
+    id: 'learn-06',
+    title: 'Khắc phục kẹt bọt khí van tỷ lệ thủy lực nâng hạ bàn phôi',
+    errorCode: 'ALARM-302',
+    machineModel: 'GF AgieCharmilles FORM E 350',
+    discoveredBy: 'Trần Minh Tuấn (Kỹ sư Cơ điện)',
+    learnedAt: '2026-08-30',
+    problemStatement: 'Bàn phôi hạ giật cục khi xả dầu ngâm, gây rung động làm xô lệch phôi gá đặt chính xác.',
+    humanSolution: 'Mở ốc xả khí (Bleed screw) trên đỉnh van tỷ lệ Rexroth, bơm tuần hoàn áp suất thấp 3 bar trong 2 phút để đẩy toàn bộ bọt khí ra khỏi đường ống dầu.',
+    aiSynthesizedRule: 'Hiện tượng giật cục bàn gá thủy lực: Xả e bọt khí tại van tỷ lệ trước khi tháo kiểm tra bơm thủy lực.',
+    timesAppliedSuccessfully: 10,
+    verified: true,
+  },
+  {
+    id: 'learn-07',
+    title: 'Hiệu chuẩn bù trừ sai số quang học thước đo tuyến tính Heidenhain',
+    errorCode: 'E-201',
+    machineModel: 'Sodick ALC600G',
+    discoveredBy: 'Phạm Đức Anh (Kỹ thuật viên 4.0)',
+    learnedAt: '2026-09-15',
+    problemStatement: 'Thước quang trục X báo lỗi tín hiệu đọc yếu do hơi dầu bám mặt kính quang học sau 1800 giờ.',
+    humanSolution: 'Dùng tăm bông chuyên dụng thấm cồn Isopropyl 99% lau nhẹ mắt đọc quang học (Scanning head), kiểm tra áp suất khí thổi bảo vệ thước đạt 0.15 MPa.',
+    aiSynthesizedRule: 'Lỗi tín hiệu thước quang E-201: Vệ sinh mắt đọc bằng cồn tinh khiết và phục hồi áp suất khí nén làm sạch chống ẩm.',
+    timesAppliedSuccessfully: 9,
+    verified: true,
+  },
+  {
+    id: 'learn-08',
+    title: 'Xử lý tắc kim phun áp lực cao luồn dây tự động AWF bằng bể rửa siêu âm',
+    errorCode: 'ALARM-404',
+    machineModel: 'Makino U6 H.E.A.T',
+    discoveredBy: 'Phạm Đức Anh (Kỹ thuật viên 4.0)',
+    learnedAt: '2026-09-22',
+    problemStatement: 'Tia nước luồn dây tự động bị tòe sang một bên, tỷ lệ xỏ dây mồi thành công chỉ đạt 30%.',
+    humanSolution: 'Tháo vòi phun Nozzle 4mm ngâm trong bể rửa siêu âm với dung dịch tẩy gỉ sét trong 15 phút, dùng dây cước ø0.3mm thông lỗ mồi.',
+    aiSynthesizedRule: 'Tia nước AWF bị lệch: Thông rửa siêu âm đầu vòi xả cao áp để phục hồi tỷ lệ luồn dây tự động đạt 100%.',
+    timesAppliedSuccessfully: 7,
+    verified: true,
+  },
+  {
+    id: 'learn-09',
+    title: 'Căn chỉnh độ vuông góc tháp cắt U-V bằng thước chuẩn đá Granite',
+    errorCode: 'E-303',
+    machineModel: 'Fanuc Robocut α-C600iB',
+    discoveredBy: 'Lê Hoàng Nam (Chuyên gia Cắt Dây)',
+    learnedAt: '2026-09-20',
+    problemStatement: 'Góc cắt côn 10 độ bị biến dạng elip trên chi tiết khuôn dập liên hoàn.',
+    humanSolution: 'Gá thước góc vuông đá granite lên bàn máy, chạy rà đồng hồ so điện tử 0.001mm bù độ nghiêng trục U và V trên phần mềm Fanuc 31i-WB.',
+    aiSynthesizedRule: 'Gia công góc côn bị méo: Thực hiện chu trình căn chỉnh tự động tháp U/V với cữ chuẩn đá granit.',
+    timesAppliedSuccessfully: 11,
+    verified: true,
+  },
+  {
+    id: 'learn-10',
+    title: 'Tối ưu hóa chu trình súc rửa xỉ khe phóng điện khi cắt phôi dày > 200mm',
+    errorCode: 'ALARM-108',
+    machineModel: 'Makino U6 H.E.A.T',
+    discoveredBy: 'Nguyễn Văn Hùng (Kỹ sư Trưởng)',
+    learnedAt: '2026-09-10',
+    problemStatement: 'Phoi xỉ tích tụ ở đáy rãnh cắt sâu gây chập điện cực và giảm tốc độ cắt xuống 40%.',
+    humanSolution: 'Kích hoạt chế độ xung nhịp dao động rút phôi (Pumping Cycle), tăng áp lực xả nước đáy lên 2.2 MPa và đảo mặt tấm tiếp điện sau mỗi 12 giờ.',
+    aiSynthesizedRule: 'Cắt phôi siêu dày > 200mm: Tăng áp suất vòi xả đáy và kích hoạt chu trình Pumping giúp thoát xỉ nhanh, tăng tốc độ cắt 25%.',
+    timesAppliedSuccessfully: 15,
     verified: true,
   },
 ];
@@ -1079,7 +1170,7 @@ Hãy trả về JSON theo schema:
 // 8. AI DIAGNOSTIC ENGINE: Analyze Equipment Breakdown
 app.post('/api/ai/diagnose', async (req, res) => {
   try {
-    const { deviceId, incidentId } = req.body;
+    const { deviceId, incidentId, voiceSymptoms } = req.body;
     const device = devices.find((d) => d.id === deviceId);
 
     if (!device) {
@@ -1127,6 +1218,11 @@ THÔNG SỐ CẢM BIẾN TẠI THỜI ĐIỂM DỪNG (EDM Snapshot):
 - Nhiệt độ dung dịch điện môi: ${incident.telemetrySnapshot.dielectricTemp} °C (Định mức: ${device.nominalRanges.dielectricTemp[0]} - ${device.nominalRanges.dielectricTemp[1]} °C)
 - Sức căng dây cắt EDM: ${incident.telemetrySnapshot.wireTension} N (Định mức: ${device.nominalRanges.wireTension[0]} - ${device.nominalRanges.wireTension[1]} N)
 - Độ rung: ${incident.telemetrySnapshot.vibration} mm/s (Định mức: ${device.nominalRanges.vibration[0]} - ${device.nominalRanges.vibration[1]} mm/s)
+${voiceSymptoms ? `
+TRIỆU CHỨNG THỰC TẾ DO KỸ THUẬT VIÊN MÔ TẢ TRỰC TIẾP QUA GIỌNG NÓI RẢNH TAY (HANDS-FREE VOICE INPUT):
+"${voiceSymptoms}"
+* LƯU Ý ĐẶC BIỆT: Hãy trực tiếp phân tích và đưa ra giải pháp dựa trên triệu chứng âm thanh/mùi/cơ học mà kỹ thuật viên đang quan sát trực tiếp này!
+` : ''}
 
 TÀI LIỆU KỸ THUẬT DO CON NGƯỜI ĐÃ CUNG CẤP CHO BẠN:
 ${relevantDocs.map((d) => `[Tài liệu: ${d.title}]\n${d.content.slice(0, 700)}`).join('\n---\n')}
@@ -1135,7 +1231,7 @@ KINH NGHIỆM THỰC CHIẾN MÀ BẠN (AI) ĐÃ HỌC TỪ CÁC KỸ THUẬT VI
 ${relevantLearnings.map((l) => `[Bài học từ ${l.discoveredBy}]: ${l.aiSynthesizedRule}\nCách giải quyết thực tế: ${l.humanSolution}`).join('\n---\n')}
 
 YÊU CẦU:
-Hãy phân tích nguyên nhân sự cố một cách sắc sảo, tích hợp cả tài liệu kỹ thuật lẫn kinh nghiệm thực chiến đã học từ con người để đưa ra giải pháp sửa chữa NHANH NHẤT và AN TOÀN NHẤT.
+Hãy phân tích nguyên nhân sự cố một cách sắc sảo, tích hợp cả triệu chứng giọng nói, tài liệu kỹ thuật lẫn kinh nghiệm thực chiến đã học từ con người để đưa ra giải pháp sửa chữa NHANH NHẤT và AN TOÀN NHẤT.
 
 Trả về kết quả chuẩn định dạng JSON theo schema:
 {
@@ -1250,6 +1346,13 @@ Trả về kết quả chuẩn định dạng JSON theo schema:
           recommendedParts: ['Quạt làm mát 24VDC Sunon', 'Túi hạt nhựa trao đổi ion DI Resin'],
           estimatedMttrMinutes: 30,
         };
+      }
+    }
+
+    if (voiceSymptoms && diagnosisData) {
+      diagnosisData.failureMechanism = `${diagnosisData.failureMechanism} (Phân tích theo triệu chứng KTV mô tả qua giọng nói: "${voiceSymptoms}")`;
+      if (!diagnosisData.stepByStepGuide.some((s: string) => s.includes('giọng nói') || s.includes('triệu chứng'))) {
+        diagnosisData.stepByStepGuide.unshift(`Bước ưu tiên: Kiểm tra và xử lý trực tiếp triệu chứng rảnh tay đã ghi nhận: "${voiceSymptoms}".`);
       }
     }
 

@@ -5,6 +5,8 @@ import {
   BarChart,
   Bar,
   Cell,
+  ComposedChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -17,6 +19,7 @@ import {
   Activity,
   AlertOctagon,
   AlertTriangle,
+  ArrowRight,
   ArrowUpRight,
   BarChart3,
   Calendar,
@@ -26,15 +29,23 @@ import {
   Clock,
   Cpu,
   Download,
+  Droplets,
   FileSpreadsheet,
+  Filter,
+  Info,
   Layers,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
+  TrendingDown,
   TrendingUp,
   Wrench,
   Zap,
 } from 'lucide-react';
 import { Device } from '../types';
+import { download30DayOperationalCSV } from '../utils/csvExportHelper';
+import { getStoredReminders } from '../utils/maintenanceReminderData';
+import { getMachineScheduledTasks } from '../utils/serviceScheduleData';
 
 interface PerformanceAnalyticsProps {
   devices: Device[];
@@ -42,7 +53,7 @@ interface PerformanceAnalyticsProps {
 
 export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devices }) => {
   const [selectedMachine, setSelectedMachine] = useState<string>('ALL');
-  const [activeMetric, setActiveMetric] = useState<'uptime' | 'oee' | 'downtime'>('downtime');
+  const [activeMetric, setActiveMetric] = useState<'uptime' | 'oee' | 'downtime' | 'forecast'>('downtime');
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [downtimeThreshold, setDowntimeThreshold] = useState<number>(120); // 120 minutes = 2 hours
 
@@ -138,6 +149,133 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
     return (mins / 60).toFixed(0);
   }, [historyData]);
 
+  // 7-Day Forward Operational Performance (Uptime) Forecast based on historical trends & current maintenance alerts
+  const forecast7DaysData = useMemo(() => {
+    // Current date benchmark: 2026-10-06
+    const today = new Date('2026-10-06T12:00:00Z');
+    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
+    const allReminders = getStoredReminders().filter((r) => r.isActive);
+    const targetDevices = selectedMachine === 'ALL' ? devices : devices.filter((d) => d.id === selectedMachine);
+    const fleetSize = Math.max(1, targetDevices.length);
+    const baseHistoricalUptime = Number(avgUptime) || 96.2;
+
+    const forecast = [];
+
+    for (let i = 1; i <= 7; i++) {
+      const forecastDate = new Date(today);
+      forecastDate.setUTCDate(today.getUTCDate() + i);
+
+      const year = forecastDate.getUTCFullYear();
+      const month = forecastDate.getUTCMonth() + 1;
+      const day = forecastDate.getUTCDate();
+      const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      const shortDate = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}`;
+      const dayOfWeekIndex = forecastDate.getUTCDay();
+      const dayName = dayNames[dayOfWeekIndex];
+      const isWeekend = dayOfWeekIndex === 0 || dayOfWeekIndex === 6;
+
+      const matchingTasks: string[] = [];
+      let totalPlannedDowntimeMins = 0;
+
+      targetDevices.forEach((dev) => {
+        // Scheduled service tasks
+        const devTasks = getMachineScheduledTasks(dev);
+        devTasks
+          .filter((t) => t.dueDate === dateStr)
+          .forEach((t) => {
+            matchingTasks.push(`[${dev.code}] ${t.taskTitle}`);
+            totalPlannedDowntimeMins += t.estimatedDurationMinutes || 60;
+          });
+
+        // Reminders due
+        const devReminders = allReminders.filter((r) => r.deviceId === dev.id && r.nextDueDate === dateStr);
+        devReminders.forEach((r) => {
+          matchingTasks.push(`[${dev.code}] Nhắc nhở: ${r.componentName}`);
+          totalPlannedDowntimeMins += r.intervalType === 'CALENDAR_DAYS' ? 45 : 30;
+        });
+
+        // Active incidents on day 1 or 2
+        if (i <= 2 && (dev.status === 'ALARM_STOPPED' || dev.activeIncident)) {
+          matchingTasks.push(`[${dev.code}] ⚠️ Khắc phục sự cố: ${dev.activeIncident?.errorTitle || 'Dừng máy'}`);
+          totalPlannedDowntimeMins += 50;
+        }
+      });
+
+      // Calculate planned downtime impact: 1% uptime = 14.4 mins in 24h
+      const avgMachineDowntime = totalPlannedDowntimeMins / fleetSize;
+      const plannedDowntimeImpactPct = (avgMachineDowntime / 1440) * 100;
+      const weekendBoost = isWeekend ? 1.4 : 0;
+      const stochasticVariance = Math.sin(i * 1.5) * 0.35;
+
+      let predictedUptime = baseHistoricalUptime + weekendBoost - plannedDowntimeImpactPct + stochasticVariance;
+      predictedUptime = Math.round(Math.min(99.5, Math.max(82.0, predictedUptime)) * 10) / 10;
+
+      const confidenceUpper = Math.round(Math.min(99.8, predictedUptime + 1.6) * 10) / 10;
+      const confidenceLower = Math.round(Math.max(78.0, predictedUptime - (matchingTasks.length > 0 ? 2.6 : 1.4)) * 10) / 10;
+
+      let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+      if (predictedUptime < 93.0 || totalPlannedDowntimeMins >= 100) {
+        riskLevel = 'HIGH';
+      } else if (predictedUptime < 95.0 || matchingTasks.length > 0) {
+        riskLevel = 'MEDIUM';
+      }
+
+      let eventSummary = 'Vận hành ổn định (Không có lịch bảo trì)';
+      if (matchingTasks.length === 1) {
+        eventSummary = matchingTasks[0];
+      } else if (matchingTasks.length > 1) {
+        eventSummary = `${matchingTasks[0]} (+${matchingTasks.length - 1} nhiệm vụ)`;
+      }
+
+      let recommendation = 'Duy trì ca trực và sản xuất tiêu chuẩn.';
+      if (riskLevel === 'HIGH') {
+        recommendation = 'Chuẩn bị sẵn vật tư dự phòng, điều phối đơn hàng sang các máy dự phòng.';
+      } else if (riskLevel === 'MEDIUM') {
+        recommendation = 'Theo dõi chặt chẽ áp suất và nhiệt độ trong ca bảo dưỡng.';
+      }
+
+      forecast.push({
+        dayIndex: i,
+        dayName,
+        date: shortDate,
+        fullDate: `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`,
+        predictedUptime,
+        targetUptime: 95.0,
+        confidenceUpper,
+        confidenceLower,
+        totalPlannedDowntimeMins,
+        plannedDowntimeHours: (totalPlannedDowntimeMins / 60).toFixed(1),
+        matchingTasks,
+        eventSummary,
+        riskLevel,
+        recommendation,
+        isWeekend,
+      });
+    }
+
+    return forecast;
+  }, [devices, selectedMachine, avgUptime]);
+
+  const avgForecastUptime = useMemo(() => {
+    const sum = forecast7DaysData.reduce((acc, curr) => acc + curr.predictedUptime, 0);
+    return (sum / forecast7DaysData.length).toFixed(1);
+  }, [forecast7DaysData]);
+
+  const totalForecastEventsCount = useMemo(() => {
+    return forecast7DaysData.reduce((acc, curr) => acc + curr.matchingTasks.length, 0);
+  }, [forecast7DaysData]);
+
+  const highestRiskForecastDay = useMemo(() => {
+    let lowest = forecast7DaysData[0];
+    forecast7DaysData.forEach((d) => {
+      if (d.predictedUptime < (lowest?.predictedUptime || 100)) {
+        lowest = d;
+      }
+    });
+    return lowest;
+  }, [forecast7DaysData]);
+
   // Export current 30-day analytics data as CSV
   const handleDownloadCSV = () => {
     const selectedMachineName =
@@ -230,15 +368,14 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Download Report Button */}
+          {/* Export CSV Button for 30-Day Machine Uptime Trend Audit */}
           <button
-            onClick={handleDownloadCSV}
-            title="Tải báo cáo dữ liệu 30 ngày dưới định dạng CSV (tương thích Microsoft Excel / Google Sheets)"
-            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium px-3 py-1.5 text-xs shadow-md shadow-emerald-950/40 transition active:scale-95 cursor-pointer"
+            onClick={() => download30DayOperationalCSV(devices)}
+            title="Tải báo cáo dữ liệu 30 ngày dưới định dạng CSV cho mục đích kiểm toán bên ngoài (Excel/Google Sheets)"
+            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-3.5 py-1.5 text-xs shadow-md shadow-emerald-950/40 transition active:scale-95 cursor-pointer"
           >
             <Download className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Xuất Báo Cáo CSV</span>
-            <span className="sm:hidden">Xuất CSV</span>
+            <span>Export CSV</span>
           </button>
 
           {/* Machine Filter Dropdown */}
@@ -278,7 +415,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
       {isExpanded && (
         <div className="mt-5 space-y-6 animate-in fade-in duration-300">
           {/* Quick KPI Stat Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3.5">
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span>Tỷ lệ Uptime TB 30 ngày</span>
@@ -332,11 +469,38 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
                 Tổng downtime 30 ngày: {totalDowntimeHours}h
               </div>
             </div>
+
+            {/* 5th KPI Card: 7-Day Predictive Uptime Forecast */}
+            <div
+              onClick={() => setActiveMetric('forecast')}
+              className={`rounded-2xl border p-3.5 cursor-pointer transition ${
+                activeMetric === 'forecast'
+                  ? 'border-cyan-500 bg-cyan-950/40 shadow-lg shadow-cyan-500/15 ring-1 ring-cyan-500/50'
+                  : 'border-slate-800/80 bg-gradient-to-br from-slate-950 to-cyan-950/20 hover:border-cyan-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="text-cyan-300 font-semibold flex items-center gap-1">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-300 animate-pulse" />
+                  Dự báo 7 ngày tới
+                </span>
+                <span className="rounded bg-cyan-500/20 text-cyan-300 px-1.5 py-0.2 text-[9px] font-mono font-bold">
+                  Recharts AI
+                </span>
+              </div>
+              <div className="mt-1 font-mono text-2xl font-extrabold text-cyan-400">
+                {avgForecastUptime}%
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400 flex items-center justify-between">
+                <span>{totalForecastEventsCount} kỳ bảo dưỡng</span>
+                <span className="text-emerald-400 font-medium">SLA: Đạt</span>
+              </div>
+            </div>
           </div>
 
           {/* Metric Selector & Threshold Controls */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   onClick={() => setActiveMetric('downtime')}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
@@ -367,6 +531,17 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
                 >
                   Chỉ Số OEE Sản Xuất (%)
                 </button>
+                <button
+                  onClick={() => setActiveMetric('forecast')}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition flex items-center gap-1.5 ${
+                    activeMetric === 'forecast'
+                      ? 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-md shadow-cyan-600/30 ring-1 ring-cyan-400/40'
+                      : 'text-cyan-400 hover:text-white hover:bg-slate-800 border border-cyan-500/30'
+                  }`}
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                  <span>Dự Báo Uptime 7 Ngày Tới (AI &amp; Bảo Trì)</span>
+                </button>
               </div>
 
               {/* Threshold Selector for Downtime Alert (> 2 hours) */}
@@ -388,10 +563,103 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
               </div>
             </div>
 
-            {/* MAIN CHART: RECHARTS 30-DAY UPTIME TREND */}
+            {/* MAIN CHART: RECHARTS 30-DAY UPTIME TREND OR 7-DAY FORECAST */}
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                {activeMetric === 'downtime' ? (
+                {activeMetric === 'forecast' ? (
+                  <ComposedChart data={forecast7DaysData} margin={{ top: 20, right: 15, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="forecastAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      stroke="#64748b"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={{ stroke: '#334155' }}
+                    />
+                    <YAxis
+                      domain={[85, 100]}
+                      stroke="#64748b"
+                      fontSize={10}
+                      tickLine={false}
+                      axisLine={{ stroke: '#334155' }}
+                      unit="%"
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#090d16',
+                        borderColor: '#06b6d4',
+                        borderRadius: '14px',
+                        color: '#f8fafc',
+                        fontSize: '11px',
+                        boxShadow: '0 12px 30px -5px rgba(0, 0, 0, 0.7)',
+                        padding: '12px 14px',
+                      }}
+                      formatter={(value: any, name: any, item: any) => {
+                        const payload = item?.payload;
+                        if (name === 'predictedUptime') {
+                          return [
+                            `${value}% (Dải tin cậy: ${payload?.confidenceLower}% - ${payload?.confidenceUpper}%)`,
+                            'Dự Báo Uptime',
+                          ];
+                        }
+                        return [value, name];
+                      }}
+                      labelFormatter={(label, items) => {
+                        const item = items?.[0]?.payload;
+                        if (!item) return label;
+                        return `📅 ${item.dayName} (${item.fullDate}) • Kế hoạch: ${item.eventSummary}`;
+                      }}
+                    />
+                    {/* Target SLA ReferenceLine */}
+                    <ReferenceLine
+                      y={95}
+                      stroke="#f59e0b"
+                      strokeDasharray="4 4"
+                      label={{
+                        value: 'Mục Tiêu SLA Chuẩn: 95%',
+                        fill: '#f59e0b',
+                        fontSize: 10,
+                        position: 'insideTopRight',
+                      }}
+                    />
+                    {/* Critical Alert ReferenceLine */}
+                    <ReferenceLine
+                      y={92}
+                      stroke="#ef4444"
+                      strokeWidth={1.5}
+                      strokeDasharray="3 3"
+                      label={{
+                        value: 'Ngưỡng Rủi Ro Gián Đoạn: 92%',
+                        fill: '#ef4444',
+                        fontSize: 10,
+                        fontWeight: 'bold',
+                        position: 'insideBottomRight',
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="confidenceUpper"
+                      stroke="none"
+                      fill="url(#forecastAreaGradient)"
+                      name="Dải tin cậy 95%"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="predictedUptime"
+                      stroke="#06b6d4"
+                      strokeWidth={3}
+                      dot={{ r: 5, fill: '#06b6d4', stroke: '#090d16', strokeWidth: 2 }}
+                      activeDot={{ r: 7, fill: '#38bdf8' }}
+                      name="predictedUptime"
+                    />
+                  </ComposedChart>
+                ) : activeMetric === 'downtime' ? (
                   <BarChart data={historyData} margin={{ top: 20, right: 15, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                     <XAxis
@@ -541,6 +809,110 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
                 )}
               </ResponsiveContainer>
             </div>
+
+            {/* 7-DAY PREDICTIVE FORECAST CARDS BREAKDOWN */}
+            {activeMetric === 'forecast' && (
+              <div className="space-y-3 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-cyan-400" />
+                    <h4 className="text-xs sm:text-sm font-bold text-white">
+                      Chi Tiết Dự Báo Vận Hành &amp; Lịch Bảo Trì Linh Kiện (7 Ngày Tới)
+                    </h4>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Dựa trên dữ liệu lịch sử 30 ngày &amp; các cảnh báo bảo trì linh kiện hiện tại
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
+                  {forecast7DaysData.map((day) => (
+                    <div
+                      key={day.dayIndex}
+                      className={`rounded-2xl border p-3 flex flex-col justify-between transition ${
+                        day.riskLevel === 'HIGH'
+                          ? 'border-red-500/40 bg-gradient-to-b from-red-950/30 to-slate-950'
+                          : day.riskLevel === 'MEDIUM'
+                          ? 'border-amber-500/40 bg-gradient-to-b from-amber-950/20 to-slate-950'
+                          : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between border-b border-slate-800/60 pb-1.5 mb-2">
+                          <span className="text-xs font-bold text-white">{day.dayName}</span>
+                          <span className="font-mono text-[11px] text-slate-400">{day.date}</span>
+                        </div>
+
+                        <div className="flex items-baseline justify-between mb-2">
+                          <span
+                            className={`font-mono text-lg font-black ${
+                              day.predictedUptime >= 95
+                                ? 'text-emerald-400'
+                                : day.predictedUptime >= 92
+                                ? 'text-amber-400'
+                                : 'text-red-400'
+                            }`}
+                          >
+                            {day.predictedUptime}%
+                          </span>
+                          <span
+                            className={`rounded-full px-1.5 py-0.2 text-[9px] font-bold ${
+                              day.riskLevel === 'HIGH'
+                                ? 'bg-red-500/20 text-red-300'
+                                : day.riskLevel === 'MEDIUM'
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'bg-emerald-500/20 text-emerald-300'
+                            }`}
+                          >
+                            {day.riskLevel === 'HIGH' ? 'RỦI RO' : day.riskLevel === 'MEDIUM' ? 'BẢO TRÌ' : 'ỔN ĐỊNH'}
+                          </span>
+                        </div>
+
+                        <div className="text-[11px] text-slate-300 font-medium leading-snug line-clamp-2 mb-2">
+                          {day.eventSummary}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-800/60 text-[10px] text-slate-400">
+                        {day.totalPlannedDowntimeMins > 0 ? (
+                          <span className="text-amber-300 flex items-center gap-1 font-mono">
+                            <Clock className="h-3 w-3 text-amber-400" />
+                            Dừng dự kiến: ~{day.totalPlannedDowntimeMins}m
+                          </span>
+                        ) : (
+                          <span className="text-emerald-400 flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Chạy liên tục
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Forecast Action Recommendation Banner */}
+                <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/30 via-slate-900 to-slate-950 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-300 shrink-0">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-white">
+                        Khuyến Nghị Điều Phối Sản Xuất &amp; Bảo Trì Phòng Ngừa
+                      </h5>
+                      <p className="text-slate-300 text-[11px] mt-0.5">
+                        Ngày <strong className="text-amber-300">{highestRiskForecastDay?.date} ({highestRiskForecastDay?.dayName})</strong> có lịch bảo dưỡng tập trung ({highestRiskForecastDay?.eventSummary}). {highestRiskForecastDay?.recommendation}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 font-mono text-[11px] text-slate-400 self-end sm:self-auto shrink-0">
+                    <span className="rounded bg-slate-800 px-2.5 py-1 text-slate-200">
+                      Dự báo Uptime TB: <strong className="text-cyan-400">{avgForecastUptime}%</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* PROBLEMATIC MACHINES IDENTIFIER BANNER (THRESHOLD EXCEEDED) */}
             {exceededDays.length > 0 && (

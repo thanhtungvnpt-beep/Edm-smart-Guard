@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Award,
+  BellRing,
   Calendar,
   CalendarClock,
   CheckCircle2,
@@ -42,6 +43,11 @@ import { PredictiveInsightPanel } from './PredictiveInsightPanel';
 import { HardwareWearComponent } from '../utils/hardwarePrediction';
 import { TelemetrySparklineCard } from './TelemetrySparklineCard';
 import { MachinePdfReportModal } from './MachinePdfReportModal';
+import { ServiceScheduleCalendar } from './ServiceScheduleCalendar';
+import { ScheduledServiceTask } from '../utils/serviceScheduleData';
+import { MaintenanceFrequencyChart } from './MaintenanceFrequencyChart';
+import { MaintenanceReminderModal } from './MaintenanceReminderModal';
+import { getDeviceMaintenanceReminders } from '../utils/maintenanceReminderData';
 
 interface MachineDetailsModalProps {
   device: Device;
@@ -56,7 +62,7 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
   onOpenDiagnosis,
   onTriggerAlarm,
 }) => {
-  const [activeTab, setActiveTab] = useState<'maintenance' | 'telemetry' | 'prediction'>('maintenance');
+  const [activeTab, setActiveTab] = useState<'maintenance' | 'schedule' | 'prediction' | 'telemetry'>('maintenance');
   const [records, setRecords] = useState<MaintenanceRecord[]>(() =>
     getDeviceMaintenanceHistory(device.id)
   );
@@ -64,7 +70,12 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   const [showQRTag, setShowQRTag] = useState<boolean>(false);
   const [showPdfReport, setShowPdfReport] = useState<boolean>(false);
+  const [showReminderModal, setShowReminderModal] = useState<boolean>(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  const activeRemindersCount = useMemo(() => {
+    return getDeviceMaintenanceReminders(device.id).filter((r) => r.isActive).length;
+  }, [device.id, showReminderModal]);
 
   // Live Telemetry Streaming toggle & real-time history buffer
   const [isLiveStreamEnabled, setIsLiveStreamEnabled] = useState<boolean>(true);
@@ -185,6 +196,28 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
       `Linh kiện đạt mức hao mòn ${comp.wearPercentage}%. Thay thế phòng ngừa để tránh ${comp.downtimeRiskHours}h dừng máy. Hành động: ${comp.preventiveAction}`
     );
     setNewNotes(`Kho lưu trữ: ${comp.stockLocation}. Đã xuất kho dự trù.`);
+  };
+
+  // Pre-fill maintenance logging form from Service Schedule Calendar task
+  const handlePreFillFromSchedule = (task: ScheduledServiceTask) => {
+    setActiveTab('maintenance');
+    setShowAddForm(true);
+    setNewTitle(task.taskTitle);
+    setNewType(
+      task.serviceType === 'OVERHAUL'
+        ? 'OVERHAUL'
+        : task.serviceType === 'CALIBRATION'
+        ? 'CALIBRATION'
+        : task.serviceType === 'PARTS_REPLACEMENT'
+        ? 'PARTS_REPLACEMENT'
+        : 'PREVENTIVE'
+    );
+    setNewTech(task.assignedTechnicianName || device.assignedTechnician?.name || 'Kỹ thuật viên ca trực');
+    setNewDuration(task.estimatedDurationMinutes.toString());
+    setNewHours(task.operatingHoursTarget.toString());
+    setNewParts(task.recommendedParts.join(', '));
+    setNewFindings(`Kế hoạch thực hiện: ${task.instructions}`);
+    setNewNotes(`Theo tài liệu: ${task.sopDocumentTitle || 'SOP tiêu chuẩn'}. Hạn hoàn thành: ${task.dueDate}`);
   };
 
   // Handle submit new maintenance record
@@ -326,6 +359,22 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
               <span className="font-bold">{isLiveStreamEnabled ? 'BẬT' : 'TẮT'}</span>
             </button>
 
+            {/* Set Maintenance Reminder Button */}
+            <button
+              onClick={() => setShowReminderModal(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:text-white transition cursor-pointer shadow-sm active:scale-95"
+              title="Thiết lập nhắc nhở bảo dưỡng linh kiện định kỳ (Lõi lọc, Bơm làm mát, Cụm kim cương...)"
+            >
+              <BellRing className="h-3.5 w-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Set Maintenance Reminder</span>
+              <span className="sm:hidden">Nhắc Nhở</span>
+              {activeRemindersCount > 0 && (
+                <span className="ml-0.5 rounded-full bg-amber-500/25 border border-amber-500/40 px-1.5 py-0.2 text-[10px] font-mono font-bold text-amber-300">
+                  {activeRemindersCount}
+                </span>
+              )}
+            </button>
+
             {/* Download PDF Report Button */}
             <button
               onClick={() => setShowPdfReport(true)}
@@ -383,6 +432,18 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
             >
               <Wrench className="h-4 w-4" />
               <span>Lịch Sử Bảo Dưỡng ({records.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('schedule')}
+              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition ${
+                activeTab === 'schedule'
+                  ? 'border-amber-500 text-amber-400 font-bold'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Calendar className="h-4 w-4" />
+              <span>Lịch Bảo Dưỡng (Service Schedule)</span>
             </button>
 
             <button
@@ -530,6 +591,13 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* SUMMARY CHART: FREQUENCY OF PAST MAINTENANCE TASKS OVER TIME (RECHARTS) */}
+              <MaintenanceFrequencyChart
+                records={records}
+                deviceName={device.name}
+                deviceCode={device.code}
+              />
 
               {/* ADD NEW MAINTENANCE TASK FORM */}
               {showAddForm && (
@@ -780,6 +848,18 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
             </div>
           )}
 
+          {/* TAB: SERVICE SCHEDULE CALENDAR VIEW */}
+          {activeTab === 'schedule' && (
+            <ServiceScheduleCalendar
+              device={device}
+              onPreFillMaintenanceRecord={handlePreFillFromSchedule}
+              onOpenNewTaskForm={() => {
+                setActiveTab('maintenance');
+                setShowAddForm(true);
+              }}
+            />
+          )}
+
           {/* TAB 2: AI MAINTENANCE PREDICTIONS */}
           {activeTab === 'prediction' && (
             <div className="space-y-4">
@@ -1027,6 +1107,18 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
           device={device}
           records={records}
           onClose={() => setShowPdfReport(false)}
+        />
+      )}
+
+      {/* Custom Recurring Maintenance Reminder Modal */}
+      {showReminderModal && (
+        <MaintenanceReminderModal
+          device={device}
+          onClose={() => setShowReminderModal(false)}
+          onToast={() => {
+            setFormSuccess(true);
+            setTimeout(() => setFormSuccess(false), 4000);
+          }}
         />
       )}
     </div>
