@@ -18,6 +18,7 @@ import {
   Search,
   Sparkles,
   Zap,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   Device,
@@ -48,6 +49,14 @@ import { QRCodeScannerModal } from './components/QRCodeScannerModal';
 import { OfflineConnectivityBanner } from './components/OfflineConnectivityBanner';
 import { DashboardCardsContainer } from './components/DashboardCardsContainer';
 import {
+  AdvancedFilterPanel,
+  AdvancedFilterCriteria,
+  DEFAULT_ADVANCED_FILTERS,
+} from './components/AdvancedFilterPanel';
+import { VoiceSearchBar } from './components/VoiceSearchBar';
+import { OnboardingTour } from './components/OnboardingTour';
+import { getDeviceOperationalMetrics } from './utils/operationalMetrics';
+import {
   TopLevelCardId,
   getStoredDashboardCardsOrder,
 } from './utils/dashboardLayoutStorage';
@@ -77,6 +86,8 @@ export default function App() {
   // Filters
   const [deviceFilter, setDeviceFilter] = useState<'ALL' | 'ALARM' | 'RUNNING' | 'WIRE_EDM' | 'SINKER_EDM'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilterCriteria>(DEFAULT_ADVANCED_FILTERS);
 
   // Audio & Notification Permissions
   const [isMuted, setIsMuted] = useState(false);
@@ -91,6 +102,13 @@ export default function App() {
   const [showSimulator, setShowSimulator] = useState(false);
   const [showTechSidebar, setShowTechSidebar] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showOnboardingTour, setShowOnboardingTour] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const completed = localStorage.getItem('smartguard_onboarding_completed');
+      return completed !== 'true';
+    }
+    return false;
+  });
 
   // Success Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -473,14 +491,26 @@ export default function App() {
     }
   };
 
-  // Filtered devices list
+  // Filtered devices list with both basic and advanced telemetry filters
   const filteredDevices = devices.filter((d) => {
+    const term = searchTerm.toLowerCase().trim();
     const matchesSearch =
-      d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.assignedTechnician?.name.toLowerCase().includes(searchTerm.toLowerCase());
+      !term ||
+      d.name.toLowerCase().includes(term) ||
+      d.code.toLowerCase().includes(term) ||
+      d.model.toLowerCase().includes(term) ||
+      d.brand.toLowerCase().includes(term) ||
+      d.location.toLowerCase().includes(term) ||
+      d.assignedTechnician?.name.toLowerCase().includes(term) ||
+      // Match active error code and incident title
+      (d.activeIncident && (
+        d.activeIncident.errorCode.toLowerCase().includes(term) ||
+        d.activeIncident.errorTitle.toLowerCase().includes(term)
+      )) ||
+      // Also match error codes in common known incidents like E-102, SPW-303, ALARM-204
+      (term.includes('e-102') || term.includes('e102') ? (d.code === 'EDM-W01' || d.code === 'EDM-W02') : false) ||
+      (term.includes('spw-303') || term.includes('spw303') ? (d.code === 'EDM-W03') : false) ||
+      (term.includes('alarm-204') || term.includes('alarm204') ? (d.code === 'EDM-S01') : false);
 
     let matchesFilter = true;
     if (deviceFilter === 'ALARM') matchesFilter = d.status === 'ALARM_STOPPED';
@@ -488,8 +518,53 @@ export default function App() {
     else if (deviceFilter === 'WIRE_EDM') matchesFilter = d.type === 'WIRE_EDM';
     else if (deviceFilter === 'SINKER_EDM') matchesFilter = d.type === 'SINKER_EDM';
 
-    return matchesSearch && matchesFilter;
+    if (!matchesSearch || !matchesFilter) return false;
+
+    // Advanced Telemetry Filters
+    const opMetrics = getDeviceOperationalMetrics(d);
+
+    // 1. Temperature Threshold Filter
+    if (advancedFilters.tempMode === 'OVERHEATING') {
+      if (opMetrics.tempStatus !== 'OVERHEATING' && opMetrics.temperature < 24) return false;
+    } else if (advancedFilters.tempMode === 'ELEVATED') {
+      if (opMetrics.tempStatus === 'NORMAL') return false;
+    } else if (advancedFilters.tempMode === 'CUSTOM_MIN') {
+      if (opMetrics.temperature < advancedFilters.minTempThreshold) return false;
+    }
+
+    // 2. Power Consumption Status Filter
+    if (advancedFilters.powerStatusMode === 'HIGH_DRAW') {
+      if (opMetrics.powerKw < advancedFilters.minPowerKw) return false;
+    } else if (advancedFilters.powerStatusMode === 'OVERCONSUMPTION') {
+      if (opMetrics.powerStatus !== 'OVERCONSUMPTION') return false;
+    } else if (advancedFilters.powerStatusMode === 'IDLE_SAVING') {
+      if (opMetrics.powerKw > 2.0 && opMetrics.powerStatus !== 'IDLE_SAVING') return false;
+    }
+
+    // 3. Continuous Uptime (Runtime) Filter
+    if (advancedFilters.uptimeMode === 'OVER_24H') {
+      if (opMetrics.continuousUptimeHours < 24) return false;
+    } else if (advancedFilters.uptimeMode === 'OVER_18H') {
+      if (opMetrics.continuousUptimeHours < 18) return false;
+    } else if (advancedFilters.uptimeMode === 'OVER_12H') {
+      if (opMetrics.continuousUptimeHours < 12) return false;
+    } else if (advancedFilters.uptimeMode === 'CUSTOM_HOURS') {
+      if (opMetrics.continuousUptimeHours < advancedFilters.minUptimeHours) return false;
+    }
+
+    // 4. Urgent Maintenance Priority Filter
+    if (advancedFilters.urgentMaintenanceOnly) {
+      if (!opMetrics.isUrgentMaintenanceNeeded) return false;
+    }
+
+    return true;
   });
+
+  const activeAdvancedFilterCount =
+    (advancedFilters.tempMode !== 'ALL' ? 1 : 0) +
+    (advancedFilters.powerStatusMode !== 'ALL' ? 1 : 0) +
+    (advancedFilters.uptimeMode !== 'ALL' ? 1 : 0) +
+    (advancedFilters.urgentMaintenanceOnly ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -510,6 +585,10 @@ export default function App() {
         isSimulatedOffline={isSimulated}
         onToggleSimulateOffline={toggleSimulateOffline}
         onlineMobileCount={mobileDevices.filter((m) => m.status === 'ONLINE' && !m.isLocked).length}
+        onStartTour={() => {
+          setActiveTab('devices');
+          setShowOnboardingTour(true);
+        }}
       />
 
       {/* Offline Connectivity Banner */}
@@ -566,22 +645,19 @@ export default function App() {
               }}
             />
 
-            {/* Filter and Search Bar */}
+            {/* Filter and Search Bar with Voice-to-Text Microphone Integration */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl bg-slate-900/60 border border-slate-800 p-3">
-              <div className="relative w-full sm:w-80">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Tìm máy theo mã, model, vị trí, KTV..."
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
+              <VoiceSearchBar
+                value={searchTerm}
+                onChange={(val) => setSearchTerm(val)}
+                devices={devices}
+                onToast={(msg) => showToast(msg)}
+              />
 
               {/* Status Filter Buttons and QR Scanner */}
               <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
                 <button
+                  id="tour-qr-scanner"
                   onClick={() => setShowQRScanner(true)}
                   className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 px-3 py-1 text-xs font-bold text-slate-950 shadow-md shadow-amber-500/20 transition active:scale-95 shrink-0"
                   title="Quét mã QR dán trên thân máy để mở ngay chi tiết & chẩn đoán"
@@ -640,22 +716,110 @@ export default function App() {
                 >
                   Xung Sinker
                 </button>
+
+                {/* ADVANCED FILTER TOGGLE BUTTON */}
+                <button
+                  id="tour-advanced-filter"
+                  onClick={() => setShowAdvancedFilter((prev) => !prev)}
+                  title="Mở bộ lọc nâng cao theo nhiệt độ vận hành, công suất tiêu thụ & thời gian chạy liên tục"
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-semibold transition shadow-sm ${
+                    showAdvancedFilter || activeAdvancedFilterCount > 0
+                      ? 'border-amber-500 bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40'
+                      : 'border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Bộ Lọc Nâng Cao</span>
+                  {activeAdvancedFilterCount > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-mono font-bold text-slate-950">
+                      {activeAdvancedFilterCount}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
 
+            {/* EXPANDABLE ADVANCED FILTER PANEL */}
+            <AdvancedFilterPanel
+              isOpen={showAdvancedFilter}
+              onClose={() => setShowAdvancedFilter(false)}
+              criteria={advancedFilters}
+              onChange={(nextCriteria) => setAdvancedFilters(nextCriteria)}
+              onReset={() => {
+                setAdvancedFilters(DEFAULT_ADVANCED_FILTERS);
+                showToast('Đã xóa tất cả bộ lọc nâng cao!');
+              }}
+              devices={devices}
+              filteredCount={filteredDevices.length}
+            />
+
+            {/* Active Filters Summary Strip if panel is closed but filters applied */}
+            {!showAdvancedFilter && activeAdvancedFilterCount > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-950/20 px-3.5 py-2 text-xs text-amber-200">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-amber-300 flex items-center gap-1">
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    Đang áp dụng bộ lọc nâng cao ({activeAdvancedFilterCount}):
+                  </span>
+                  {advancedFilters.urgentMaintenanceOnly && (
+                    <span className="rounded-md bg-red-500/30 border border-red-500/50 px-2 py-0.5 text-[11px] font-semibold text-red-200">
+                      🚨 Cần bảo trì cấp bách
+                    </span>
+                  )}
+                  {advancedFilters.tempMode !== 'ALL' && (
+                    <span className="rounded-md bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 text-[11px] font-semibold text-rose-300">
+                      Nhiệt độ: {advancedFilters.tempMode === 'OVERHEATING' ? '> 24°C' : `>= ${advancedFilters.minTempThreshold}°C`}
+                    </span>
+                  )}
+                  {advancedFilters.powerStatusMode !== 'ALL' && (
+                    <span className="rounded-md bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                      Điện năng: {advancedFilters.powerStatusMode === 'HIGH_DRAW' ? `>= ${advancedFilters.minPowerKw} kW` : advancedFilters.powerStatusMode}
+                    </span>
+                  )}
+                  {advancedFilters.uptimeMode !== 'ALL' && (
+                    <span className="rounded-md bg-cyan-500/20 border border-cyan-500/40 px-2 py-0.5 text-[11px] font-semibold text-cyan-300">
+                      Uptime: {advancedFilters.uptimeMode === 'OVER_24H' ? '> 24h' : advancedFilters.uptimeMode === 'OVER_18H' ? '> 18h' : `>= ${advancedFilters.minUptimeHours}h`}
+                    </span>
+                  )}
+                  <span className="font-mono text-slate-300">
+                    ({filteredDevices.length} máy hiển thị)
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowAdvancedFilter(true)}
+                    className="text-xs text-amber-400 underline hover:text-amber-300"
+                  >
+                    Chỉnh sửa
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAdvancedFilters(DEFAULT_ADVANCED_FILTERS);
+                      showToast('Đã xóa bộ lọc nâng cao!');
+                    }}
+                    className="rounded bg-slate-800 hover:bg-slate-700 px-2 py-0.5 text-xs text-slate-300"
+                  >
+                    Bỏ lọc
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Industrial SCADA Machine Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredDevices.map((device) => (
-                <DeviceCard
-                  key={device.id}
-                  device={device}
-                  onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
-                  onOpenRepairReport={(d) => setRepairDevice(d)}
-                  onTriggerAlarm={(id) => handleTriggerAlarm(id)}
-                  onAcknowledge={(id) => handleAcknowledge(id)}
-                  onOpenPhoneViewWithIncident={(d) => setPhoneDevice(d)}
-                  onOpenMachineDetails={(d) => setDetailsDevice(d)}
-                />
+              {filteredDevices.map((device, idx) => (
+                <div key={device.id} id={idx === 0 ? 'tour-first-device-card' : undefined}>
+                  <DeviceCard
+                    device={device}
+                    onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+                    onOpenRepairReport={(d) => setRepairDevice(d)}
+                    onTriggerAlarm={(id) => handleTriggerAlarm(id)}
+                    onAcknowledge={(id) => handleAcknowledge(id)}
+                    onOpenPhoneViewWithIncident={(d) => setPhoneDevice(d)}
+                    onOpenMachineDetails={(d) => setDetailsDevice(d)}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -739,6 +903,8 @@ export default function App() {
       {repairDevice && (
         <RepairReportModal
           device={repairDevice}
+          technicians={technicians}
+          learnings={learnings}
           onClose={() => setRepairDevice(null)}
           onSuccess={handleRepairSuccess}
         />
@@ -786,6 +952,15 @@ export default function App() {
         onClose={() => setShowQRScanner(false)}
         devices={devices}
         onScanSuccess={handleQRScanSuccess}
+      />
+
+      {/* 9. Interactive Onboarding Tour for New Technicians */}
+      <OnboardingTour
+        isOpen={showOnboardingTour}
+        onClose={() => setShowOnboardingTour(false)}
+        onComplete={() => {
+          showToast('Chúc mừng bạn đã hoàn thành Tour hướng dẫn kỹ thuật viên mới!');
+        }}
       />
     </div>
   );

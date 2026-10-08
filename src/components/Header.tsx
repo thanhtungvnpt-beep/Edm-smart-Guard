@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -14,9 +14,11 @@ import {
   Radio,
   Zap,
   HardDrive,
+  Compass,
 } from 'lucide-react';
 import { FactoryStats } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
+import { SystemDocumentationModal } from './SystemDocumentationModal';
 
 interface HeaderProps {
   stats: FactoryStats | null;
@@ -34,6 +36,7 @@ interface HeaderProps {
   isSimulatedOffline?: boolean;
   onToggleSimulateOffline?: () => void;
   onlineMobileCount?: number;
+  onStartTour?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -52,7 +55,10 @@ export const Header: React.FC<HeaderProps> = ({
   isSimulatedOffline = false,
   onToggleSimulateOffline,
   onlineMobileCount = 5,
+  onStartTour,
 }) => {
+  const [showDocModal, setShowDocModal] = useState(false);
+
   return (
     <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md">
       {/* Top Banner: Industrial IoT Telemetry Header */}
@@ -140,6 +146,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Technician Status & Dispatch Sidebar Button */}
           <button
+            id="tour-tech-status-btn"
             onClick={onOpenTechStatus}
             title="Bảng theo dõi trạng thái trực ca và tải phân công của kỹ thuật viên"
             className="flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition shadow-sm"
@@ -151,6 +158,28 @@ export const Header: React.FC<HeaderProps> = ({
                 {onDutyTechCount}
               </span>
             )}
+          </button>
+
+          {/* Onboarding Tour Button for New Technicians */}
+          {onStartTour && (
+            <button
+              onClick={onStartTour}
+              title="Khám phá nhanh tính năng hệ thống dành cho kỹ thuật viên mới"
+              className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-orange-500/20 px-2.5 py-1.5 text-xs font-bold text-amber-300 hover:border-amber-400 hover:text-white transition shadow-sm active:scale-95"
+            >
+              <Compass className="h-4 w-4 text-amber-400 animate-spin-slow" />
+              <span className="hidden md:inline">Tour KTV Mới</span>
+            </button>
+          )}
+
+          {/* System Documentation Button */}
+          <button
+            onClick={() => setShowDocModal(true)}
+            title="Xem tài liệu giới thiệu chức năng toàn diện của hệ thống"
+            className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-500/20 transition shadow-sm"
+          >
+            <BookOpen className="h-4 w-4 text-blue-400" />
+            <span className="hidden lg:inline">Tài Liệu Hệ Thống</span>
           </button>
 
           {/* Simulate EDM Breakdown Button */}
@@ -185,6 +214,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
+            id="tour-ai-brain-tab"
             onClick={() => setActiveTab('learnings')}
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
               activeTab === 'learnings'
@@ -275,6 +305,12 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
       </div>
+
+      {/* Official System Documentation Viewer Modal */}
+      <SystemDocumentationModal
+        isOpen={showDocModal}
+        onClose={() => setShowDocModal(false)}
+      />
     </header>
   );
 };

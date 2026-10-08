@@ -13,9 +13,12 @@ import {
   Zap,
   Activity,
   ArrowUpRight,
+  Flame,
 } from 'lucide-react';
 import { Device } from '../types';
 import { calculatePredictedMaintenance } from '../utils/maintenancePrediction';
+import { getDeviceOperationalMetrics } from '../utils/operationalMetrics';
+import { MachineHealthArcGauge } from './MachineHealthArcGauge';
 
 interface DeviceCardProps {
   device: Device;
@@ -42,6 +45,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   // Heuristic calculation of Predicted Next Maintenance Date based on 30-day performance
   const prediction = useMemo(() => calculatePredictedMaintenance(device), [device]);
+  const opMetrics = useMemo(() => getDeviceOperationalMetrics(device), [device]);
 
   return (
     <div
@@ -197,19 +201,91 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
             <div className="flex items-center justify-between text-slate-400 text-[11px]">
               <span className="flex items-center gap-1">
-                <Gauge className="h-3 w-3 text-rose-400" />
+                <Flame className={`h-3 w-3 ${opMetrics.tempStatus === 'OVERHEATING' ? 'text-red-400 animate-pulse' : opMetrics.tempStatus === 'ELEVATED' ? 'text-amber-400' : 'text-rose-400'}`} />
                 Nhiệt độ dung môi
               </span>
               <span className="font-mono text-[10px]">°C</span>
             </div>
-            <div className="mt-1 font-mono text-lg font-bold text-white">
+            <div className={`mt-1 font-mono text-lg font-bold ${opMetrics.tempStatus === 'OVERHEATING' ? 'text-red-400' : 'text-white'}`}>
               {device.telemetry.dielectricTemp.toFixed(1)}
               <span className="text-xs font-normal text-slate-400 ml-1">°C</span>
             </div>
             <div className="text-[10px] text-slate-400 truncate">
-              {device.type === 'WIRE_EDM' ? `Căng dây: ${device.telemetry.wireTension}N` : `Rung: ${device.telemetry.vibration}mm/s`}
+              {opMetrics.tempStatus === 'OVERHEATING' ? (
+                <span className="text-red-400 font-semibold">⚠️ Vượt ngưỡng!</span>
+              ) : (
+                `Chuẩn: ${device.nominalRanges.dielectricTemp[0]}-${device.nominalRanges.dielectricTemp[1]}°C`
+              )}
             </div>
           </div>
+        </div>
+
+        {/* Operational Diagnostics Strip: Real-time Power & Continuous Uptime */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="flex items-center justify-between rounded-xl bg-slate-950/50 border border-slate-800/90 px-2.5 py-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Zap className={`h-3.5 w-3.5 shrink-0 ${opMetrics.powerStatus === 'OVERCONSUMPTION' ? 'text-red-400 animate-pulse' : opMetrics.powerKw >= 8 ? 'text-amber-400' : 'text-yellow-400'}`} />
+              <span className="text-slate-400 text-[11px] truncate">Công suất điện:</span>
+            </div>
+            <div className="text-right shrink-0">
+              <span className={`font-mono text-xs font-bold ${opMetrics.powerStatus === 'OVERCONSUMPTION' ? 'text-red-400' : 'text-amber-300'}`}>
+                {opMetrics.powerKw.toFixed(1)} kW
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl bg-slate-950/50 border border-slate-800/90 px-2.5 py-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Clock className={`h-3.5 w-3.5 shrink-0 ${opMetrics.isLongRunWarning ? 'text-cyan-300 animate-pulse' : 'text-cyan-400'}`} />
+              <span className="text-slate-400 text-[11px] truncate">Chạy liên tục:</span>
+            </div>
+            <div className="text-right shrink-0">
+              <span className={`font-mono text-xs font-bold ${opMetrics.continuousUptimeHours >= 24 ? 'text-rose-400' : opMetrics.continuousUptimeHours >= 18 ? 'text-cyan-300' : 'text-slate-200'}`}>
+                {opMetrics.continuousUptimeHours.toFixed(1)}h
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* URGENT OPERATIONAL MAINTENANCE WARNING BANNER (IF APPLICABLE) */}
+        {opMetrics.isUrgentMaintenanceNeeded && (
+          <div className="rounded-xl border border-red-500/40 bg-red-950/30 p-2 text-xs flex items-start gap-2 animate-in fade-in">
+            <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-bold text-red-300 text-[11px]">Cảnh báo bảo trì cấp bách:</span>
+                <span className="font-mono text-[10px] text-red-400 font-bold">Điểm rủi ro: {opMetrics.urgencyScore}%</span>
+              </div>
+              <p className="text-slate-300 text-[11px] truncate mt-0.5" title={opMetrics.urgencyReasons.join(' • ')}>
+                {opMetrics.urgencyReasons[0] || 'Thiết bị cần kiểm tra bảo dưỡng sớm'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* MACHINE RELIABILITY HEALTH SCORE ARC GAUGE PANEL */}
+        <div
+          onClick={() => onOpenMachineDetails && onOpenMachineDetails(device)}
+          title="Bấm để xem phân tích chi tiết độ tin cậy và lịch sử vận hành của máy"
+          className="rounded-xl border border-slate-800/80 bg-slate-950/70 p-2.5 hover:border-slate-700 hover:bg-slate-950/90 transition cursor-pointer"
+        >
+          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+            <span className="font-semibold text-slate-300 flex items-center gap-1">
+              <Activity className="h-3 w-3 text-cyan-400" />
+              Chỉ Số Sức Khỏe &amp; Độ Tin Cậy Máy (Health Score)
+            </span>
+            <span className="font-mono text-[10px] text-slate-400">
+              Chu kỳ 30 ngày
+            </span>
+          </div>
+
+          <MachineHealthArcGauge
+            score={opMetrics.reliabilityHealthScore}
+            incidentCount={device.incidentHistoryCount || 0}
+            continuousUptimeHours={opMetrics.continuousUptimeHours}
+            size={74}
+            showLabel={true}
+          />
         </div>
 
         {/* Assigned Technician Profile Bar */}

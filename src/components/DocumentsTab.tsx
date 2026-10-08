@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   BookOpen,
   CheckCircle2,
+  Download,
   FileCode,
   FileText,
   Plus,
@@ -12,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { TechnicalDocument } from '../types';
+import { SystemDocumentationModal } from './SystemDocumentationModal';
 
 interface DocumentsTabProps {
   documents: TechnicalDocument[];
@@ -24,6 +26,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSystemDocModal, setShowSystemDocModal] = useState(false);
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null);
 
   // Form states
@@ -132,6 +135,47 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
             <Plus className="h-5 w-5" />
             <span>Nạp Thêm Tài Liệu Mới</span>
           </button>
+        </div>
+      </div>
+
+      {/* Featured Card: Official System Documentation */}
+      <div className="rounded-2xl border border-blue-500/40 bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900 p-4.5 sm:p-5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600/30 border border-blue-500/40 text-blue-300">
+            <BookOpen className="h-6 w-6 text-blue-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm sm:text-base font-bold text-white">
+                Tài Liệu Giới Thiệu Chức Năng Hệ Thống (System Documentation)
+              </h3>
+              <span className="rounded bg-blue-500/20 border border-blue-500/30 px-2 py-0.5 text-[10px] font-mono text-blue-300 font-bold">
+                Tài Liệu Chính Thức
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Tổng hợp toàn diện 12 phân hệ: IoT Telemetry, AI Voice & Smart History, Human-in-the-Loop, ETTR, Bảng điểm KTV và Lịch bảo dưỡng.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowSystemDocModal(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 text-xs font-bold shadow-md shadow-blue-600/30 transition active:scale-95"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            <span>Xem Chi Tiết</span>
+          </button>
+          <a
+            href="/TAI_LIEU_GIOI_THIEU_CHUC_NANG_HE_THONG.md"
+            download="TAI_LIEU_GIOI_THIEU_CHUC_NANG_HE_THONG.md"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 text-xs font-semibold transition"
+          >
+            <Download className="h-3.5 w-3.5 text-blue-400" />
+            <span>Tải .md</span>
+          </a>
         </div>
       </div>
 
@@ -370,6 +414,12 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Official System Documentation Viewer Modal */}
+      <SystemDocumentationModal
+        isOpen={showSystemDocModal}
+        onClose={() => setShowSystemDocModal(false)}
+      />
     </div>
   );
 };

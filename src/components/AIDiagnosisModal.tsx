@@ -1,11 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   AlertTriangle,
   BookOpen,
   Brain,
+  Calendar,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Copy,
+  History,
+  Layers,
   MessageSquare,
   Mic,
   MicOff,
@@ -13,6 +18,7 @@ import {
   RefreshCw,
   Send,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Trash2,
   Volume2,
@@ -22,6 +28,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { AIDiagnosis, Device } from '../types';
+import { getDeviceMaintenanceHistory } from '../utils/maintenanceHistoryData';
 
 interface AIDiagnosisModalProps {
   device: Device | null;
@@ -52,6 +59,11 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
   const [matchedDocs, setMatchedDocs] = useState<any[]>([]);
   const [matchedLearnings, setMatchedLearnings] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'diagnosis' | 'chat'>('diagnosis');
+
+  // Smart History-Based Diagnosis States
+  const [useHistoryDiagnostic, setUseHistoryDiagnostic] = useState<boolean>(true);
+  const [showHistoryPanel, setShowHistoryPanel] = useState<boolean>(true);
+  const maintenanceHistory = useMemo(() => getDeviceMaintenanceHistory(device.id), [device.id]);
 
   // Voice-to-Text States
   const [voiceSymptoms, setVoiceSymptoms] = useState<string>('');
@@ -149,11 +161,13 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
     };
   }, []);
 
-  // Fetch AI Diagnosis (with optional voice symptoms incorporated)
-  const fetchDiagnosis = async (overrideSymptoms?: string) => {
+  // Fetch AI Diagnosis (with optional voice symptoms & periodic maintenance history incorporated)
+  const fetchDiagnosis = async (overrideSymptoms?: string, forceHistory?: boolean) => {
     setLoading(true);
     const symptomsToSend =
       overrideSymptoms !== undefined ? overrideSymptoms : voiceSymptoms;
+    const includeHistory =
+      forceHistory !== undefined ? forceHistory : useHistoryDiagnostic;
 
     try {
       const res = await fetch('/api/ai/diagnose', {
@@ -163,6 +177,7 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
           deviceId: device.id,
           incidentId: device.activeIncident?.incidentId,
           voiceSymptoms: symptomsToSend.trim() || undefined,
+          maintenanceHistory: includeHistory && maintenanceHistory.length > 0 ? maintenanceHistory : undefined,
         }),
       });
       const data = await res.json();
@@ -727,6 +742,148 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
                 </div>
               </div>
 
+              {/* SMART HISTORY-BASED DIAGNOSIS PANEL (Chẩn đoán thông minh dựa trên lịch sử bảo dưỡng định kỳ) */}
+              <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-950/30 via-slate-900 to-slate-950 p-4.5 sm:p-5 shadow-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-500/20 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-600/30 border border-amber-500/40 text-amber-400">
+                      <History className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                          <span>Chẩn Đoán Thông Minh Dựa Trên Lịch Sử Bảo Dưỡng</span>
+                          <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                        </h3>
+                        <span className="rounded bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300">
+                          {maintenanceHistory.length} Kỳ Bảo Dưỡng
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300">
+                        AI tự động đối chiếu tiền sử hỏng hóc, linh kiện đã thay và chu kỳ hao mòn của chính máy <strong className="text-amber-300">{device.code}</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none rounded-xl bg-slate-900 border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:border-amber-500/50 transition">
+                      <input
+                        type="checkbox"
+                        checked={useHistoryDiagnostic}
+                        onChange={(e) => setUseHistoryDiagnostic(e.target.checked)}
+                        className="rounded border-slate-700 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
+                      />
+                      <span className="font-mono text-[11px]">Bật đối chiếu</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowHistoryPanel((prev) => !prev)}
+                      className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition border border-slate-800"
+                      title={showHistoryPanel ? 'Thu gọn' : 'Mở rộng'}
+                    >
+                      {showHistoryPanel ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {showHistoryPanel && (
+                  <div className="mt-3.5 space-y-3">
+                    {/* Recent Maintenance Dossier Strip */}
+                    {maintenanceHistory.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-3">
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                            <span className="flex items-center gap-1 font-mono">
+                              <Calendar className="h-3 w-3 text-amber-400" />
+                              Kỳ gần nhất: {new Date(maintenanceHistory[0].completedAt).toLocaleDateString('vi-VN')}
+                            </span>
+                            <span className="rounded bg-slate-800 px-1.5 py-0.2 text-[10px] text-emerald-400 font-mono">
+                              {maintenanceHistory[0].taskType}
+                            </span>
+                          </div>
+                          <strong className="text-white text-xs block leading-snug">
+                            {maintenanceHistory[0].taskTitle}
+                          </strong>
+                          <p className="mt-1 text-[11px] text-slate-300 line-clamp-2">
+                            {maintenanceHistory[0].findingsAndActions}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {maintenanceHistory[0].partsReplaced?.map((part, pIdx) => (
+                              <span
+                                key={pIdx}
+                                className="rounded bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-200 font-mono"
+                              >
+                                🔩 {part}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Lifecycle wear and correlation summary */}
+                        <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-3 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                              <span className="font-mono text-cyan-300 flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                Chu kỳ hao mòn linh kiện
+                              </span>
+                              <span className="font-mono text-slate-400 text-[10px]">
+                                Ngưỡng: 500h
+                              </span>
+                            </div>
+                            <div className="space-y-1.5 mt-2">
+                              <div>
+                                <div className="flex justify-between text-[10px] font-mono text-slate-300 mb-0.5">
+                                  <span>Dẫn hướng kim cương & Vòi phun</span>
+                                  <span className="text-amber-400 font-bold">380h / 500h (76%)</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                  <div className="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-red-500 rounded-full" style={{ width: '76%' }}></div>
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="flex justify-between text-[10px] font-mono text-slate-300 mb-0.5">
+                                  <span>Lõi lọc giấy ion 3-micron</span>
+                                  <span className="text-red-400 font-bold">420h / 500h (84%)</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                  <div className="h-full bg-gradient-to-r from-emerald-500 to-red-500 rounded-full" style={{ width: '84%' }}></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between pt-2 border-t border-slate-800">
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              KTV phụ trách: {maintenanceHistory[0].technicianName}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => fetchDiagnosis(undefined, true)}
+                              disabled={loading}
+                              className="flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 text-[11px] font-bold shadow transition active:scale-95 disabled:opacity-50"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              <span>AI Tái Chẩn Đoán Cùng Lịch Sử</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">
+                        Chưa có dữ liệu bảo dưỡng định kỳ trước đây cho máy này.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-600/20 text-purple-400 mb-4">
@@ -737,10 +894,10 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
                     </span>
                   </div>
                   <h3 className="text-base font-bold text-white">
-                    Gemini AI đang phân tích dữ liệu EDM & triệu chứng giọng nói...
+                    Gemini AI đang phân tích dữ liệu EDM, lịch sử bảo dưỡng & triệu chứng giọng nói...
                   </h3>
                   <p className="text-xs text-slate-400 max-w-md mt-1.5">
-                    Đang đối chiếu thông số cảm biến thời điểm dừng máy với các bài học sửa chữa trước đây và sổ tay vận hành nhà máy.
+                    Đang đối chiếu thông số cảm biến với dữ liệu bảo dưỡng định kỳ của chính máy {device.code} và sổ tay vận hành xưởng.
                   </p>
                 </div>
               ) : diagnosis ? (
@@ -756,6 +913,12 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
                           <span className="rounded-md bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300 flex items-center gap-1">
                             <Mic className="h-3 w-3" />
                             Đã Tích Hợp Giọng Nói
+                          </span>
+                        )}
+                        {diagnosis.historyCorrelation && (
+                          <span className="rounded-md bg-cyan-500/20 border border-cyan-500/40 px-2 py-0.5 text-[10px] font-mono font-bold text-cyan-300 flex items-center gap-1">
+                            <History className="h-3 w-3" />
+                            Đối Chiếu Lịch Sử Máy ({diagnosis.historyCorrelation.correlationPercentage}%)
                           </span>
                         )}
                         <span className="text-xs font-mono text-slate-400">
@@ -787,6 +950,30 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
                         💡 <strong>Cơ chế hỏng hóc (Failure Mechanism):</strong>{' '}
                         {diagnosis.failureMechanism}
                       </p>
+
+                      {/* DEDICATED HISTORY CORRELATION INSIGHT HIGHLIGHT */}
+                      {diagnosis.historyCorrelation && (
+                        <div className="mt-3.5 rounded-xl border border-amber-500/35 bg-gradient-to-br from-amber-950/30 to-slate-900/80 p-3.5 text-xs">
+                          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 text-amber-300 font-bold font-mono">
+                              <History className="h-4 w-4 text-amber-400" />
+                              <span>GỢI Ý NGUYÊN NHÂN TỪ LỊCH SỬ BẢO DƯỠNG CỦA {device.code}:</span>
+                            </div>
+                            <span className="rounded-full bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-mono text-amber-300 font-bold">
+                              Mức tương quan: {diagnosis.historyCorrelation.correlationPercentage}%
+                            </span>
+                          </div>
+                          <p className="text-slate-200 leading-relaxed font-normal">
+                            {diagnosis.historyCorrelation.riskHypothesis}
+                          </p>
+                          {diagnosis.historyCorrelation.preventiveActionAdvised && (
+                            <p className="mt-2 text-[11px] text-amber-200/90 font-mono flex items-center gap-1.5 pt-1.5 border-t border-amber-500/20">
+                              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              <span>Khuyến nghị phòng ngừa: {diagnosis.historyCorrelation.preventiveActionAdvised}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* MTTR & Source Reference Badges */}

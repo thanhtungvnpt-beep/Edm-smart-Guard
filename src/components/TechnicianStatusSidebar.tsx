@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRight,
   ArrowUpRight,
+  BarChart3,
   CheckCircle2,
   Clock,
   Cpu,
@@ -29,6 +30,7 @@ import {
   TechnicianProficiencyScore,
   matchTechLearnings,
 } from './TechnicianProficiencyScore';
+import { TechnicianSkillsComparisonChart } from './TechnicianSkillsComparisonChart';
 
 interface TechnicianStatusSidebarProps {
   isOpen: boolean;
@@ -57,7 +59,7 @@ export const TechnicianStatusSidebar: React.FC<TechnicianStatusSidebarProps> = (
   onFilterByDevice,
   onNavigateToLearningsTab,
 }) => {
-  const [sidebarMode, setSidebarMode] = useState<'DISPATCH' | 'PROFICIENCY'>('DISPATCH');
+  const [sidebarMode, setSidebarMode] = useState<'DISPATCH' | 'PROFICIENCY' | 'SKILLS_CHART'>('DISPATCH');
   const [selectedTechForProficiency, setSelectedTechForProficiency] = useState<string | null>(null);
   const [filterTab, setFilterTab] = useState<'ALL' | 'ON_DUTY' | 'BUSY' | 'OFF_DUTY'>('ALL');
   const [selectedTechForReassign, setSelectedTechForReassign] = useState<string | null>(null);
@@ -159,7 +161,11 @@ export const TechnicianStatusSidebar: React.FC<TechnicianStatusSidebarProps> = (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div
         className={`relative w-full ${
-          sidebarMode === 'PROFICIENCY' ? 'max-w-md sm:max-w-xl md:max-w-2xl' : 'max-w-md sm:max-w-lg'
+          sidebarMode === 'SKILLS_CHART'
+            ? 'max-w-md sm:max-w-2xl md:max-w-3xl lg:max-w-4xl'
+            : sidebarMode === 'PROFICIENCY'
+            ? 'max-w-md sm:max-w-xl md:max-w-2xl'
+            : 'max-w-md sm:max-w-lg'
         } h-full bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col overflow-hidden transition-all duration-300 animate-in slide-in-from-right`}
       >
         {/* SIDEBAR HEADER */}
@@ -167,12 +173,16 @@ export const TechnicianStatusSidebar: React.FC<TechnicianStatusSidebarProps> = (
           <div className="flex items-center gap-3">
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-2xl text-white shadow-lg ${
-                sidebarMode === 'PROFICIENCY'
+                sidebarMode === 'SKILLS_CHART'
+                  ? 'bg-gradient-to-br from-cyan-500 to-indigo-600 shadow-cyan-500/20'
+                  : sidebarMode === 'PROFICIENCY'
                   ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20'
                   : 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/20'
               }`}
             >
-              {sidebarMode === 'PROFICIENCY' ? (
+              {sidebarMode === 'SKILLS_CHART' ? (
+                <BarChart3 className="h-5 w-5" />
+              ) : sidebarMode === 'PROFICIENCY' ? (
                 <Trophy className="h-5 w-5" />
               ) : (
                 <Users className="h-5 w-5" />
@@ -181,24 +191,32 @@ export const TechnicianStatusSidebar: React.FC<TechnicianStatusSidebarProps> = (
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-white text-base sm:text-lg">
-                  {sidebarMode === 'PROFICIENCY'
+                  {sidebarMode === 'SKILLS_CHART'
+                    ? 'So Sánh Kỹ Năng KTV (Recharts)'
+                    : sidebarMode === 'PROFICIENCY'
                     ? 'Bảng Điểm Thành Thạo KTV'
                     : 'Trạng Thái & Điều Phối KTV'}
                 </h3>
                 <span
                   className={`rounded-full px-2 py-0.5 text-[10px] font-mono font-bold ${
-                    sidebarMode === 'PROFICIENCY'
+                    sidebarMode === 'SKILLS_CHART'
+                      ? 'bg-cyan-500/15 border border-cyan-500/30 text-cyan-300'
+                      : sidebarMode === 'PROFICIENCY'
                       ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
                       : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
                   }`}
                 >
-                  {sidebarMode === 'PROFICIENCY'
+                  {sidebarMode === 'SKILLS_CHART'
+                    ? `${technicians.length} Kỹ Thuật Viên`
+                    : sidebarMode === 'PROFICIENCY'
                     ? `${learnings.length} Bài Học AI`
                     : `${onDutyCount}/${technicians.length} Trực Ca`}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                {sidebarMode === 'PROFICIENCY'
+                {sidebarMode === 'SKILLS_CHART'
+                  ? 'Trực quan hóa tỷ lệ hoàn thành sửa chữa (%) trên 5 dòng máy EDM/CNC'
+                  : sidebarMode === 'PROFICIENCY'
                   ? 'Năng lực xử lý sự cố & kinh nghiệm đã nạp vào bộ não tri thức AI'
                   : 'Giám sát tải phân công máy & tối ưu hóa điều phối sự cố khẩn cấp'}
               </p>
@@ -214,35 +232,47 @@ export const TechnicianStatusSidebar: React.FC<TechnicianStatusSidebarProps> = (
           </button>
         </div>
 
-        {/* PRIMARY VIEW TABS SWITCHER: DISPATCH VS PROFICIENCY SCORE */}
-        <div className="flex border-b border-slate-800 bg-slate-950/80 px-4 py-2 gap-2">
+        {/* PRIMARY VIEW TABS SWITCHER: 3-TAB SYSTEM (DISPATCH, PROFICIENCY, RECHARTS SKILLS CHART) */}
+        <div className="flex border-b border-slate-800 bg-slate-950/80 px-3 py-2 gap-1.5 sm:gap-2">
           <button
             onClick={() => {
               setSidebarMode('DISPATCH');
               setSelectedTechForProficiency(null);
             }}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 text-xs font-bold transition ${
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-2.5 text-xs font-bold transition ${
               sidebarMode === 'DISPATCH'
                 ? 'bg-slate-800 text-white shadow-sm border border-slate-700'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
             }`}
           >
             <Users className="h-3.5 w-3.5 text-indigo-400" />
-            <span>Trực Ca & Tải Máy</span>
+            <span>Trực Ca & Tải</span>
           </button>
 
           <button
             onClick={() => setSidebarMode('PROFICIENCY')}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 text-xs font-bold transition ${
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-2.5 text-xs font-bold transition ${
               sidebarMode === 'PROFICIENCY'
                 ? 'bg-gradient-to-r from-amber-500/20 via-amber-600/20 to-orange-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
                 : 'text-slate-400 hover:text-amber-300 hover:bg-slate-900/60'
             }`}
           >
             <Trophy className="h-3.5 w-3.5 text-amber-400" />
-            <span>Điểm Thành Thạo (AI Score)</span>
-            <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.2 text-[9px] font-mono font-bold text-amber-300">
-              Mới
+            <span>Điểm AI</span>
+          </button>
+
+          <button
+            onClick={() => setSidebarMode('SKILLS_CHART')}
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-2.5 text-xs font-bold transition ${
+              sidebarMode === 'SKILLS_CHART'
+                ? 'bg-gradient-to-r from-cyan-500/20 via-indigo-600/20 to-purple-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-900/60'
+            }`}
+          >
+            <BarChart3 className="h-3.5 w-3.5 text-cyan-400" />
+            <span>Biểu Đồ Kỹ Năng</span>
+            <span className="rounded-full bg-cyan-500/20 border border-cyan-500/30 px-1.5 py-0.2 text-[9px] font-mono font-bold text-cyan-300">
+              Recharts
             </span>
           </button>
         </div>
@@ -255,8 +285,19 @@ export const TechnicianStatusSidebar: React.FC<TechnicianStatusSidebarProps> = (
           </div>
         )}
 
-        {/* CONTENT SWITCH: PROFICIENCY SCORE VIEW */}
-        {sidebarMode === 'PROFICIENCY' ? (
+        {/* CONTENT SWITCH: SKILLS CHART VIEW */}
+        {sidebarMode === 'SKILLS_CHART' ? (
+          <TechnicianSkillsComparisonChart
+            technicians={technicians}
+            learnings={learnings}
+            devices={devices}
+            onSelectTechForDispatch={(techId) => {
+              setSelectedTechForReassign(techId);
+              setSidebarMode('DISPATCH');
+            }}
+            onOpenMachineDetails={onOpenMachineDetails}
+          />
+        ) : sidebarMode === 'PROFICIENCY' ? (
           <TechnicianProficiencyScore
             technicians={technicians}
             learnings={learnings}
@@ -268,6 +309,7 @@ export const TechnicianStatusSidebar: React.FC<TechnicianStatusSidebarProps> = (
             }}
             onNavigateToLearningsTab={onNavigateToLearningsTab}
             onOpenMachineDetails={onOpenMachineDetails}
+            onOpenSkillsChart={() => setSidebarMode('SKILLS_CHART')}
           />
         ) : (
           /* CONTENT SWITCH: DISPATCH & LOAD BALANCING VIEW */

@@ -48,6 +48,7 @@ import { ScheduledServiceTask } from '../utils/serviceScheduleData';
 import { MaintenanceFrequencyChart } from './MaintenanceFrequencyChart';
 import { MaintenanceReminderModal } from './MaintenanceReminderModal';
 import { getDeviceMaintenanceReminders } from '../utils/maintenanceReminderData';
+import { getDeviceOperationalMetrics } from '../utils/operationalMetrics';
 
 interface MachineDetailsModalProps {
   device: Device;
@@ -1048,6 +1049,71 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
                   lineColor="#f59e0b"
                 />
               </div>
+
+              {/* Operational Energy & Continuous Uptime Diagnostics Panel */}
+              {(() => {
+                const op = getDeviceOperationalMetrics(device);
+                return (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                    <div className="flex items-center justify-between mb-3 border-b border-slate-800/80 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-amber-400" />
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                          Chỉ Số Điện Năng &amp; Thời Gian Chạy Liên Tục (Operational Uptime)
+                        </h4>
+                      </div>
+                      <span className={`text-[11px] font-mono px-2 py-0.5 rounded-full font-bold ${op.isUrgentMaintenanceNeeded ? 'bg-red-500/20 text-red-300 border border-red-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'}`}>
+                        {op.isUrgentMaintenanceNeeded ? '⚠️ CẦN BẢO TRÌ CẤP BÁCH' : 'TẢI VẬN HÀNH BÌNH THƯỜNG'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-2.5">
+                        <span className="text-slate-400 block text-[11px]">Công suất tiêu thụ:</span>
+                        <div className="mt-1 font-mono text-base font-bold text-amber-300">
+                          {op.powerKw.toFixed(1)} kW
+                        </div>
+                        <span className="text-[10px] text-slate-400">
+                          Định mức: {op.nominalPowerKw[0]}-{op.nominalPowerKw[1]} kW
+                        </span>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-2.5">
+                        <span className="text-slate-400 block text-[11px]">Chạy liên tục chu kỳ này:</span>
+                        <div className={`mt-1 font-mono text-base font-bold ${op.continuousUptimeHours >= 24 ? 'text-rose-400' : op.continuousUptimeHours >= 18 ? 'text-cyan-300' : 'text-slate-200'}`}>
+                          {op.continuousUptimeHours.toFixed(1)} giờ
+                        </div>
+                        <span className="text-[10px] text-slate-400">
+                          {op.isLongRunWarning ? '⚠️ Chạy dài ca liên tục' : 'Thời gian ổn định'}
+                        </span>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-2.5">
+                        <span className="text-slate-400 block text-[11px]">Tổng giờ chạy lũy kế:</span>
+                        <div className="mt-1 font-mono text-base font-bold text-white">
+                          {op.totalOperatingHours.toLocaleString('vi-VN')} h
+                        </div>
+                        <span className="text-[10px] text-slate-400">Odometer máy</span>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-2.5">
+                        <span className="text-slate-400 block text-[11px]">Hệ số công suất cos φ:</span>
+                        <div className="mt-1 font-mono text-base font-bold text-emerald-400">
+                          {op.powerFactor.toFixed(2)}
+                        </div>
+                        <span className="text-[10px] text-slate-400">Hiệu suất điện năng tối ưu</span>
+                      </div>
+                    </div>
+
+                    {op.urgencyReasons.length > 0 && (
+                      <div className="mt-3 rounded-xl bg-amber-950/30 border border-amber-500/30 p-2.5 text-xs text-amber-200">
+                        <span className="font-bold text-amber-300">Phân tích bảo dưỡng cấp bách: </span>
+                        <span>{op.urgencyReasons.join(' • ')}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Technical Specifications */}
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">

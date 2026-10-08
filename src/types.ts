@@ -22,6 +22,19 @@ export interface MachineTelemetry {
   oee: number; // %
 }
 
+export interface HistoryCorrelationInsight {
+  correlatedTaskId?: string;
+  correlatedTaskTitle: string;
+  lastMaintenanceDate: string;
+  operatingHoursAtMaintenance?: number;
+  hoursElapsedSince?: number;
+  partsReplacedInPast?: string[];
+  findingsHistory?: string;
+  riskHypothesis: string;
+  correlationPercentage: number;
+  preventiveActionAdvised?: string;
+}
+
 export interface AIDiagnosis {
   rootCause: string;
   confidenceScore: number;
@@ -34,6 +47,7 @@ export interface AIDiagnosis {
   matchedLearningsCount: number;
   matchedDocsCount: number;
   generatedAt: string;
+  historyCorrelation?: HistoryCorrelationInsight;
 }
 
 export interface HumanResolution {

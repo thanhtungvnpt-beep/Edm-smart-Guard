@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Award,
+  BarChart3,
   Brain,
   CheckCircle2,
   ChevronDown,
@@ -32,6 +33,7 @@ interface TechnicianProficiencyScoreProps {
   onSelectTechForDispatch?: (techId: string) => void;
   onNavigateToLearningsTab?: () => void;
   onOpenMachineDetails?: (device: Device) => void;
+  onOpenSkillsChart?: () => void;
 }
 
 export function matchTechLearnings(tech: Technician, allLearnings: AILearning[]): AILearning[] {
@@ -67,6 +69,7 @@ export const TechnicianProficiencyScore: React.FC<TechnicianProficiencyScoreProp
   onSelectTechForDispatch,
   onNavigateToLearningsTab,
   onOpenMachineDetails,
+  onOpenSkillsChart,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'SCORE' | 'REPAIRS' | 'IMPACT'>('SCORE');
@@ -309,6 +312,38 @@ export const TechnicianProficiencyScore: React.FC<TechnicianProficiencyScoreProp
           </div>
         </div>
       </div>
+
+      {/* QUICK LAUNCHER: RECHARTS SKILLS COMPARISON CHART BANNER */}
+      {onOpenSkillsChart && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 via-indigo-950/30 to-slate-900 p-3 sm:p-3.5 shadow-md">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-300">
+              <BarChart3 className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h5 className="font-bold text-white text-xs sm:text-sm">
+                  Biểu Đồ So Sánh Kỹ Năng Recharts
+                </h5>
+                <span className="rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 text-[9px] font-mono font-bold">
+                  Mới
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Trực quan hóa tỷ lệ hoàn thành sửa chữa (%) trên 5 dòng máy Sodick, Makino, GF Agie, Fanuc...
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onOpenSkillsChart}
+            className="shrink-0 flex items-center gap-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 text-xs font-bold text-slate-950 shadow-md shadow-cyan-600/20 transition active:scale-95"
+          >
+            <span>Mở Biểu Đồ</span>
+            <TrendingUp className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* FILTER & SORT CONTROLS */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs">

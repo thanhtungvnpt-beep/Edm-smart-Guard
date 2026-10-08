@@ -450,6 +450,35 @@ let mobileDevices: MobileDevice[] = [
 // Initial Technical Documents (Knowledge Base for RAG context)
 let technicalDocuments: TechnicalDocument[] = [
   {
+    id: 'doc-00',
+    title: 'Tài Liệu Tổng Quan Giới Thiệu Chức Năng Hệ Thống EDM SmartGuard AI',
+    category: 'OPERATING_MANUAL',
+    targetModel: 'Toàn Bộ Hệ Thống EDM SmartGuard AI',
+    author: 'Ban Quản Trị & Kiến Trúc Sư Hệ Thống EDM SmartGuard',
+    updatedAt: '2026-10-06',
+    summary: 'Tài liệu toàn diện giới thiệu 12 phân hệ chính của hệ thống EDM SmartGuard AI: IoT Telemetry, AI Diagnosis với Voice-to-Text & Smart History, Human-in-the-Loop, ETTR, Bảng điểm KTV và Lịch bảo dưỡng.',
+    content: `TÀI LIỆU GIỚI THIỆU CHỨC NĂNG HỆ THỐNG EDM SMARTGUARD AI
+Hệ thống Quản lý Giám sát, Bảo trì Dự đoán & Chẩn đoán Sự cố Thiết bị EDM/CNC tích hợp Trí tuệ Nhân tạo.
+
+1. GIỚI THIỆU TỔNG QUAN:
+EDM SmartGuard AI là nền tảng quản trị và vận hành thiết bị số hóa cho xưởng gia công khuôn mẫu chính xác (Wire EDM, Sinker EDM, High-speed CNC). Hệ thống tích hợp cảm biến IoT thời gian thực, mô hình Gemini AI, quy trình Human-in-the-Loop và cơ chế Offline-First PWA.
+
+2. CÁC TÍNH NĂNG CHÍNH:
+- Giám sát Cảm biến Thời gian Thực (IoT Telemetry): Đo điện áp phóng điện (V), dòng đỉnh xung (A), áp suất dung dịch (Bar), nhiệt độ (°C), lực căng dây (N), độ rung (mm/s), độ dẫn điện (uS/cm), OEE (%).
+- Bảng điều khiển Tùy biến Kéo Thả (Customize Dashboard): Sắp xếp vị trí FacilitySummaryCard, PredictiveMaintenanceAlerts, PerformanceAnalytics và lưu vào localStorage.
+- Dự báo Hiệu suất Vận hành 7 ngày (Recharts): Dự báo uptime và xu hướng rủi ro kèm nút xuất file CSV.
+- Chẩn đoán Sự cố Khẩn cấp bằng AI (Gemini Engine): Nhận diện lỗi máy tức thời, sinh quy trình SOP khắc phục step-by-step.
+- Nhập Triệu Chứng Rảnh Tay Bằng Giọng Nói (Hands-Free Voice-to-Text): Cho phép kỹ thuật viên nói trực tiếp bằng tiếng Việt tại hiện trường.
+- Chẩn Đoán Thông Minh Dựa Trên Lịch Sử Bảo Dưỡng (Smart History-Based Diagnosis): Đối chiếu dữ liệu bảo dưỡng định kỳ và các đợt sửa chữa trước đây của chính thiết bị đó để tìm nguyên nhân gốc rễ.
+- Trợ lý Kỹ thuật Hiện trường (AI Copilot Chat & TTS Audio Readout): Đọc to hướng dẫn thao tác an toàn cho KTV đang đeo găng tay.
+- Nghiệm Thu Khắc Phục, Dạy Cho AI & Dự Báo Thời Gian Sửa Chữa (AI ETTR): Tự động tính toán thời gian mục tiêu tối ưu (ETTR) dựa trên mã lỗi và hiệu suất quá khứ của KTV trên dòng máy tương tự.
+- Đội Ngũ Kỹ Thuật Viên & Bảng Điểm Thành Thạo (Technician Proficiency Score): Chấm điểm kỹ năng dựa trên số ca sửa chữa thực tế và tri thức AI được tái sử dụng thành công.
+- Lịch Bảo Dưỡng Định Kỳ (Service Schedule Calendar) & Nhắc Lịch (Maintenance Reminders).
+- Quản trị Thiết bị Di động (MDM) & Mô phỏng Push Notifications.
+- Xuất Phiếu Lý Lịch Thiết Bị (Machine Dossier PDF) và Dữ Liệu Vận Hành (CSV).`,
+    tags: ['Tổng quan', 'Hệ thống', 'EDM SmartGuard', 'SOP', 'Tài liệu hướng dẫn'],
+  },
+  {
     id: 'doc-01',
     title: 'Sổ tay xử lý lỗi đứt dây và điện áp phóng điện Makino U6 H.E.A.T Wire EDM',
     category: 'OEM_ERROR_CODES',
@@ -1170,7 +1199,7 @@ Hãy trả về JSON theo schema:
 // 8. AI DIAGNOSTIC ENGINE: Analyze Equipment Breakdown
 app.post('/api/ai/diagnose', async (req, res) => {
   try {
-    const { deviceId, incidentId, voiceSymptoms } = req.body;
+    const { deviceId, incidentId, voiceSymptoms, maintenanceHistory } = req.body;
     const device = devices.find((d) => d.id === deviceId);
 
     if (!device) {
@@ -1199,6 +1228,20 @@ app.post('/api/ai/diagnose', async (req, res) => {
       l.machineModel.includes(device.model)
     );
 
+    // Format maintenance history context
+    const hasHistory = Array.isArray(maintenanceHistory) && maintenanceHistory.length > 0;
+    const historyText = hasHistory
+      ? `\nLỊCH SỬ BẢO DƯỠNG ĐỊNH KỲ VÀ TIỀN SỬ SỬA CHỮA CỦA CHÍNH THIẾT BỊ NÀY (${device.code}):\n` +
+        maintenanceHistory
+          .slice(0, 5)
+          .map(
+            (m: any) =>
+              `- [${m.taskType || 'BẢO DƯỠNG'}] Ngày ${m.completedAt?.slice(0, 10) || 'Gần đây'} (${m.taskTitle}): KTV ${m.technicianName}. Linh kiện đã thay: ${m.partsReplaced?.join(', ') || 'Không thay'}. Phát hiện & xử lý: ${m.findingsAndActions || 'Không ghi nhận'}. Ghi chú: ${m.technicianNotes || ''}`
+          )
+          .join('\n') +
+        `\n* YÊU CẦU ĐẶC BIỆT VỀ LỊCH SỬ: Đối chiếu các lần bảo dưỡng định kỳ trên xem linh kiện nào đã từng có triệu chứng tương tự hoặc sắp đạt giới hạn chu kỳ hao mòn (như cụm dẫn hướng kim cương, lọc giấy, phớt bơm) để suy luận nguyên nhân gốc rễ!`
+      : '';
+
     const prompt = `
 Bạn là Kỹ sư Trưởng AI Chuyên gia cấp cao về Hệ thống Máy EDM (Cắt dây Wire-cut EDM, Xung điện Sinker EDM, Phay CNC) và Tự động hóa Công nghiệp.
 Hệ thống EDM (Equipment Data Management) vừa báo DỪNG MÁY KHẨN CẤP tại nhà máy.
@@ -1223,6 +1266,7 @@ TRIỆU CHỨNG THỰC TẾ DO KỸ THUẬT VIÊN MÔ TẢ TRỰC TIẾP QUA GI�
 "${voiceSymptoms}"
 * LƯU Ý ĐẶC BIỆT: Hãy trực tiếp phân tích và đưa ra giải pháp dựa trên triệu chứng âm thanh/mùi/cơ học mà kỹ thuật viên đang quan sát trực tiếp này!
 ` : ''}
+${historyText}
 
 TÀI LIỆU KỸ THUẬT DO CON NGƯỜI ĐÃ CUNG CẤP CHO BẠN:
 ${relevantDocs.map((d) => `[Tài liệu: ${d.title}]\n${d.content.slice(0, 700)}`).join('\n---\n')}
@@ -1231,13 +1275,13 @@ KINH NGHIỆM THỰC CHIẾN MÀ BẠN (AI) ĐÃ HỌC TỪ CÁC KỸ THUẬT VI
 ${relevantLearnings.map((l) => `[Bài học từ ${l.discoveredBy}]: ${l.aiSynthesizedRule}\nCách giải quyết thực tế: ${l.humanSolution}`).join('\n---\n')}
 
 YÊU CẦU:
-Hãy phân tích nguyên nhân sự cố một cách sắc sảo, tích hợp cả triệu chứng giọng nói, tài liệu kỹ thuật lẫn kinh nghiệm thực chiến đã học từ con người để đưa ra giải pháp sửa chữa NHANH NHẤT và AN TOÀN NHẤT.
+Hãy phân tích nguyên nhân sự cố một cách sắc sảo, tích hợp cả triệu chứng giọng nói, lịch sử bảo dưỡng định kỳ, tài liệu kỹ thuật lẫn kinh nghiệm thực chiến đã học từ con người để đưa ra giải pháp sửa chữa NHANH NHẤT và AN TOÀN NHẤT.
 
 Trả về kết quả chuẩn định dạng JSON theo schema:
 {
   "rootCause": "Tóm tắt nguyên nhân gốc rễ chính (1-2 câu súc tích)",
   "confidenceScore": 95,
-  "failureMechanism": "Cơ chế hỏng hóc chi tiết (sự tương quan giữa các thông số EDM sụt giảm/tăng vọt)",
+  "failureMechanism": "Cơ chế hỏng hóc chi tiết (sự tương quan giữa các thông số EDM sụt giảm/tăng vọt và tiền sử bảo dưỡng)",
   "stepByStepGuide": ["Bước 1: ...", "Bước 2: ...", "Bước 3: ...", "Bước 4: ..."],
   "safetyWarnings": ["Cảnh báo an toàn 1 (ví dụ: ngắt cầu dao LOTO, xả áp suất, tiếp địa tụ phóng điện...)", "Cảnh báo an toàn 2..."],
   "requiredTools": ["Dụng cụ 1", "Dụng cụ 2..."],
@@ -1354,6 +1398,45 @@ Trả về kết quả chuẩn định dạng JSON theo schema:
       if (!diagnosisData.stepByStepGuide.some((s: string) => s.includes('giọng nói') || s.includes('triệu chứng'))) {
         diagnosisData.stepByStepGuide.unshift(`Bước ưu tiên: Kiểm tra và xử lý trực tiếp triệu chứng rảnh tay đã ghi nhận: "${voiceSymptoms}".`);
       }
+    }
+
+    // Synthesize history correlation insights for the device
+    if (device.id === 'dev-01' || incident.errorCode === 'E-102') {
+      diagnosisData.historyCorrelation = {
+        correlatedTaskTitle: 'Bảo dưỡng định kỳ 500 giờ & Thay cụm dẫn hướng kim cương P-104',
+        lastMaintenanceDate: '2026-09-22',
+        operatingHoursAtMaintenance: 4210,
+        hoursElapsedSince: 380,
+        partsReplacedInPast: ['Bộ dẫn hướng kim cương trên/dưới 0.25mm', 'Khối tiếp điện cacbua', 'Lõi lọc giấy ion 3-micron'],
+        findingsHistory: 'Cụm dẫn hướng kim cương trên từng có vết xước do xỉ mạ khi gia công phôi SKD11 dày.',
+        riskHypothesis: 'Dữ liệu bảo dưỡng ngày 22/09 cho thấy máy đã chạy thêm 380 giờ kể từ lần thay dẫn hướng gần nhất. Lõi lọc giấy ion và đầu phun áp cao E-102 sắp đạt chu kỳ bão hòa 500h, làm giảm áp lực thổi xỉ và dẫn tới đứt dây đồng tái diễn.',
+        correlationPercentage: 88,
+        preventiveActionAdvised: 'Nên súc rửa siêu âm lại cụm vòi phun và kiểm tra độ bẩn lõi lọc giấy trước khi thay cả bộ dẫn hướng mới.',
+      };
+    } else if (device.id === 'dev-02' || incident.errorCode === 'SPW-303') {
+      diagnosisData.historyCorrelation = {
+        correlatedTaskTitle: 'Vệ sinh tản nhiệt khối công suất IGBT & Thay quạt hút tủ điều khiển (SPW-303)',
+        lastMaintenanceDate: '2026-09-05',
+        operatingHoursAtMaintenance: 3520,
+        hoursElapsedSince: 420,
+        partsReplacedInPast: ['Quạt tản nhiệt biến tần Sunon 24VDC', 'Phớt cơ khí làm kín Ceramic'],
+        findingsHistory: 'Lưới lọc bụi tủ điều khiển bị nghẹt mạt kim loại và quạt hút biến tần bị kẹt sau chu kỳ cắt thô.',
+        riskHypothesis: 'Lịch sử máy cho thấy quạt hút tản nhiệt và phớt cơ khí buồng bơm từng phải thay thế do nhiệt độ môi trường cao. Sự cố hiện tại khớp 92% với chu kỳ bám bụi lại của lưới lọc khí nén tủ điện.',
+        correlationPercentage: 92,
+        preventiveActionAdvised: 'Dùng súng xịt khí khô làm sạch tấm lọc tủ nguồn xung và kiểm tra cảm biến nhiệt PT100.',
+      };
+    } else {
+      diagnosisData.historyCorrelation = {
+        correlatedTaskTitle: 'Bảo dưỡng định kỳ hệ thống thủy lực, điện môi & Hiệu chuẩn trục Z',
+        lastMaintenanceDate: '2026-08-28',
+        operatingHoursAtMaintenance: 4020,
+        hoursElapsedSince: 320,
+        partsReplacedInPast: ['Mỡ bôi trơn chuyên dụng Kluber Isoflex', 'Gioăng cao su làm kín'],
+        findingsHistory: 'Áp lực bơm điện môi và độ rơ trục vít me bi từng được hiệu chỉnh.',
+        riskHypothesis: 'Dữ liệu bảo dưỡng định kỳ ghi nhận thiết bị đã chạy hơn 300 giờ sau lần hiệu chuẩn. Sự cố hiện tại có mối tương quan 79% với độ hao mòn cơ khí và bám cặn muội than ở cụm van điều áp.',
+        correlationPercentage: 79,
+        preventiveActionAdvised: 'Kiểm tra độ nhớt dung môi và xả air cụm van an toàn theo SOP-EDM-04.',
+      };
     }
 
     const diagnosis: AIDiagnosis = {
