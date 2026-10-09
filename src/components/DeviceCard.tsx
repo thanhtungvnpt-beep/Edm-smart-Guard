@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
@@ -14,11 +14,16 @@ import {
   Activity,
   ArrowUpRight,
   Flame,
+  RotateCcw,
+  Sliders,
+  RefreshCw,
 } from 'lucide-react';
 import { Device } from '../types';
 import { calculatePredictedMaintenance } from '../utils/maintenancePrediction';
 import { getDeviceOperationalMetrics } from '../utils/operationalMetrics';
 import { MachineHealthArcGauge } from './MachineHealthArcGauge';
+import { DeviceQuickActionsMenu } from './DeviceQuickActionsMenu';
+import { DeviceQuickActionsModal, QuickActionMode } from './DeviceQuickActionsModal';
 
 interface DeviceCardProps {
   device: Device;
@@ -28,6 +33,8 @@ interface DeviceCardProps {
   onAcknowledge: (deviceId: string) => void;
   onOpenPhoneViewWithIncident: (device: Device) => void;
   onOpenMachineDetails?: (device: Device) => void;
+  onQuickActionSuccess?: (device: Device, message: string) => void;
+  onQuickSyncDirect?: (deviceId: string) => Promise<void>;
 }
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({
@@ -38,7 +45,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   onAcknowledge,
   onOpenPhoneViewWithIncident,
   onOpenMachineDetails,
+  onQuickActionSuccess,
+  onQuickSyncDirect,
 }) => {
+  const [quickActionMode, setQuickActionMode] = useState<QuickActionMode>(null);
   const isAlarm = device.status === 'ALARM_STOPPED';
   const isRunning = device.status === 'RUNNING';
   const isIdle = device.status === 'IDLE';
@@ -79,8 +89,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           </div>
         </div>
 
-        {/* Status Badge */}
-        <div>
+        {/* Status Badge & Quick Actions Menu */}
+        <div className="flex items-center gap-2">
           {isAlarm && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-red-500/40 animate-bounce">
               <AlertTriangle className="h-3.5 w-3.5" />
@@ -98,6 +108,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               Chờ Phôi
             </span>
           )}
+
+          {/* Quick Actions Dropdown Menu */}
+          <DeviceQuickActionsMenu
+            device={device}
+            onSelectAction={(mode) => setQuickActionMode(mode)}
+            onOpenMachineDetails={onOpenMachineDetails}
+            onQuickSyncDirect={onQuickSyncDirect}
+          />
         </div>
       </div>
 
@@ -433,6 +451,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   <span>Lịch Sử</span>
                 </button>
               )}
+
+              {/* Quick Actions Menu Trigger */}
+              <button
+                type="button"
+                onClick={() => setQuickActionMode('RESET_COUNTER')}
+                className="flex items-center justify-center gap-1 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 py-2.5 px-2.5 text-xs font-semibold text-amber-300 transition"
+                title="Tác vụ nhanh: Reset bộ đếm 500h, Hiệu chuẩn cảm biến, Force Sync PLC"
+              >
+                <Zap className="h-4 w-4 text-amber-400" />
+                <span className="hidden sm:inline">Tác Vụ</span>
+              </button>
             </>
           ) : (
             <>
@@ -457,6 +486,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 </button>
               )}
 
+              {/* Quick Actions Button */}
+              <button
+                type="button"
+                onClick={() => setQuickActionMode('RESET_COUNTER')}
+                className="flex items-center justify-center gap-1 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 py-2 px-2.5 text-xs font-semibold text-amber-300 transition"
+                title="Tác vụ nhanh: Reset bộ đếm 500h, Hiệu chuẩn cảm biến, Force Sync PLC"
+              >
+                <Zap className="h-3.5 w-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Tác Vụ</span>
+              </button>
+
               {/* Quick Trigger Breakdown Simulation on this specific machine */}
               <button
                 onClick={() => onTriggerAlarm(device.id)}
@@ -470,6 +510,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           )}
         </div>
       </div>
+
+      {/* QUICK ACTIONS MODAL DIALOG */}
+      <DeviceQuickActionsModal
+        device={device}
+        mode={quickActionMode}
+        onClose={() => setQuickActionMode(null)}
+        onSuccess={(updatedDevice, message) => {
+          if (onQuickActionSuccess) {
+            onQuickActionSuccess(updatedDevice, message);
+          }
+        }}
+      />
     </div>
   );
 };

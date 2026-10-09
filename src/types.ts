@@ -103,6 +103,11 @@ export interface Device {
   lastEdmSignalTime: string;
   activeIncident?: Incident;
   incidentHistoryCount: number;
+  lastCalibrationTime?: string;
+  serviceCounterResetAt?: string;
+  serviceHoursSinceLastReset?: number;
+  lastSyncTime?: string;
+  lastSyncLatencyMs?: number;
 }
 
 export interface TechnicalDocument {

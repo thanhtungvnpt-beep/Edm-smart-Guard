@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -19,6 +19,7 @@ import {
   Sparkles,
   Zap,
   SlidersHorizontal,
+  Bookmark,
 } from 'lucide-react';
 import {
   Device,
@@ -46,12 +47,16 @@ import { PredictiveMaintenanceAlerts } from './components/PredictiveMaintenanceA
 import { MachineDetailsModal } from './components/MachineDetailsModal';
 import { TechnicianStatusSidebar } from './components/TechnicianStatusSidebar';
 import { QRCodeScannerModal } from './components/QRCodeScannerModal';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { OfflineConnectivityBanner } from './components/OfflineConnectivityBanner';
 import { DashboardCardsContainer } from './components/DashboardCardsContainer';
 import {
   AdvancedFilterPanel,
   AdvancedFilterCriteria,
   DEFAULT_ADVANCED_FILTERS,
+  areCriteriaEqual,
+  getSavedQuickPresets,
+  matchesShift,
 } from './components/AdvancedFilterPanel';
 import { VoiceSearchBar } from './components/VoiceSearchBar';
 import { OnboardingTour } from './components/OnboardingTour';
@@ -102,6 +107,7 @@ export default function App() {
   const [showSimulator, setShowSimulator] = useState(false);
   const [showTechSidebar, setShowTechSidebar] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showOnboardingTour, setShowOnboardingTour] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const completed = localStorage.getItem('smartguard_onboarding_completed');
@@ -423,6 +429,137 @@ export default function App() {
     }
   };
 
+  // --- INDUSTRIAL KEYBOARD SHORTCUTS LISTENER ---
+  // Optimized for technicians wearing gloves or working on IPC operator consoles
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isEditingText =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          (activeEl as HTMLElement).isContentEditable);
+
+      // 1. Alt + Number (1-5): Fast Tab Switching
+      // Supports standard digit keys (1-5) and industrial numeric keypads (Numpad1-5)
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (e.key === '1' || e.code === 'Digit1' || e.code === 'Numpad1') {
+          e.preventDefault();
+          setActiveTab('devices');
+          soundManager.playBeep();
+          showToast('⚡ [Alt+1] Chuyển tab: Giám Sát EDM Trực Tuyến');
+          return;
+        }
+        if (e.key === '2' || e.code === 'Digit2' || e.code === 'Numpad2') {
+          e.preventDefault();
+          setActiveTab('learnings');
+          soundManager.playBeep();
+          showToast('⚡ [Alt+2] Chuyển tab: Bộ Não Tri Thức AI');
+          return;
+        }
+        if (e.key === '3' || e.code === 'Digit3' || e.code === 'Numpad3') {
+          e.preventDefault();
+          setActiveTab('documents');
+          soundManager.playBeep();
+          showToast('⚡ [Alt+3] Chuyển tab: Kho Tài Liệu Kỹ Thuật (SOP/OEM)');
+          return;
+        }
+        if (e.key === '4' || e.code === 'Digit4' || e.code === 'Numpad4') {
+          e.preventDefault();
+          setActiveTab('notifications');
+          soundManager.playBeep();
+          showToast('⚡ [Alt+4] Chuyển tab: Nhật Ký Bắn Push');
+          return;
+        }
+        if (e.key === '5' || e.code === 'Digit5' || e.code === 'Numpad5') {
+          e.preventDefault();
+          setActiveTab('mobile-devices');
+          soundManager.playBeep();
+          showToast('⚡ [Alt+5] Chuyển tab: Quản Lý Thiết Bị Di Động');
+          return;
+        }
+
+        // Alt + K or Alt + /: Toggle Industrial Keyboard Shortcuts Cheat Sheet
+        if (e.key === 'k' || e.key === 'K' || e.key === '/' || e.key === '?') {
+          e.preventDefault();
+          setShowKeyboardShortcuts((prev) => !prev);
+          soundManager.playBeep();
+          return;
+        }
+
+        // Alt + Q: Fast Open Physical Machine QR Code Scanner
+        if (e.key === 'q' || e.key === 'Q') {
+          e.preventDefault();
+          setShowQRScanner((prev) => !prev);
+          soundManager.playBeep();
+          showToast('⚡ [Alt+Q] Mở camera quét mã QR thiết bị EDM');
+          return;
+        }
+
+        // Alt + T: Fast Open Technician On-Duty & Shift Sidebar
+        if (e.key === 't' || e.key === 'T') {
+          e.preventDefault();
+          setShowTechSidebar((prev) => !prev);
+          soundManager.playBeep();
+          return;
+        }
+
+        // Alt + M: Fast Mute / Unmute Siren Alarm
+        if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault();
+          toggleMute();
+          showToast(isMuted ? '⚡ [Alt+M] Đã BẬT còi báo động công nghiệp' : '⚡ [Alt+M] Đã TẮT còi báo động');
+          return;
+        }
+
+        // Alt + F / Alt + S: Focus Machine / Error Code Search Box
+        if (e.key === 'f' || e.key === 'F' || e.key === 's' || e.key === 'S') {
+          e.preventDefault();
+          setActiveTab('devices');
+          setTimeout(() => {
+            const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+            if (searchInput) {
+              searchInput.focus();
+              searchInput.select();
+            }
+          }, 80);
+          showToast('⚡ [Alt+F] Ô tìm kiếm máy EDM / mã lỗi chẩn đoán');
+          return;
+        }
+
+        // Alt + R: Fast Refresh Data (fetchAllData)
+        if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault();
+          soundManager.playBeep();
+          fetchAllData();
+          showToast('⚡ [Alt+R] Đã làm mới & đồng bộ dữ liệu toàn xưởng EDM!');
+          return;
+        }
+      }
+
+      // 2. Shift + R: Fast Refresh Data (fetchAllData) across any screen
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'r' || e.key === 'R' || e.code === 'KeyR')) {
+        if (!isEditingText) {
+          e.preventDefault();
+          soundManager.playBeep();
+          fetchAllData();
+          showToast('⚡ [Shift+R] Đã làm mới & đồng bộ dữ liệu thời gian thực từ EDM Gateway!');
+          return;
+        }
+      }
+
+      // Standalone '?' key or Shift + '/' to view cheat sheet when not editing text
+      if (!isEditingText && (e.key === '?' || (e.shiftKey && e.key === '/'))) {
+        e.preventDefault();
+        setShowKeyboardShortcuts((prev) => !prev);
+        soundManager.playBeep();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isMuted]);
+
   // --- TRIGGER EDM ALARM ---
   const handleTriggerAlarm = async (deviceId: string, errorCode: string = 'E-102', errorTitle: string = 'Sự cố đứt dây & sụt áp phóng điện') => {
     try {
@@ -491,6 +628,35 @@ export default function App() {
     }
   };
 
+  // --- QUICK ACTIONS CALLBACK ---
+  const handleQuickActionSuccess = (updatedDevice: Device, message: string) => {
+    setDevices((prev) =>
+      prev.map((d) => (d.id === updatedDevice.id ? { ...d, ...updatedDevice } : d))
+    );
+    showToast(message);
+    fetchAllData();
+  };
+
+  const handleQuickSyncDirect = async (deviceId: string) => {
+    try {
+      const res = await fetch(`/api/devices/${deviceId}/quick-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'force-sync' }),
+      });
+      const data = await res.json();
+      if (data.success && data.device) {
+        setDevices((prev) =>
+          prev.map((d) => (d.id === data.device.id ? { ...d, ...data.device } : d))
+        );
+        showToast(data.message);
+        fetchAllData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Filtered devices list with both basic and advanced telemetry filters
   const filteredDevices = devices.filter((d) => {
     const term = searchTerm.toLowerCase().trim();
@@ -552,7 +718,12 @@ export default function App() {
       if (opMetrics.continuousUptimeHours < advancedFilters.minUptimeHours) return false;
     }
 
-    // 4. Urgent Maintenance Priority Filter
+    // 4. Shift Schedule Filter (Ca làm việc: Morning, Afternoon, Night)
+    if (advancedFilters.shiftMode && !matchesShift(d, advancedFilters.shiftMode)) {
+      return false;
+    }
+
+    // 5. Urgent Maintenance Priority Filter
     if (advancedFilters.urgentMaintenanceOnly) {
       if (!opMetrics.isUrgentMaintenanceNeeded) return false;
     }
@@ -564,7 +735,12 @@ export default function App() {
     (advancedFilters.tempMode !== 'ALL' ? 1 : 0) +
     (advancedFilters.powerStatusMode !== 'ALL' ? 1 : 0) +
     (advancedFilters.uptimeMode !== 'ALL' ? 1 : 0) +
+    (advancedFilters.shiftMode !== 'ALL' ? 1 : 0) +
     (advancedFilters.urgentMaintenanceOnly ? 1 : 0);
+
+  const matchedQuickPreset = useMemo(() => {
+    return getSavedQuickPresets().find((p) => areCriteriaEqual(p.criteria, advancedFilters));
+  }, [advancedFilters]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -589,6 +765,7 @@ export default function App() {
           setActiveTab('devices');
           setShowOnboardingTour(true);
         }}
+        onOpenShortcuts={() => setShowKeyboardShortcuts(true)}
       />
 
       {/* Offline Connectivity Banner */}
@@ -751,6 +928,7 @@ export default function App() {
               }}
               devices={devices}
               filteredCount={filteredDevices.length}
+              onToast={(msg) => showToast(msg)}
             />
 
             {/* Active Filters Summary Strip if panel is closed but filters applied */}
@@ -761,6 +939,12 @@ export default function App() {
                     <SlidersHorizontal className="h-3.5 w-3.5" />
                     Đang áp dụng bộ lọc nâng cao ({activeAdvancedFilterCount}):
                   </span>
+                  {matchedQuickPreset && (
+                    <span className="rounded-md bg-amber-500/30 border border-amber-500/60 px-2 py-0.5 text-[11px] font-bold text-amber-200 flex items-center gap-1 shadow-sm">
+                      <Bookmark className="h-3 w-3 text-amber-400" />
+                      Lọc nhanh: {matchedQuickPreset.name}
+                    </span>
+                  )}
                   {advancedFilters.urgentMaintenanceOnly && (
                     <span className="rounded-md bg-red-500/30 border border-red-500/50 px-2 py-0.5 text-[11px] font-semibold text-red-200">
                       🚨 Cần bảo trì cấp bách
@@ -779,6 +963,11 @@ export default function App() {
                   {advancedFilters.uptimeMode !== 'ALL' && (
                     <span className="rounded-md bg-cyan-500/20 border border-cyan-500/40 px-2 py-0.5 text-[11px] font-semibold text-cyan-300">
                       Uptime: {advancedFilters.uptimeMode === 'OVER_24H' ? '> 24h' : advancedFilters.uptimeMode === 'OVER_18H' ? '> 18h' : `>= ${advancedFilters.minUptimeHours}h`}
+                    </span>
+                  )}
+                  {advancedFilters.shiftMode !== 'ALL' && (
+                    <span className="rounded-md bg-purple-500/20 border border-purple-500/40 px-2 py-0.5 text-[11px] font-semibold text-purple-300">
+                      Ca: {advancedFilters.shiftMode === 'MORNING' ? 'Ca Sáng (06:00-14:30)' : advancedFilters.shiftMode === 'AFTERNOON' ? 'Ca Chiều (14:00-22:30)' : 'Ca Đêm (22:00-06:30)'}
                     </span>
                   )}
                   <span className="font-mono text-slate-300">
@@ -818,6 +1007,8 @@ export default function App() {
                     onAcknowledge={(id) => handleAcknowledge(id)}
                     onOpenPhoneViewWithIncident={(d) => setPhoneDevice(d)}
                     onOpenMachineDetails={(d) => setDetailsDevice(d)}
+                    onQuickActionSuccess={(updated, msg) => handleQuickActionSuccess(updated, msg)}
+                    onQuickSyncDirect={(id) => handleQuickSyncDirect(id)}
                   />
                 </div>
               ))}
@@ -960,6 +1151,16 @@ export default function App() {
         onClose={() => setShowOnboardingTour(false)}
         onComplete={() => {
           showToast('Chúc mừng bạn đã hoàn thành Tour hướng dẫn kỹ thuật viên mới!');
+        }}
+      />
+
+      {/* 10. Industrial Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal
+        isOpen={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          soundManager.playBeep();
         }}
       />
     </div>

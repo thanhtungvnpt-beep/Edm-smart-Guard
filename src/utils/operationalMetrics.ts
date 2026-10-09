@@ -105,6 +105,12 @@ export function getDeviceOperationalMetrics(device: Device): DeviceOperationalMe
       'dev-06': 8.4,
     };
     continuousUptimeHours = baseHourOffsets[device.id] ?? ((charCodeSum % 25) + 6.5);
+    // If technician performed 'Reset Service Counter', calculate elapsed time since reset
+    if (device.serviceCounterResetAt) {
+      const resetTime = new Date(device.serviceCounterResetAt).getTime();
+      const diffHours = Math.max(0, (Date.now() - resetTime) / (1000 * 60 * 60));
+      continuousUptimeHours = Math.round(diffHours * 10) / 10;
+    }
   } else if (device.status === 'ALARM_STOPPED') {
     continuousUptimeHours = 0;
   } else {

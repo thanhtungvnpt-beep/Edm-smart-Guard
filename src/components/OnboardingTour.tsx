@@ -59,12 +59,12 @@ export const ONBOARDING_TOUR_STEPS: TourStep[] = [
   {
     id: 'device-card',
     targetSelector: '#tour-first-device-card',
-    title: 'Thẻ Máy SCADA & Đo Độ Tin Cậy (Arc Gauge)',
+    title: 'Thẻ Máy SCADA, Health Score & Menu Tác Vụ Nhanh',
     description:
-      'Mỗi thẻ hiển thị trạng thái thời gian thực, đồng hồ cung tròn Health Score (độ tin cậy máy), công suất điện kW, chu kỳ chạy liên tục và nút kích hoạt AI Chẩn Đoán.',
+      'Mỗi thẻ hiển thị trạng thái thời gian thực, đồng hồ Arc Gauge Health Score, menu "Tác Vụ Nhanh" (Reset bộ đếm bảo dưỡng 500h, Hiệu chuẩn cảm biến áp suất/điện áp, Force Sync PLC tức thì mà không cần mở toàn bộ modal) và nút kích hoạt AI Chẩn Đoán.',
     icon: <Activity className="h-5 w-5 text-cyan-400" />,
     placement: 'top',
-    badgeText: 'Bước 4/6 • Thẻ Máy Thông Minh',
+    badgeText: 'Bước 4/6 • Thẻ Máy & Tác Vụ Nhanh',
   },
   {
     id: 'tech-status',

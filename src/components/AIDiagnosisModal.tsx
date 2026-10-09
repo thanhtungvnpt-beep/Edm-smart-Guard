@@ -1,14 +1,29 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  ReferenceLine,
+} from 'recharts';
+import {
+  AlertCircle,
   AlertTriangle,
+  BarChart3,
   BookOpen,
   Brain,
   Calendar,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
   Copy,
+  ExternalLink,
   History,
   Layers,
   MessageSquare,
@@ -16,11 +31,13 @@ import {
   MicOff,
   Radio,
   RefreshCw,
+  Search,
   Send,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   Trash2,
+  TrendingUp,
   Volume2,
   VolumeX,
   Wrench,
@@ -29,6 +46,11 @@ import {
 } from 'lucide-react';
 import { AIDiagnosis, Device } from '../types';
 import { getDeviceMaintenanceHistory } from '../utils/maintenanceHistoryData';
+import {
+  get30DayErrorCodeFrequency,
+  COMMON_EDM_ERROR_CODES,
+  ErrorCodeDayBucket,
+} from '../utils/errorCodeFrequency';
 
 interface AIDiagnosisModalProps {
   device: Device | null;
@@ -91,6 +113,65 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
   ]);
   const [inputMsg, setInputMsg] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+
+  // 30-Day Error Code Frequency & Deeper Root Cause Analysis (RCA) States
+  const [selectedErrorCode, setSelectedErrorCode] = useState<string>(
+    device.activeIncident?.errorCode || 'E-102'
+  );
+  const [showRcaGuidance, setShowRcaGuidance] = useState<boolean>(true);
+  const [rcaCopySuccess, setRcaCopySuccess] = useState<boolean>(false);
+
+  // Keep selected error code synchronized if device active incident changes
+  useEffect(() => {
+    if (device.activeIncident?.errorCode) {
+      setSelectedErrorCode(device.activeIncident.errorCode);
+    }
+  }, [device.activeIncident?.errorCode, device.id]);
+
+  // Compute 30-day frequency and deep root cause analysis data
+  const frequencySummary = useMemo(() => {
+    return get30DayErrorCodeFrequency(
+      device.id,
+      selectedErrorCode,
+      device.activeIncident?.errorCode
+    );
+  }, [device.id, selectedErrorCode, device.activeIncident?.errorCode]);
+
+  // Handler to copy 30-day RCA summary to clipboard
+  const handleCopyRcaSummary = () => {
+    const text = `=== BÁO CÁO TẦN SUẤT MÃ LỖI 30 NGÀY & ĐÁNH GIÁ RCA ===
+Thiết bị: ${device.code} - ${device.name} (${device.model})
+Mã lỗi đang chọn: [${frequencySummary.errorCode}] - ${frequencySummary.errorTitle}
+Tổng số lần dừng máy trong 30 ngày: ${frequencySummary.totalOccurrences30Days} lần
+Chu kỳ lặp lại trung bình (MTBF): ${frequencySummary.daysBetweenOccurrences} ngày/sự cố
+Xu hướng: ${frequencySummary.trend === 'INCREASING' ? 'Gia tăng' : frequencySummary.trend === 'DECREASING' ? 'Giảm dần' : 'Ổn định'}
+Đánh giá mức độ can thiệp: ${
+      frequencySummary.requiresDeepRca
+        ? '🔴 BẮT BUỘC PHÂN TÍCH GỐC RỄ CHUYÊN SÂU (DEEP RCA REQUIRED)'
+        : frequencySummary.rcaUrgency === 'MODERATE_MONITOR'
+        ? '🟡 CẢNH BÁO LẶP LẠI - CẦN GIÁM SÁT'
+        : '🟢 SỰ CỐ ĐƠN LẺ - KHÔNG CẦN RCA SÂU'
+    }
+Nhận định AI:
+${frequencySummary.rcaRationale}
+
+Khuyến nghị hành động kỹ thuật chuyên sâu:
+${frequencySummary.rootCauseRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+Ngày trích xuất: ${new Date().toLocaleDateString('vi-VN')}
+`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setRcaCopySuccess(true);
+      setTimeout(() => setRcaCopySuccess(false), 2500);
+    }
+  };
+
+  // Handler to send 30-day recurrence analysis request to AI Copilot
+  const handleAskCopilotAboutRca = () => {
+    const promptText = `Máy ${device.code} (${device.model}) vừa ghi nhận mã lỗi [${frequencySummary.errorCode}] lặp lại ${frequencySummary.totalOccurrences30Days} lần trong 30 ngày qua (trung bình cứ ${frequencySummary.daysBetweenOccurrences} ngày/sự cố, xu hướng ${frequencySummary.trend === 'INCREASING' ? 'gia tăng mạnh' : 'dày đặc'}). Nhờ AI Copilot phân tích nguyên nhân gốc rễ chuyên sâu (Root Cause Analysis - 5 Whys & Biểu đồ Ishikawa) và đề xuất phương án bảo dưỡng triệt để để tránh tiếp tục dừng máy?`;
+    setActiveTab('chat');
+    setInputMsg(promptText);
+  };
 
   // Play audio chirp when mic activates or deactivates
   const playMicChime = (start: boolean) => {
@@ -902,6 +983,426 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
                 </div>
               ) : diagnosis ? (
                 <>
+                  {/* 30-DAY ERROR CODE FREQUENCY & DEEP ROOT CAUSE ANALYSIS (RCA) BAR CHART */}
+                  <div className="rounded-2xl border border-indigo-500/40 bg-gradient-to-br from-indigo-950/35 via-slate-900 to-slate-950 p-4.5 sm:p-5 shadow-xl">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-500/20 pb-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400">
+                          <BarChart3 className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                              <span>Tần Suất Mã Lỗi 30 Ngày & Đánh Giá Phân Tích Gốc Rễ (RCA)</span>
+                              <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                            </h3>
+                            <span className="rounded bg-indigo-500/20 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-mono font-bold text-indigo-300">
+                              30-Day Frequency
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-300">
+                            Theo dõi tần suất xuất hiện của mã lỗi trong 30 ngày qua trên máy <strong className="text-indigo-300">{device.code}</strong> để đánh giá mức độ cần thiết phân tích nguyên nhân gốc rễ chuyên sâu.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={handleCopyRcaSummary}
+                          className="flex items-center gap-1 rounded-xl bg-slate-900 border border-slate-700 hover:border-indigo-500/50 px-2.5 py-1.5 text-xs text-slate-300 hover:text-white transition font-mono"
+                          title="Sao chép báo cáo tần suất và đánh giá RCA"
+                        >
+                          {rcaCopySuccess ? (
+                            <>
+                              <Check className="h-3.5 w-3.5 text-emerald-400" />
+                              <span className="text-emerald-300 font-bold">Đã chép!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3.5 w-3.5 text-indigo-400" />
+                              <span>Sao Chép</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowRcaGuidance((prev) => !prev)}
+                          className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition border border-slate-800"
+                          title={showRcaGuidance ? 'Thu gọn' : 'Mở rộng'}
+                        >
+                          {showRcaGuidance ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Error Code Selector Bar */}
+                    <div className="mt-3.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+                          <Search className="h-3 w-3 text-indigo-400" />
+                          <span>Mã lỗi đang chọn:</span>
+                        </span>
+                        <select
+                          value={selectedErrorCode}
+                          onChange={(e) => setSelectedErrorCode(e.target.value)}
+                          className="rounded-lg bg-slate-900 border border-indigo-500/40 text-indigo-200 font-mono text-xs px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                          {COMMON_EDM_ERROR_CODES.map((opt) => (
+                            <option key={opt.code} value={opt.code}>
+                              {opt.code} - {opt.title.slice(0, 42)}...
+                            </option>
+                          ))}
+                        </select>
+
+                        {device.activeIncident?.errorCode && device.activeIncident.errorCode !== selectedErrorCode && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedErrorCode(device.activeIncident!.errorCode)}
+                            className="rounded-lg bg-red-500/15 border border-red-500/30 px-2 py-0.5 text-[10px] font-mono font-bold text-red-300 hover:bg-red-500/25 transition flex items-center gap-1"
+                          >
+                            <Zap className="h-3 w-3 text-red-400" />
+                            <span>Về lỗi hiện tại: {device.activeIncident.errorCode}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Quick Pill Filter Buttons */}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {COMMON_EDM_ERROR_CODES.slice(0, 4).map((item) => (
+                          <button
+                            key={item.code}
+                            type="button"
+                            onClick={() => setSelectedErrorCode(item.code)}
+                            className={`rounded-lg px-2 py-0.5 text-[10px] font-mono font-bold transition flex items-center gap-1 ${
+                              selectedErrorCode === item.code
+                                ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400'
+                                : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800'
+                            }`}
+                          >
+                            {item.code === device.activeIncident?.errorCode && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse"></span>
+                            )}
+                            <span>{item.code}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Summary KPI Cards Grid (3 Cards) */}
+                    <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {/* Card 1: 30-Day Occurrences */}
+                      <div className="rounded-xl bg-slate-950/70 border border-slate-800/80 p-3 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                          <span>Tổng tần suất (30 ngày)</span>
+                          <span className={`flex items-center gap-0.5 font-mono text-[10px] font-bold ${
+                            frequencySummary.trend === 'INCREASING' ? 'text-red-400' : 'text-slate-400'
+                          }`}>
+                            <TrendingUp className="h-3 w-3" />
+                            {frequencySummary.trend === 'INCREASING' ? 'Tăng gần đây' : frequencySummary.trend === 'DECREASING' ? 'Giảm dần' : 'Ổn định'}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline gap-1.5 mt-1">
+                          <span className={`text-2xl font-bold font-mono ${
+                            frequencySummary.requiresDeepRca ? 'text-red-400' : frequencySummary.totalOccurrences30Days >= 2 ? 'text-amber-400' : 'text-emerald-400'
+                          }`}>
+                            {frequencySummary.totalOccurrences30Days}
+                          </span>
+                          <span className="text-xs text-slate-400">lần dừng máy</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                          Mã lỗi: <strong className="text-indigo-300">{frequencySummary.errorCode}</strong>
+                        </p>
+                      </div>
+
+                      {/* Card 2: Average Days Between Failures */}
+                      <div className="rounded-xl bg-slate-950/70 border border-slate-800/80 p-3 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                          <span>Chu kỳ lặp lại (MTBF)</span>
+                          <Clock className="h-3.5 w-3.5 text-cyan-400" />
+                        </div>
+                        <div className="flex items-baseline gap-1.5 mt-1">
+                          <span className="text-2xl font-bold font-mono text-cyan-400">
+                            ~{frequencySummary.daysBetweenOccurrences}
+                          </span>
+                          <span className="text-xs text-slate-400">ngày / sự cố</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                          {frequencySummary.totalOccurrences30Days > 1 ? 'Lặp lại định kỳ' : 'Sự cố hiếm gặp'}
+                        </p>
+                      </div>
+
+                      {/* Card 3: Deep RCA Verdict Badge Card */}
+                      <div className={`rounded-xl border p-3 flex flex-col justify-between ${
+                        frequencySummary.requiresDeepRca
+                          ? 'bg-red-950/30 border-red-500/40 ring-1 ring-red-500/20'
+                          : frequencySummary.rcaUrgency === 'MODERATE_MONITOR'
+                          ? 'bg-amber-950/30 border-amber-500/40'
+                          : 'bg-emerald-950/30 border-emerald-500/40'
+                      }`}>
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className="font-bold uppercase tracking-wider text-[10px] font-mono text-slate-300">
+                            Đánh giá can thiệp gốc rễ
+                          </span>
+                          {frequencySummary.requiresDeepRca ? (
+                            <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                          )}
+                        </div>
+                        <div className="mt-1">
+                          <span className={`text-xs sm:text-[13px] font-bold block leading-snug ${
+                            frequencySummary.requiresDeepRca
+                              ? 'text-red-300'
+                              : frequencySummary.rcaUrgency === 'MODERATE_MONITOR'
+                              ? 'text-amber-300'
+                              : 'text-emerald-300'
+                          }`}>
+                            {frequencySummary.requiresDeepRca
+                              ? 'CẦN PHÂN TÍCH GỐC RỄ CHUYÊN SÂU'
+                              : frequencySummary.rcaUrgency === 'MODERATE_MONITOR'
+                              ? 'THEO DÕI XU HƯỚNG TÁI DIỄN'
+                              : 'SỰ CỐ ĐƠN LẺ / NGẪU NHIÊN'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] mt-1 font-mono text-slate-400">
+                          {frequencySummary.requiresDeepRca
+                            ? 'Bắt buộc mở hồ sơ RCA L2'
+                            : 'Không yêu cầu phân tích sâu'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* SMALL RECHARTS BAR CHART AREA */}
+                    <div className="mt-3.5 rounded-xl bg-slate-950/90 border border-slate-800/90 p-3 sm:p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-800/80">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-white font-mono">
+                              Biểu Đồ Tần Suất 30 Ngày Qua ({frequencySummary.dayBuckets[0]?.displayDate} - {frequencySummary.dayBuckets[29]?.displayDate})
+                            </span>
+                            <span className="text-[10px] text-indigo-400 font-mono">
+                              [{frequencySummary.errorCode}]
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate max-w-md">
+                            {frequencySummary.errorTitle}
+                          </p>
+                        </div>
+
+                        {/* Chart Legend Pills */}
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                            <span>≥2 lần/ngày (Dày đặc)</span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="h-2 w-2 rounded-full bg-purple-500"></span>
+                            <span>1 lần</span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>
+                            <span>Hôm nay</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Small Recharts BarChart container */}
+                      <div className="h-[145px] w-full pt-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={frequencySummary.dayBuckets}
+                            margin={{ top: 8, right: 8, left: -22, bottom: 0 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
+                            <XAxis
+                              dataKey="displayDate"
+                              interval={4}
+                              tick={{ fill: '#94a3b8', fontSize: 10 }}
+                              tickLine={{ stroke: '#475569' }}
+                              axisLine={{ stroke: '#475569' }}
+                            />
+                            <YAxis
+                              allowDecimals={false}
+                              domain={[0, Math.max(2, frequencySummary.highestDailyCount + 1)]}
+                              tick={{ fill: '#94a3b8', fontSize: 10 }}
+                              tickLine={{ stroke: '#475569' }}
+                              axisLine={{ stroke: '#475569' }}
+                            />
+                            <Tooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload as ErrorCodeDayBucket;
+                                  return (
+                                    <div className="rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 shadow-2xl backdrop-blur-md text-xs z-50 min-w-[200px]">
+                                      <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-1.5 mb-1.5">
+                                        <span className="font-mono font-bold text-slate-200 flex items-center gap-1">
+                                          <Calendar className="h-3 w-3 text-indigo-400" />
+                                          {data.fullDateLabel}
+                                        </span>
+                                        {data.dayOffset === 0 && (
+                                          <span className="rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 text-[10px] font-mono font-bold">
+                                            Hôm nay
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="space-y-1">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <span className="text-slate-400">Số lần dừng máy:</span>
+                                          <span
+                                            className={`font-mono font-bold ${
+                                              data.count > 1
+                                                ? 'text-red-400'
+                                                : data.count === 1
+                                                ? 'text-amber-400'
+                                                : 'text-slate-500'
+                                            }`}
+                                          >
+                                            {data.count} lần
+                                          </span>
+                                        </div>
+                                        {data.shift && (
+                                          <div className="flex items-center justify-between gap-3">
+                                            <span className="text-slate-400">Ca vận hành:</span>
+                                            <span className="font-mono text-cyan-300 text-[11px]">
+                                              {data.shift}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {data.incidentDetails ? (
+                                          <p className="text-[11px] text-slate-300 italic pt-1 border-t border-slate-800">
+                                            💡 {data.incidentDetails}
+                                          </p>
+                                        ) : (
+                                          <p className="text-[11px] text-slate-500 italic pt-1 border-t border-slate-800">
+                                            Vận hành bình thường, không ghi nhận sự cố.
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <ReferenceLine
+                              y={1}
+                              stroke="#f59e0b"
+                              strokeDasharray="3 3"
+                              strokeOpacity={0.6}
+                            />
+                            <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={12}>
+                              {frequencySummary.dayBuckets.map((entry, index) => {
+                                let fill = '#334155';
+                                if (entry.count >= 2) fill = '#ef4444';
+                                else if (entry.count === 1) {
+                                  fill = entry.dayOffset === 0 ? '#f43f5e' : '#8b5cf6';
+                                }
+                                return (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={fill}
+                                    fillOpacity={entry.count > 0 ? 1 : 0.15}
+                                  />
+                                );
+                              })}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1.5 border-t border-slate-800/80">
+                        <span>Trục hoành: 30 ngày liên tục</span>
+                        <span>Đường đứt nét cam: Ngưỡng cảnh báo lặp lại (1 lần/ngày)</span>
+                      </div>
+                    </div>
+
+                    {/* DEEPER ROOT CAUSE ANALYSIS ASSESSMENT PANEL */}
+                    {showRcaGuidance && (
+                      <div className={`mt-3.5 rounded-xl border p-3.5 text-xs transition-all ${
+                        frequencySummary.requiresDeepRca
+                          ? 'border-red-500/40 bg-red-950/20'
+                          : frequencySummary.rcaUrgency === 'MODERATE_MONITOR'
+                          ? 'border-amber-500/40 bg-amber-950/20'
+                          : 'border-slate-800 bg-slate-900/60'
+                      }`}>
+                        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 font-bold font-mono">
+                            {frequencySummary.requiresDeepRca ? (
+                              <>
+                                <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                                <span className="text-red-300">
+                                  KẾT LUẬN RCA: MÁY CẦN PHÂN TÍCH NGUYÊN NHÂN GỐC RỄ CHUYÊN SÂU
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                                <span className="text-slate-200">
+                                  ĐÁNH GIÁ MỨC ĐỘ CAN THIỆP GỐC RỄ
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-mono font-bold border ${
+                            frequencySummary.requiresDeepRca
+                              ? 'bg-red-500/20 border-red-500/40 text-red-300'
+                              : frequencySummary.rcaUrgency === 'MODERATE_MONITOR'
+                              ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                              : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                          }`}>
+                            {frequencySummary.requiresDeepRca
+                              ? 'Cần Deep RCA Cấp Độ 2'
+                              : 'Sự cố trong định mức'}
+                          </span>
+                        </div>
+
+                        <p className="text-slate-300 leading-relaxed">
+                          {frequencySummary.rcaRationale}
+                        </p>
+
+                        {/* Action Checklist for Deeper RCA */}
+                        <div className="mt-2.5 pt-2 border-t border-slate-800">
+                          <div className="text-[11px] font-mono font-bold text-slate-200 mb-1.5 flex items-center gap-1">
+                            <Wrench className="h-3 w-3 text-amber-400" />
+                            <span>Khuyến nghị các bước phân tích chuyên sâu cho KTV & Giám sát xưởng:</span>
+                          </div>
+                          <ul className="space-y-1 text-[11px] text-slate-300">
+                            {frequencySummary.rootCauseRecommendations.map((rec, rIdx) => (
+                              <li key={rIdx} className="flex items-start gap-1.5">
+                                <span className="text-indigo-400 font-bold">•</span>
+                                <span>{rec}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Interactive Buttons Strip */}
+                        <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={handleAskCopilotAboutRca}
+                            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 text-xs font-bold shadow-md shadow-indigo-600/20 transition active:scale-95"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5 text-amber-300" />
+                            <span>Hỏi AI Copilot Phân Tích Gốc Rễ Chuyên Sâu (5 Whys)</span>
+                          </button>
+
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Dữ liệu thống kê 30 ngày máy {device.code}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* ROOT CAUSE SUMMARY CARD */}
                   <div className="rounded-2xl border border-purple-500/40 bg-gradient-to-br from-purple-950/40 via-slate-900 to-slate-950 p-5 shadow-xl">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-500/20 pb-3">

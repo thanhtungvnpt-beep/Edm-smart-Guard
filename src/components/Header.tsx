@@ -15,6 +15,7 @@ import {
   Zap,
   HardDrive,
   Compass,
+  Keyboard,
 } from 'lucide-react';
 import { FactoryStats } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -37,6 +38,7 @@ interface HeaderProps {
   onToggleSimulateOffline?: () => void;
   onlineMobileCount?: number;
   onStartTour?: () => void;
+  onOpenShortcuts?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -56,6 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSimulateOffline,
   onlineMobileCount = 5,
   onStartTour,
+  onOpenShortcuts,
 }) => {
   const [showDocModal, setShowDocModal] = useState(false);
 
@@ -182,6 +185,21 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden lg:inline">Tài Liệu Hệ Thống</span>
           </button>
 
+          {/* Industrial Keyboard Shortcuts Cheat Sheet Button */}
+          {onOpenShortcuts && (
+            <button
+              onClick={onOpenShortcuts}
+              title="Xem danh sách phím tắt thao tác nhanh công nghiệp (Alt+1..5, Alt+K)"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/90 hover:border-amber-500/50 hover:bg-slate-800/90 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-amber-300 transition shadow-sm active:scale-95"
+            >
+              <Keyboard className="h-4 w-4 text-amber-400" />
+              <span className="hidden xl:inline">Phím Tắt</span>
+              <kbd className="hidden sm:inline-block rounded bg-slate-800 border border-slate-700 px-1 py-0.2 text-[10px] font-mono text-slate-400">
+                Alt+K
+              </kbd>
+            </button>
+          )}
+
           {/* Simulate EDM Breakdown Button */}
           <button
             onClick={onOpenSimulator}
@@ -198,6 +216,7 @@ export const Header: React.FC<HeaderProps> = ({
         <nav className="flex space-x-1 sm:space-x-2">
           <button
             onClick={() => setActiveTab('devices')}
+            title="Giám Sát EDM Trực Tuyến (Phím tắt: Alt+1)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
               activeTab === 'devices'
                 ? 'bg-slate-800 text-amber-400 shadow-sm'
@@ -206,6 +225,15 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Activity className="h-4 w-4" />
             <span>Giám Sát EDM Trực Tuyến</span>
+            <kbd
+              className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
+                activeTab === 'devices'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
+                  : 'bg-slate-900 text-slate-500 border border-slate-800'
+              }`}
+            >
+              Alt+1
+            </kbd>
             {stats && stats.alarmCount > 0 && (
               <span className="flex h-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white animate-pulse">
                 {stats.alarmCount} dừng
@@ -216,6 +244,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="tour-ai-brain-tab"
             onClick={() => setActiveTab('learnings')}
+            title="Bộ Não Tri Thức AI (Phím tắt: Alt+2)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
               activeTab === 'learnings'
                 ? 'bg-slate-800 text-amber-400 shadow-sm'
@@ -224,6 +253,15 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Brain className="h-4 w-4 text-purple-400" />
             <span>Bộ Não Tri Thức AI</span>
+            <kbd
+              className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
+                activeTab === 'learnings'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold'
+                  : 'bg-slate-900 text-slate-500 border border-slate-800'
+              }`}
+            >
+              Alt+2
+            </kbd>
             {stats && (
               <span className="rounded bg-purple-500/20 px-1.5 py-0.2 text-[10px] font-semibold text-purple-300">
                 {stats.totalLearnings} bài học
@@ -233,6 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => setActiveTab('documents')}
+            title="Kho Tài Liệu Kỹ Thuật SOP/OEM (Phím tắt: Alt+3)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
               activeTab === 'documents'
                 ? 'bg-slate-800 text-amber-400 shadow-sm'
@@ -241,6 +280,15 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <BookOpen className="h-4 w-4 text-blue-400" />
             <span>Kho Tài Liệu Kỹ Thuật (SOP/OEM)</span>
+            <kbd
+              className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
+                activeTab === 'documents'
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold'
+                  : 'bg-slate-900 text-slate-500 border border-slate-800'
+              }`}
+            >
+              Alt+3
+            </kbd>
             {stats && (
               <span className="rounded bg-blue-500/20 px-1.5 py-0.2 text-[10px] font-semibold text-blue-300">
                 {stats.totalDocuments}
@@ -250,6 +298,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => setActiveTab('notifications')}
+            title="Nhật Ký Bắn Push (Phím tắt: Alt+4)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
               activeTab === 'notifications'
                 ? 'bg-slate-800 text-amber-400 shadow-sm'
@@ -258,10 +307,20 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Radio className="h-4 w-4 text-emerald-400" />
             <span>Nhật Ký Bắn Push</span>
+            <kbd
+              className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
+                activeTab === 'notifications'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold'
+                  : 'bg-slate-900 text-slate-500 border border-slate-800'
+              }`}
+            >
+              Alt+4
+            </kbd>
           </button>
 
           <button
             onClick={() => setActiveTab('mobile-devices')}
+            title="Thiết Bị Di Động (Phím tắt: Alt+5)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
               activeTab === 'mobile-devices'
                 ? 'bg-slate-800 text-indigo-400 shadow-sm font-bold'
@@ -270,6 +329,15 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Smartphone className="h-4 w-4 text-indigo-400" />
             <span>Thiết Bị Di Động</span>
+            <kbd
+              className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
+                activeTab === 'mobile-devices'
+                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold'
+                  : 'bg-slate-900 text-slate-500 border border-slate-800'
+              }`}
+            >
+              Alt+5
+            </kbd>
             {onlineMobileCount !== undefined && (
               <span className="flex h-4 items-center justify-center rounded-full bg-indigo-500/20 px-1.5 text-[9px] font-mono font-bold text-indigo-300">
                 {onlineMobileCount} online

@@ -270,7 +270,7 @@ const technicians: Technician[] = [
     phone: '0977.889.001',
     email: 'ducanh.pham@factory-edm.vn',
     avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
-    shift: 'Ca Sáng (06:00 - 14:30)',
+    shift: 'Ca Đêm (22:00 - 06:30)',
     activeStatus: 'ON_DUTY',
     fcmToken: 'fcm_phone_ducanh_xiaomi14',
   },
@@ -1080,6 +1080,131 @@ app.post('/api/devices/:id/acknowledge', (req, res) => {
     message: `Kỹ thuật viên ${device.activeIncident.acknowledgedBy} đã tiếp nhận xử lý sự cố`,
     incident: device.activeIncident,
   });
+});
+
+// 6.1 Quick Actions: 'reset-service-counter', 'calibrate-sensor', 'force-sync'
+app.post('/api/devices/:id/quick-action', (req, res) => {
+  try {
+    const { action, sensorType, technicianName, resetScope, note } = req.body;
+    const device = devices.find((d) => d.id === req.params.id);
+    if (!device) {
+      return res.status(404).json({ success: false, message: 'Thiết bị không tồn tại' });
+    }
+
+    const now = new Date();
+    const tech = technicians.find((t) => t.id === device.assignedTechnicianId) || technicians[0];
+    const performer = technicianName || (tech ? tech.name : 'Kỹ thuật viên hiện trường');
+
+    if (action === 'reset-service-counter') {
+      // 1. Reset Service Counter
+      (device as any).serviceCounterResetAt = now.toISOString();
+      (device as any).serviceHoursSinceLastReset = 0;
+      if (device.incidentHistoryCount > 0) {
+        device.incidentHistoryCount = Math.max(0, device.incidentHistoryCount - 1);
+      }
+      device.lastEdmSignalTime = now.toISOString();
+
+      return res.json({
+        success: true,
+        message: `Đã đặt lại bộ đếm bảo dưỡng cho máy ${device.code} (${resetScope || 'Chu kỳ 500 giờ'}) thành công!`,
+        device,
+        data: {
+          deviceId: device.id,
+          resetAt: now.toISOString(),
+          resetScope: resetScope || 'Toàn bộ chu kỳ bảo dưỡng 500h',
+          performer,
+          note: note || '',
+        },
+      });
+    }
+
+    if (action === 'calibrate-sensor') {
+      // 2. Calibrate Sensor(s) back to precision nominal range
+      const type = sensorType || 'ALL';
+      if (type === 'DIELECTRIC_PRESSURE' || type === 'ALL') {
+        device.telemetry.dielectricPressure = 1.35;
+      }
+      if (type === 'DISCHARGE_VOLTAGE' || type === 'ALL') {
+        device.telemetry.dischargeVoltage = device.type === 'WIRE_EDM' ? 55.0 : 48.0;
+      }
+      if (type === 'PEAK_CURRENT' || type === 'ALL') {
+        device.telemetry.peakCurrent = device.type === 'WIRE_EDM' ? 24.5 : 20.0;
+      }
+      if (type === 'DIELECTRIC_TEMP' || type === 'ALL') {
+        device.telemetry.dielectricTemp = 21.2;
+      }
+      if (type === 'WIRE_TENSION' || type === 'ALL') {
+        device.telemetry.wireTension = 13.0;
+      }
+      if (type === 'VIBRATION' || type === 'ALL') {
+        device.telemetry.vibration = 0.65;
+      }
+
+      (device as any).lastCalibrationTime = now.toISOString();
+      device.lastEdmSignalTime = now.toISOString();
+
+      const sensorLabelMap: Record<string, string> = {
+        ALL: 'Tất cả cảm biến (Áp suất, Điện áp, Dòng xung, Nhiệt độ)',
+        DIELECTRIC_PRESSURE: 'Cảm biến áp suất dung dịch (1.35 Bar)',
+        DISCHARGE_VOLTAGE: 'Cảm biến điện áp xung (55.0 V)',
+        PEAK_CURRENT: 'Cảm biến dòng đỉnh (24.5 A)',
+        DIELECTRIC_TEMP: 'Cảm biến nhiệt độ dầu cắt (21.2 °C)',
+        WIRE_TENSION: 'Cảm biến lực căng dây (13.0 N)',
+        VIBRATION: 'Cảm biến gia tốc rung động (0.65 mm/s)',
+      };
+
+      return res.json({
+        success: true,
+        message: `Đã hiệu chuẩn cảm biến máy ${device.code} (${sensorLabelMap[type] || type}) về chuẩn thành công!`,
+        device,
+        data: {
+          deviceId: device.id,
+          sensorType: type,
+          calibratedAt: now.toISOString(),
+          performer,
+          telemetry: device.telemetry,
+        },
+      });
+    }
+
+    if (action === 'force-sync') {
+      // 3. Force Sync with Machine Controller / PLC / IoT Gateway
+      const latencyMs = Math.floor(Math.random() * 9) + 11; // 11-19ms realistic PLC latency
+      device.lastEdmSignalTime = now.toISOString();
+      (device as any).lastSyncTime = now.toISOString();
+      (device as any).lastSyncLatencyMs = latencyMs;
+
+      return res.json({
+        success: true,
+        message: `Đã cưỡng bức đồng bộ dữ liệu PLC thành công cho máy ${device.code}! Độ trễ: ${latencyMs}ms`,
+        device,
+        data: {
+          deviceId: device.id,
+          syncedAt: now.toISOString(),
+          latencyMs,
+          telemetry: device.telemetry,
+        },
+      });
+    }
+
+    if (action === 'ping-controller') {
+      const pingMs = Math.floor(Math.random() * 6) + 7; // 7-12ms
+      return res.json({
+        success: true,
+        message: `Kết nối bộ điều khiển CNC của ${device.code} ổn định! Ping: ${pingMs}ms.`,
+        data: {
+          deviceId: device.id,
+          pingMs,
+          status: 'CONNECTED',
+        },
+      });
+    }
+
+    return res.status(400).json({ success: false, message: 'Hành động nhanh không hợp lệ' });
+  } catch (err: any) {
+    console.error('Quick action error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Lỗi thực thi tác vụ nhanh' });
+  }
 });
 
 // 7. Resolve Incident & Provide Human Resolution Data

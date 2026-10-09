@@ -53,7 +53,8 @@ interface PerformanceAnalyticsProps {
 
 export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devices }) => {
   const [selectedMachine, setSelectedMachine] = useState<string>('ALL');
-  const [activeMetric, setActiveMetric] = useState<'uptime' | 'oee' | 'downtime' | 'forecast'>('downtime');
+  const [activeMetric, setActiveMetric] = useState<'health_trend' | 'uptime' | 'oee' | 'downtime' | 'forecast'>('health_trend');
+  const [showOeePillars, setShowOeePillars] = useState<boolean>(true);
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [downtimeThreshold, setDowntimeThreshold] = useState<number>(120); // 120 minutes = 2 hours
 
@@ -276,6 +277,258 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
     return lowest;
   }, [forecast7DaysData]);
 
+  // 7-Day Factory Health Trend (Past 7 Days Average OEE & 3-Pillar Breakdown)
+  const factoryHealthTrend7Days = useMemo(() => {
+    const today = new Date('2026-10-08T12:00:00Z');
+    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+    const result = [];
+
+    const isSingleMachine = selectedMachine !== 'ALL';
+    const singleMachineObj = isSingleMachine ? devices.find((d) => d.id === selectedMachine) : null;
+
+    // 7 days: 6 days ago up to today (offset 6 down to 0)
+    for (let offset = 6; offset >= 0; offset--) {
+      const d = new Date(today);
+      d.setUTCDate(today.getUTCDate() - offset);
+
+      const year = d.getUTCFullYear();
+      const month = d.getUTCMonth() + 1;
+      const day = d.getUTCDate();
+      const dateStr = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}`;
+      const fullDateStr = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+      const dayOfWeekIndex = d.getUTCDay();
+      const dayName = offset === 0 ? 'Hôm Nay' : dayNames[dayOfWeekIndex];
+      const isWeekend = dayOfWeekIndex === 0 || dayOfWeekIndex === 6;
+
+      // Realistic factory OEE modeling over 7 days based on telemetry and industrial operations
+      let baseAvailability = 95.2;
+      let basePerformance = 95.6;
+      let baseQuality = 99.2;
+      let supervisorNote = 'Dây chuyền vận hành ổn định, nhịp độ sản xuất nhịp nhàng.';
+      let incidentCount = 0;
+
+      if (offset === 6) {
+        baseAvailability = 94.6;
+        basePerformance = 95.0;
+        baseQuality = 99.0;
+        supervisorNote = 'Hoàn thành bàn giao ca sáng, duy trì thông số xung EDM ổn định.';
+      } else if (offset === 5) {
+        baseAvailability = 96.4;
+        basePerformance = 96.2;
+        baseQuality = 99.4;
+        supervisorNote = 'Đạt năng suất tối ưu toàn ca, không phát sinh cảnh báo dừng máy.';
+      } else if (offset === 4) {
+        baseAvailability = 91.2;
+        basePerformance = 93.8;
+        baseQuality = 98.6;
+        incidentCount = 2;
+        supervisorNote = 'Tụt áp suất bơm P-02 và đứt dây đồng cục bộ trên EDM-W01 (đã xử lý trong 28p).';
+      } else if (offset === 3) {
+        baseAvailability = 95.8;
+        basePerformance = 96.4;
+        baseQuality = 99.3;
+        supervisorNote = 'Sau bảo dưỡng van một chiều, tốc độ phóng điện hồi phục mức 96.4%.';
+      } else if (offset === 2) {
+        baseAvailability = 93.6;
+        basePerformance = 95.2;
+        baseQuality = 99.1;
+        incidentCount = 1;
+        supervisorNote = 'Thay lõi lọc ion & dung môi điện môi định kỳ ca chiều (dừng theo kế hoạch 35p).';
+      } else if (offset === 1) {
+        baseAvailability = 97.0;
+        basePerformance = 97.2;
+        baseQuality = 99.6;
+        supervisorNote = 'Hiệu suất ca đêm vượt trội, độ nhám bề mặt Ra 0.22µm đạt chuẩn cao su.';
+      } else if (offset === 0) {
+        baseAvailability = 95.5;
+        basePerformance = 96.6;
+        baseQuality = 99.4;
+        supervisorNote = 'Hôm nay: Toàn bộ dàn máy EDM đang chạy phôi đơn hàng khuôn chính xác.';
+      }
+
+      if (isWeekend) {
+        baseAvailability += 1.2;
+        basePerformance += 0.4;
+      }
+
+      if (isSingleMachine && singleMachineObj) {
+        if (singleMachineObj.status === 'ALARM_STOPPED' && offset === 0) {
+          baseAvailability = Math.max(76, baseAvailability - 16);
+          basePerformance = Math.max(80, basePerformance - 10);
+          supervisorNote = `⚠️ Cảnh báo sự cố: ${singleMachineObj.activeIncident?.errorTitle || 'Dừng máy'}`;
+          incidentCount += 1;
+        } else if (singleMachineObj.type === 'WIRE_EDM') {
+          basePerformance += 0.6;
+        } else {
+          baseQuality += 0.2;
+        }
+      }
+
+      const noise = Math.sin((7 - offset) * 1.5) * 0.3;
+      const availability = Math.round(Math.min(99.6, Math.max(78.0, baseAvailability + noise)) * 10) / 10;
+      const performance = Math.round(Math.min(99.6, Math.max(80.0, basePerformance - noise * 0.4)) * 10) / 10;
+      const quality = Math.round(Math.min(99.9, Math.max(96.0, baseQuality)) * 10) / 10;
+
+      // Overall OEE = (A * P * Q) / 10000
+      const calculatedOee = Math.round(((availability * performance * quality) / 10000) * 10) / 10;
+
+      let healthStatus: 'EXCELLENT' | 'HEALTHY' | 'WARNING' = 'HEALTHY';
+      if (calculatedOee >= 90.0) healthStatus = 'EXCELLENT';
+      else if (calculatedOee >= 85.0) healthStatus = 'HEALTHY';
+      else healthStatus = 'WARNING';
+
+      result.push({
+        dayOffset: offset,
+        date: dateStr,
+        dateLabel: `${dateStr} (${dayName})`,
+        fullDate: fullDateStr,
+        dayName,
+        isToday: offset === 0,
+        isWeekend,
+        avgOee: calculatedOee,
+        targetOee: 85.0, // World-Class target
+        worldClassTarget: 90.0, // Operational Excellence
+        warningThreshold: 80.0,
+        availability,
+        performance,
+        quality,
+        incidentCount,
+        supervisorNote,
+        healthStatus,
+      });
+    }
+
+    return result;
+  }, [devices, selectedMachine]);
+
+  // Summary Metrics for 7-Day Factory Health Trend
+  const sevenDayHealthSummary = useMemo(() => {
+    const oeeValues = factoryHealthTrend7Days.map((d) => d.avgOee);
+    const sumOee = oeeValues.reduce((a, b) => a + b, 0);
+    const avgOee = Math.round((sumOee / factoryHealthTrend7Days.length) * 10) / 10;
+    const minOee = Math.min(...oeeValues);
+    const maxOee = Math.max(...oeeValues);
+    const minDay = factoryHealthTrend7Days.find((d) => d.avgOee === minOee);
+    const maxDay = factoryHealthTrend7Days.find((d) => d.avgOee === maxOee);
+
+    const worldClassDaysCount = factoryHealthTrend7Days.filter((d) => d.avgOee >= 85.0).length;
+    const avgAvailability =
+      Math.round(
+        (factoryHealthTrend7Days.reduce((a, b) => a + b.availability, 0) / factoryHealthTrend7Days.length) * 10
+      ) / 10;
+    const avgPerformance =
+      Math.round(
+        (factoryHealthTrend7Days.reduce((a, b) => a + b.performance, 0) / factoryHealthTrend7Days.length) * 10
+      ) / 10;
+    const avgQuality =
+      Math.round(
+        (factoryHealthTrend7Days.reduce((a, b) => a + b.quality, 0) / factoryHealthTrend7Days.length) * 10
+      ) / 10;
+
+    const previousWeekBenchmark = 87.4;
+    const delta = Math.round((avgOee - previousWeekBenchmark) * 10) / 10;
+
+    let grade: 'A+' | 'A' | 'B' | 'C' = 'A';
+    let gradeLabel = 'Đạt Chuẩn World-Class';
+    if (avgOee >= 90) {
+      grade = 'A+';
+      gradeLabel = 'Vận Hành Xuất Sắc';
+    } else if (avgOee >= 85) {
+      grade = 'A';
+      gradeLabel = 'Đạt Tiêu Chuẩn World-Class';
+    } else if (avgOee >= 80) {
+      grade = 'B';
+      gradeLabel = 'Khá - Cần Tối Ưu Thời Gian Chờ';
+    } else {
+      grade = 'C';
+      gradeLabel = 'Cảnh Báo Gián Đoạn';
+    }
+
+    return {
+      avgOee,
+      minOee,
+      maxOee,
+      minDay,
+      maxDay,
+      worldClassDaysCount,
+      avgAvailability,
+      avgPerformance,
+      avgQuality,
+      delta,
+      grade,
+      gradeLabel,
+    };
+  }, [factoryHealthTrend7Days]);
+
+  // Export 7-Day Factory Health Trend CSV
+  const handleDownloadHealthTrendCSV = () => {
+    const selectedMachineName =
+      selectedMachine === 'ALL'
+        ? 'Toàn bộ xưởng EDM (Tất cả thiết bị)'
+        : devices.find((d) => d.id === selectedMachine)?.name || selectedMachine;
+
+    const headers = [
+      'Ngày',
+      'Thứ',
+      'Ngày Đầy Đủ',
+      'OEE Trung Bình (%)',
+      'Mục Tiêu World-Class (%)',
+      'Mục Tiêu Xuất Sắc (%)',
+      'Tỷ Lệ Sẵn Sàng A (%)',
+      'Hiệu Suất Tốc Độ P (%)',
+      'Chất Lượng Phôi Q (%)',
+      'Số Sự Cố',
+      'Đánh Giá Sức Khỏe',
+      'Ghi Chú Giám Sát Viên',
+    ];
+
+    const rows = factoryHealthTrend7Days.map((d) => [
+      `"${d.date}"`,
+      `"${d.dayName}"`,
+      `"${d.fullDate}"`,
+      d.avgOee,
+      d.targetOee,
+      d.worldClassTarget,
+      d.availability,
+      d.performance,
+      d.quality,
+      d.incidentCount,
+      `"${d.healthStatus}"`,
+      `"${d.supervisorNote.replace(/"/g, '""')}"`,
+    ]);
+
+    const metadata = [
+      '# BÁO CÁO XU HƯỚNG SỨC KHỎE NHÀ XƯỞNG (FACTORY HEALTH TREND - 7 NGÀY) - HỆ THỐNG EDM SMARTGUARD',
+      `# Thời điểm trích xuất: ${new Date().toLocaleString('vi-VN')}`,
+      `# Phạm vi thiết bị: ${selectedMachineName}`,
+      `# Chỉ số OEE trung bình 7 ngày: ${sevenDayHealthSummary.avgOee}% (Chuẩn World-Class: >= 85%)`,
+      `# Xếp hạng sức khỏe nhà xưởng: ${sevenDayHealthSummary.grade} - ${sevenDayHealthSummary.gradeLabel}`,
+      `# Tỷ lệ Sẵn sàng (Availability) TB: ${sevenDayHealthSummary.avgAvailability}%`,
+      `# Hiệu suất Tốc độ (Performance) TB: ${sevenDayHealthSummary.avgPerformance}%`,
+      `# Tỷ lệ Chất lượng (Quality) TB: ${sevenDayHealthSummary.avgQuality}%`,
+      `# Tăng trưởng so với tuần trước: ${sevenDayHealthSummary.delta >= 0 ? '+' : ''}${sevenDayHealthSummary.delta}%`,
+      '',
+    ];
+
+    const csvContent =
+      '\uFEFF' +
+      metadata.join('\n') +
+      headers.join(',') +
+      '\n' +
+      rows.map((r) => r.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Factory_Health_Trend_7Days_OEE_${timestamp}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Export current 30-day analytics data as CSV
   const handleDownloadCSV = () => {
     const selectedMachineName =
@@ -430,16 +683,30 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3.5">
+            {/* 2nd KPI Card: Factory Health Trend (7-Day Average OEE) */}
+            <div
+              onClick={() => setActiveMetric('health_trend')}
+              className={`rounded-2xl border p-3.5 cursor-pointer transition ${
+                activeMetric === 'health_trend'
+                  ? 'border-emerald-500 bg-emerald-950/30 shadow-lg shadow-emerald-500/15 ring-1 ring-emerald-500/50'
+                  : 'border-slate-800/80 bg-slate-950/70 hover:border-emerald-500/50'
+              }`}
+            >
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Hiệu suất OEE Trung bình</span>
-                <Activity className="h-4 w-4 text-amber-400" />
+                <span className="text-emerald-300 font-semibold flex items-center gap-1">
+                  <Activity className="h-4 w-4 text-emerald-400" />
+                  Health Trend (OEE 7 Ngày)
+                </span>
+                <span className="rounded bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 text-[9px] font-mono font-bold">
+                  {sevenDayHealthSummary.delta >= 0 ? `+${sevenDayHealthSummary.delta}%` : `${sevenDayHealthSummary.delta}%`}
+                </span>
               </div>
               <div className="mt-1 font-mono text-2xl font-extrabold text-amber-400">
-                {avgOee}%
+                {sevenDayHealthSummary.avgOee}%
               </div>
-              <div className="mt-1 text-[11px] text-slate-400">
-                Mức World-Class: &gt; 85%
+              <div className="mt-1 text-[11px] text-slate-400 flex items-center justify-between">
+                <span>World-Class: {sevenDayHealthSummary.worldClassDaysCount}/7 ngày</span>
+                <span className="text-emerald-400 font-medium">{sevenDayHealthSummary.grade}</span>
               </div>
             </div>
 
@@ -502,6 +769,17 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
+                  onClick={() => setActiveMetric('health_trend')}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition flex items-center gap-1.5 ${
+                    activeMetric === 'health_trend'
+                      ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-amber-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400/40'
+                      : 'text-emerald-400 hover:text-white hover:bg-slate-800 border border-emerald-500/30'
+                  }`}
+                >
+                  <Activity className="h-3.5 w-3.5 text-emerald-300" />
+                  <span>Xu Hướng Sức Khỏe Nhà Xưởng (Factory Health Trend - 7 Ngày)</span>
+                </button>
+                <button
                   onClick={() => setActiveMetric('downtime')}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                     activeMetric === 'downtime'
@@ -529,7 +807,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                   }`}
                 >
-                  Chỉ Số OEE Sản Xuất (%)
+                  Chỉ Số OEE 30 Ngày (%)
                 </button>
                 <button
                   onClick={() => setActiveMetric('forecast')}
@@ -544,29 +822,185 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
                 </button>
               </div>
 
-              {/* Threshold Selector for Downtime Alert (> 2 hours) */}
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 rounded-xl border border-red-500/40 bg-red-950/30 px-3 py-1 text-xs">
-                  <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
-                  <span className="text-slate-300 font-medium">Ngưỡng cảnh báo dừng:</span>
-                  <select
-                    value={downtimeThreshold}
-                    onChange={(e) => setDowntimeThreshold(Number(e.target.value))}
-                    className="bg-transparent font-mono font-bold text-red-400 focus:outline-none cursor-pointer"
+              {/* View Controls: Toggle Pillars for Health Trend OR Downtime Threshold for other metrics */}
+              {activeMetric === 'health_trend' ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowOeePillars(!showOeePillars)}
+                    className={`flex items-center gap-1.5 rounded-xl border px-3 py-1 text-xs font-medium transition cursor-pointer ${
+                      showOeePillars
+                        ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+                        : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200'
+                    }`}
                   >
-                    <option value={90} className="bg-slate-900 text-white">&gt; 1.5 giờ (90m)</option>
-                    <option value={120} className="bg-slate-900 text-white">&gt; 2.0 giờ (120m - Tiêu chuẩn)</option>
-                    <option value={150} className="bg-slate-900 text-white">&gt; 2.5 giờ (150m)</option>
-                    <option value={180} className="bg-slate-900 text-white">&gt; 3.0 giờ (180m)</option>
-                  </select>
+                    <Layers className="h-3.5 w-3.5" />
+                    <span>{showOeePillars ? 'Ẩn Trụ Cột (A•P•Q)' : 'Hiện 3 Trụ Cột (A•P•Q)'}</span>
+                  </button>
+                  <button
+                    onClick={handleDownloadHealthTrendCSV}
+                    title="Tải báo cáo phân tích OEE 7 ngày (CSV) cho Giám sát viên"
+                    className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:text-white hover:border-slate-600 transition cursor-pointer"
+                  >
+                    <Download className="h-3.5 w-3.5 text-emerald-400" />
+                    <span className="hidden sm:inline">CSV 7 Ngày</span>
+                  </button>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-xl border border-red-500/40 bg-red-950/30 px-3 py-1 text-xs">
+                    <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
+                    <span className="text-slate-300 font-medium">Ngưỡng cảnh báo dừng:</span>
+                    <select
+                      value={downtimeThreshold}
+                      onChange={(e) => setDowntimeThreshold(Number(e.target.value))}
+                      className="bg-transparent font-mono font-bold text-red-400 focus:outline-none cursor-pointer"
+                    >
+                      <option value={90} className="bg-slate-900 text-white">&gt; 1.5 giờ (90m)</option>
+                      <option value={120} className="bg-slate-900 text-white">&gt; 2.0 giờ (120m - Tiêu chuẩn)</option>
+                      <option value={150} className="bg-slate-900 text-white">&gt; 2.5 giờ (150m)</option>
+                      <option value={180} className="bg-slate-900 text-white">&gt; 3.0 giờ (180m)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* MAIN CHART: RECHARTS 30-DAY UPTIME TREND OR 7-DAY FORECAST */}
+            {/* MAIN CHART: RECHARTS 7-DAY FACTORY HEALTH TREND, 7-DAY FORECAST, OR 30-DAY UPTIME/DOWNTIME */}
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                {activeMetric === 'forecast' ? (
+                {activeMetric === 'health_trend' ? (
+                  <ComposedChart data={factoryHealthTrend7Days} margin={{ top: 20, right: 15, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="oeeHealthGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      stroke="#64748b"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={{ stroke: '#334155' }}
+                    />
+                    <YAxis
+                      domain={[78, 100]}
+                      stroke="#64748b"
+                      fontSize={10}
+                      tickLine={false}
+                      axisLine={{ stroke: '#334155' }}
+                      unit="%"
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#090d16',
+                        borderColor: '#10b981',
+                        borderRadius: '14px',
+                        color: '#f8fafc',
+                        fontSize: '11px',
+                        boxShadow: '0 12px 30px -5px rgba(0, 0, 0, 0.7)',
+                        padding: '12px 14px',
+                      }}
+                      formatter={(value: any, name: any, item: any) => {
+                        if (name === 'avgOee') {
+                          return [
+                            `${value}% (${item?.payload?.healthStatus === 'EXCELLENT' ? 'Xuất Sắc' : item?.payload?.healthStatus === 'HEALTHY' ? 'Đạt Chuẩn World-Class' : 'Cần Chú Ý'})`,
+                            'OEE Trung Bình',
+                          ];
+                        }
+                        if (name === 'availability') return [`${value}%`, 'Sẵn Sàng (Availability)'];
+                        if (name === 'performance') return [`${value}%`, 'Hiệu Suất Tốc Độ (Performance)'];
+                        if (name === 'quality') return [`${value}%`, 'Chất Lượng Phôi (Quality)'];
+                        return [value, name];
+                      }}
+                      labelFormatter={(label, items) => {
+                        const item = items?.[0]?.payload;
+                        if (!item) return label;
+                        return `📅 ${item.dayName} (${item.fullDate}) • ${item.supervisorNote}`;
+                      }}
+                    />
+                    {/* Operational Excellence 90% */}
+                    <ReferenceLine
+                      y={90}
+                      stroke="#10b981"
+                      strokeDasharray="3 3"
+                      strokeWidth={1.5}
+                      label={{
+                        value: 'Mục Tiêu Xuất Sắc: 90%',
+                        fill: '#10b981',
+                        fontSize: 10,
+                        position: 'insideTopRight',
+                      }}
+                    />
+                    {/* World-Class Benchmark 85% */}
+                    <ReferenceLine
+                      y={85}
+                      stroke="#f59e0b"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                      label={{
+                        value: 'Chuẩn World-Class: 85%',
+                        fill: '#f59e0b',
+                        fontSize: 10,
+                        position: 'insideBottomRight',
+                      }}
+                    />
+                    {/* Critical Alert 80% */}
+                    <ReferenceLine
+                      y={80}
+                      stroke="#ef4444"
+                      strokeDasharray="2 2"
+                      label={{
+                        value: 'Ngưỡng Cảnh Báo: 80%',
+                        fill: '#ef4444',
+                        fontSize: 9,
+                        position: 'insideBottomLeft',
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="avgOee"
+                      stroke="#10b981"
+                      strokeWidth={3}
+                      fill="url(#oeeHealthGradient)"
+                      name="avgOee"
+                      dot={{ r: 5, fill: '#10b981', stroke: '#090d16', strokeWidth: 2 }}
+                      activeDot={{ r: 7, fill: '#34d399' }}
+                    />
+                    {showOeePillars && (
+                      <>
+                        <Line
+                          type="monotone"
+                          dataKey="availability"
+                          stroke="#06b6d4"
+                          strokeWidth={1.8}
+                          strokeDasharray="4 4"
+                          dot={{ r: 3, fill: '#06b6d4' }}
+                          name="availability"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="performance"
+                          stroke="#f59e0b"
+                          strokeWidth={1.8}
+                          strokeDasharray="4 4"
+                          dot={{ r: 3, fill: '#f59e0b' }}
+                          name="performance"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="quality"
+                          stroke="#a855f7"
+                          strokeWidth={1.8}
+                          strokeDasharray="4 4"
+                          dot={{ r: 3, fill: '#a855f7' }}
+                          name="quality"
+                        />
+                      </>
+                    )}
+                  </ComposedChart>
+                ) : activeMetric === 'forecast' ? (
                   <ComposedChart data={forecast7DaysData} margin={{ top: 20, right: 15, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="forecastAreaGradient" x1="0" y1="0" x2="0" y2="1">
@@ -809,6 +1243,198 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ devi
                 )}
               </ResponsiveContainer>
             </div>
+
+            {/* 7-DAY FACTORY HEALTH TREND (OEE) SUPERVISOR BREAKDOWN */}
+            {activeMetric === 'health_trend' && (
+              <div className="space-y-4 pt-2">
+                {/* OEE 3-Pillars Legend & Metric Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                  <div className="flex flex-wrap items-center gap-3 text-xs">
+                    <span className="text-slate-400 font-medium">Trụ Cột OEE:</span>
+                    <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 text-emerald-300 font-mono">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                      <span>OEE TB: <strong>{sevenDayHealthSummary.avgOee}%</strong></span>
+                    </div>
+                    {showOeePillars && (
+                      <>
+                        <div className="flex items-center gap-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-2 py-1 text-cyan-300 font-mono">
+                          <span className="h-2 w-2 rounded-full bg-cyan-400"></span>
+                          <span>Sẵn Sàng (A): <strong>{sevenDayHealthSummary.avgAvailability}%</strong></span>
+                        </div>
+                        <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2 py-1 text-amber-300 font-mono">
+                          <span className="h-2 w-2 rounded-full bg-amber-400"></span>
+                          <span>Hiệu Suất (P): <strong>{sevenDayHealthSummary.avgPerformance}%</strong></span>
+                        </div>
+                        <div className="flex items-center gap-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 px-2 py-1 text-purple-300 font-mono">
+                          <span className="h-2 w-2 rounded-full bg-purple-400"></span>
+                          <span>Chất Lượng (Q): <strong>{sevenDayHealthSummary.avgQuality}%</strong></span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
+                    <span className="rounded bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-amber-400">
+                      Chuẩn World-Class: ≥ 85%
+                    </span>
+                    <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-emerald-400">
+                      Mục Tiêu Xuất Sắc: ≥ 90%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 7 Daily Health Cards Grid */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-emerald-400" />
+                      <span>Nhật Ký Sức Khỏe Nhà Xưởng &amp; Đánh Giá OEE Chi Tiết (7 Ngày Qua)</span>
+                    </h4>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      Phạm vi: {selectedMachine === 'ALL' ? 'Toàn bộ 5 máy EDM' : devices.find((d) => d.id === selectedMachine)?.code}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
+                    {factoryHealthTrend7Days.map((day) => (
+                      <div
+                        key={day.dayOffset}
+                        className={`rounded-2xl border p-3 flex flex-col justify-between transition ${
+                          day.isToday
+                            ? 'border-emerald-500/70 bg-gradient-to-b from-emerald-950/40 to-slate-950 ring-1 ring-emerald-500/40 shadow-lg shadow-emerald-950/50'
+                            : day.healthStatus === 'EXCELLENT'
+                            ? 'border-emerald-500/30 bg-slate-950/70 hover:border-emerald-500/50'
+                            : day.healthStatus === 'WARNING'
+                            ? 'border-red-500/40 bg-gradient-to-b from-red-950/20 to-slate-950 hover:border-red-400'
+                            : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between border-b border-slate-800/60 pb-1.5 mb-2">
+                            <span className="text-xs font-bold text-white flex items-center gap-1">
+                              {day.dayName}
+                              {day.isToday && (
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                              )}
+                            </span>
+                            <span className="font-mono text-[11px] text-slate-400">{day.date}</span>
+                          </div>
+
+                          <div className="flex items-baseline justify-between mb-2">
+                            <span
+                              className={`font-mono text-lg font-black ${
+                                day.avgOee >= 90
+                                  ? 'text-emerald-400'
+                                  : day.avgOee >= 85
+                                  ? 'text-amber-400'
+                                  : 'text-red-400'
+                              }`}
+                            >
+                              {day.avgOee}%
+                            </span>
+                            <span
+                              className={`rounded-full px-1.5 py-0.2 text-[9px] font-bold ${
+                                day.healthStatus === 'EXCELLENT'
+                                  ? 'bg-emerald-500/20 text-emerald-300'
+                                  : day.healthStatus === 'HEALTHY'
+                                  ? 'bg-amber-500/20 text-amber-300'
+                                  : 'bg-red-500/20 text-red-300'
+                              }`}
+                            >
+                              {day.healthStatus === 'EXCELLENT' ? 'XUẤT SẮC' : day.healthStatus === 'HEALTHY' ? 'ĐẠT CHUẨN' : 'CẦN CHÚ Ý'}
+                            </span>
+                          </div>
+
+                          {/* 3 Pillars Small Bars */}
+                          <div className="space-y-1 mb-2 text-[10px] font-mono text-slate-400">
+                            <div className="flex items-center justify-between">
+                              <span className="text-cyan-400/90">A: {day.availability}%</span>
+                              <span className="text-amber-400/90">P: {day.performance}%</span>
+                              <span className="text-purple-400/90">Q: {day.quality}%</span>
+                            </div>
+                            <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden flex">
+                              <div style={{ width: `${(day.availability / 100) * 33.3}%` }} className="bg-cyan-500"></div>
+                              <div style={{ width: `${(day.performance / 100) * 33.3}%` }} className="bg-amber-500"></div>
+                              <div style={{ width: `${(day.quality / 100) * 33.4}%` }} className="bg-purple-500"></div>
+                            </div>
+                          </div>
+
+                          <div className="text-[11px] text-slate-300 leading-snug line-clamp-2 mb-2">
+                            {day.supervisorNote}
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800/60 text-[10px] text-slate-400 flex items-center justify-between">
+                          <span>{day.incidentCount > 0 ? `⚠️ ${day.incidentCount} sự cố dừng` : '✅ 0 sự cố'}</span>
+                          <span className="text-slate-500 font-mono">SLA: {day.avgOee >= 85 ? 'Đạt' : 'Chưa'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Supervisor Long-Term Health Guidance & Strategic Plan Panel */}
+                <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-950 p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-500/20 pb-3 mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300 shrink-0">
+                        <ShieldCheck className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-white text-xs sm:text-sm">
+                          Góc Nhìn Dài Hạn Cho Giám Sát Viên (Supervisor Long-Term Health Insights)
+                        </h5>
+                        <p className="text-slate-300 text-[11px] mt-0.5">
+                          Đánh giá tổng thể 7 ngày qua: Đội máy đạt mức <strong className="text-emerald-300">{sevenDayHealthSummary.grade} ({sevenDayHealthSummary.gradeLabel})</strong> với OEE trung bình <strong className="text-amber-300">{sevenDayHealthSummary.avgOee}%</strong>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleDownloadHealthTrendCSV}
+                        className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-1.5 text-xs shadow transition cursor-pointer"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Xuất Báo Cáo 7 Ngày (CSV)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                      <div className="flex items-center gap-1.5 text-cyan-300 font-bold mb-1">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>1. Tỷ Lệ Sẵn Sàng (Availability: {sevenDayHealthSummary.avgAvailability}%)</span>
+                      </div>
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        Duy trì chu kỳ làm sạch van một chiều và kiểm tra lọc ion định kỳ 30 ngày để ngăn chặn tụt áp bơm dung dịch điện môi.
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                      <div className="flex items-center gap-1.5 text-amber-300 font-bold mb-1">
+                        <Zap className="h-3.5 w-3.5" />
+                        <span>2. Hiệu Suất Tốc Độ (Performance: {sevenDayHealthSummary.avgPerformance}%)</span>
+                      </div>
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        Tận dụng AI Chẩn Đoán để tối ưu hóa khe hở phóng điện (spark-gap) và ổn định dòng đỉnh xung, hạn chế đứt dây cắt đồng.
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                      <div className="flex items-center gap-1.5 text-purple-300 font-bold mb-1">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>3. Chất Lượng Phôi (Quality: {sevenDayHealthSummary.avgQuality}%)</span>
+                      </div>
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        Độ biến thiên nhiệt độ dung môi được khống chế trong dải nominal, bảo toàn độ chính xác kích thước micro-met cho khuôn mẫu.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* 7-DAY PREDICTIVE FORECAST CARDS BREAKDOWN */}
             {activeMetric === 'forecast' && (

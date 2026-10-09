@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Activity,
   Award,
+  BarChart3,
   BookOpen,
   Calendar,
   Check,
@@ -24,6 +25,9 @@ import {
   Wrench,
   X,
   Zap,
+  Bookmark,
+  SlidersHorizontal,
+  Keyboard,
 } from 'lucide-react';
 
 interface SystemDocumentationModalProps {
@@ -69,7 +73,7 @@ export const SystemDocumentationModal: React.FC<SystemDocumentationModalProps> =
     { id: 'tech-stack', title: '2. Kiến Trúc Kỹ Thuật', icon: Cpu },
     { id: 'telemetry', title: '3. Giám Sát Cảm Biến IoT', icon: Activity },
     { id: 'dashboard', title: '4. Tùy Biến Dashboard Kéo Thả', icon: Layers },
-    { id: 'analytics', title: '5. Dự Báo Vận Hành 7 Ngày (Recharts)', icon: Gauge },
+    { id: 'analytics', title: '5. Factory Health Trend & OEE 7 Ngày (Recharts)', icon: Gauge },
     { id: 'ai-voice', title: '6. AI Chẩn Đoán & Voice-to-Text', icon: Mic },
     { id: 'smart-history', title: '7. Chẩn Đoán Dựa Trên Lịch Sử Máy', icon: History },
     { id: 'copilot-audio', title: '8. Trợ Lý Copilot & Audio SOP', icon: Volume2 },
@@ -244,11 +248,41 @@ export const SystemDocumentationModal: React.FC<SystemDocumentationModalProps> =
 
                 <div className="rounded-xl bg-slate-950/70 border border-slate-800/80 p-3.5">
                   <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
-                    <Gauge className="h-4 w-4 text-cyan-400" />
-                    <span>Dự Báo Hiệu Suất Vận Hành 7 Ngày (Tích hợp Recharts)</span>
+                    <Keyboard className="h-4 w-4 text-emerald-400" />
+                    <span>Phím Tắt Bàn Phím Công Nghiệp (Industrial Keyboard Hotkeys: Alt+1..5, Alt+K)</span>
                   </h4>
                   <p className="mt-1 text-slate-300 text-xs">
-                    Phân tích chuỗi thời gian telemetry và lịch sử dừng máy để vẽ biểu đồ dự báo tỷ lệ Uptime vận hành cho 7 ngày tới. Hỗ trợ nút trích xuất dữ liệu phân tích ra định dạng file CSV chuẩn.
+                    Tối ưu hóa thao tác cho kỹ thuật viên khi đang <strong>đeo găng tay cách điện / bảo hộ</strong> hoặc đứng thao tác trên màn hình điều khiển công nghiệp (IPC). Hỗ trợ chuyển đổi tức thì giữa các tab với tổ hợp <strong>Alt+1</strong> (Giám sát máy), <strong>Alt+2</strong> (Bộ não AI), <strong>Alt+3</strong> (Tài liệu kỹ thuật), <strong>Alt+4</strong> (Nhật ký Push), <strong>Alt+5</strong> (Thiết bị di động). Tích hợp phím số thường và <strong>Numpad 1..5</strong>, phím tắt <strong>Shift+R</strong> (Làm mới & đồng bộ toàn bộ dữ liệu xưởng EDM), <strong>Alt+Q</strong> (Quét QR máy), <strong>Alt+T</strong> (Trực ca KTV), <strong>Alt+M</strong> (Tắt/Bật còi) và <strong>Alt+K / ?</strong> mở bảng tra cứu phím tắt kèm âm thanh xúc giác (tactile audio feedback).
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-slate-800/80 p-3.5">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <Bookmark className="h-4 w-4 text-amber-400" />
+                    <span>Bộ Lọc Nâng Cao & Quản Lý Lọc Nhanh Tùy Chỉnh (Custom Quick Filters)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Tích hợp trong <code>AdvancedFilterPanel</code> cho phép phân loại thiết bị đa chiều theo <strong>Ca làm việc</strong> (Ca Sáng 06:00-14:30, Ca Chiều 14:00-22:30, Ca Đêm 22:00-06:30, hoặc tự động nhận diện theo giờ thực tế), nhiệt độ dung môi (°C), công suất tiêu thụ điện (kW), và thời gian vận hành liên tục (Uptime &gt;18h / &gt;24h). Đặc biệt hỗ trợ kỹ thuật viên <strong>lưu trữ không giới hạn các cấu hình bộ lọc tùy chỉnh</strong> (như <em>"Kiểm tra khẩn cấp ca sáng"</em>, <em>"Máy trực ca chiều"</em>, <em>"Máy trực ca đêm"</em>) kèm thẻ màu và biểu tượng nhận diện, lưu vĩnh viễn trên LocalStorage, và áp dụng lại tức thì chỉ với một chạm kèm âm thanh thông báo.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-slate-800/80 p-3.5">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-amber-400" />
+                    <span>Menu Tác Vụ Nhanh (Quick Actions Menu: Reset Counter, Calibrate Sensor, Force Sync)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Tích hợp trực tiếp trên mỗi thẻ máy (DeviceCard), cho phép kỹ thuật viên thực thi tức thời 3 tác vụ phổ biến nhất mà không cần mở toàn bộ modal chi tiết: <strong>Đặt lại bộ đếm bảo dưỡng (Reset Service Counter)</strong> chu kỳ 500h hoặc phụ tùng thay thế; <strong>Hiệu chuẩn cảm biến (Calibrate Sensor)</strong> với quy trình khử trôi điểm 0 (Zero-offset) và chuẩn hóa Span Gain 4 giai đoạn; và <strong>Cưỡng bức đồng bộ PLC (Force Sync)</strong> qua Modbus TCP/IP với đo kiểm độ trễ mili-giây.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-slate-800/80 p-3.5">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <Gauge className="h-4 w-4 text-cyan-400" />
+                    <span>Factory Health Trend & Dự Báo Uptime (Tích hợp Recharts)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Trực quan hóa chỉ số OEE trung bình 7 ngày qua của toàn phân xưởng hoặc theo từng thiết bị đơn lẻ bằng Recharts ComposedChart. Phân tách chi tiết 3 trụ cột OEE (Sẵn Sàng A, Hiệu Suất P, Chất Lượng Q), đối sánh đường chuẩn World-Class 85%, cùng các khuyến nghị vận hành chiến lược cho giám sát viên và xuất báo cáo CSV.
                   </p>
                 </div>
 
@@ -259,6 +293,16 @@ export const SystemDocumentationModal: React.FC<SystemDocumentationModalProps> =
                   </h4>
                   <p className="mt-1 text-slate-300 text-xs">
                     Kỹ thuật viên tại hiện trường chỉ cần bật micro và mô tả âm thanh, mùi khét hoặc hiện tượng phôi. AI lập tức tích hợp triệu chứng này vào prompt của Gemini để tái chẩn đoán sự cố chính xác.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-slate-800/80 p-3.5">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-indigo-400" />
+                    <span>Biểu Đồ Cột Tần Suất Mã Lỗi 30 Ngày & Đánh Giá Phân Tích Gốc Rễ (Deeper RCA)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Tích hợp biểu đồ cột Recharts trong AIDiagnosisModal hiển thị tần suất xuất hiện của từng mã lỗi qua 30 ngày gần nhất. Tự động tính chu kỳ lặp lại trung bình (MTBF), nhận diện xu hướng tái diễn dày đặc (≥4 lần/tháng) và đưa ra phán quyết bắt buộc kích hoạt phân tích nguyên nhân gốc rễ chuyên sâu (Deeper RCA - 5 Whys & Ishikawa) kèm danh mục kiểm tra cơ khí / điện tử chi tiết.
                   </p>
                 </div>
 
