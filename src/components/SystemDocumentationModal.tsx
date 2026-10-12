@@ -345,6 +345,16 @@ export const SystemDocumentationModal: React.FC<SystemDocumentationModalProps> =
                     Lịch trực quan theo dõi các mốc bảo dưỡng 250h, 500h, 1000h, 2000h và cho phép thiết lập thông báo nhắc việc định kỳ cho từng linh kiện hao mòn cụ thể (như bộ lọc, phớt bơm, dây curoa).
                   </p>
                 </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-amber-500/30 p-3.5 bg-gradient-to-r from-amber-950/20 to-slate-950/60">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <Wrench className="h-4 w-4 text-amber-400" />
+                    <span>Lưu Trữ & Tra Cứu Lịch Sử Bảo Trì Sửa Chữa (Maintenance & Repair History Log)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Lưu trữ hồ sơ bảo trì và sửa chữa chi tiết cho từng thiết bị EDM. Bao gồm đầy đủ: <strong>Ngày thực hiện</strong>, <strong>Mô tả sự cố</strong> (hiện tượng hư hỏng ban đầu), <strong>Hành động sửa chữa</strong> (quy trình kỹ thuật xử lý), <strong>Bộ phận thay thế</strong> (phụ tùng tiêu hao) và <strong>Kỹ thuật viên thực hiện</strong>. Cung cấp bộ lọc thông minh đa chiều theo thiết bị (máy), ngày tháng (khoảng thời gian) và loại sự cố (sửa chữa khẩn cấp, bảo dưỡng định kỳ, thay linh kiện, hiệu chuẩn, đại tu) cùng tìm kiếm tức thì và xuất file CSV/In báo cáo.
+                  </p>
+                </div>
               </div>
             </div>
 

@@ -26,12 +26,14 @@ import {
   Sunset,
   Calendar,
   Users,
+  Gauge,
 } from 'lucide-react';
 import { Device } from '../types';
 import { getDeviceOperationalMetrics } from '../utils/operationalMetrics';
 import { soundManager } from '../utils/audio';
 
 export type ShiftFilterMode = 'ALL' | 'MORNING' | 'AFTERNOON' | 'NIGHT';
+export type OeeFilterMode = 'ALL' | 'BELOW_70' | 'BELOW_60' | 'BELOW_80' | 'CUSTOM_MAX';
 
 export interface AdvancedFilterCriteria {
   // Operating Temperature Threshold
@@ -49,6 +51,10 @@ export interface AdvancedFilterCriteria {
   // Shift Schedule (Ca làm việc: Morning, Afternoon, Night)
   shiftMode: ShiftFilterMode;
 
+  // OEE Overall Equipment Effectiveness Threshold
+  oeeMode: OeeFilterMode;
+  maxOeeThreshold: number; // e.g. 70%
+
   // Quick preset: Priority urgent maintenance
   urgentMaintenanceOnly: boolean;
 }
@@ -61,6 +67,8 @@ export const DEFAULT_ADVANCED_FILTERS: AdvancedFilterCriteria = {
   uptimeMode: 'ALL',
   minUptimeHours: 18,
   shiftMode: 'ALL',
+  oeeMode: 'ALL',
+  maxOeeThreshold: 70,
   urgentMaintenanceOnly: false,
 };
 
@@ -79,7 +87,8 @@ export type QuickFilterIcon =
   | 'Moon'
   | 'Sunset'
   | 'Users'
-  | 'Calendar';
+  | 'Calendar'
+  | 'Gauge';
 
 export interface QuickFilterPreset {
   id: string;
@@ -95,6 +104,27 @@ export interface QuickFilterPreset {
 // Built-in presets including "Kiểm tra khẩn cấp ca sáng"
 export const BUILT_IN_QUICK_PRESETS: QuickFilterPreset[] = [
   {
+    id: 'preset-low-oee-optimization',
+    name: 'Tối ưu máy OEE thấp (< 70%)',
+    description: 'Rà soát các máy có hiệu suất thiết bị tổng thể suy giảm dưới 70% cần can thiệp tối ưu hóa',
+    criteria: {
+      tempMode: 'ALL',
+      minTempThreshold: 24,
+      powerStatusMode: 'ALL',
+      minPowerKw: 8.0,
+      uptimeMode: 'ALL',
+      minUptimeHours: 18,
+      shiftMode: 'ALL',
+      oeeMode: 'BELOW_70',
+      maxOeeThreshold: 70,
+      urgentMaintenanceOnly: false,
+    },
+    isBuiltIn: true,
+    color: 'rose',
+    icon: 'Gauge',
+    createdAt: '2026-03-01T06:00:00Z',
+  },
+  {
     id: 'preset-morning-urgent-shift',
     name: 'Kiểm tra khẩn cấp ca sáng',
     description: 'Rà soát ưu tiên máy ca sáng (06:00 - 14:30) cần bảo trì khẩn cấp, nhiệt độ vượt ngưỡng hoặc tải điện cao',
@@ -106,6 +136,8 @@ export const BUILT_IN_QUICK_PRESETS: QuickFilterPreset[] = [
       uptimeMode: 'ALL',
       minUptimeHours: 18,
       shiftMode: 'MORNING',
+      oeeMode: 'ALL',
+      maxOeeThreshold: 70,
       urgentMaintenanceOnly: true,
     },
     isBuiltIn: true,
@@ -125,6 +157,8 @@ export const BUILT_IN_QUICK_PRESETS: QuickFilterPreset[] = [
       uptimeMode: 'ALL',
       minUptimeHours: 18,
       shiftMode: 'AFTERNOON',
+      oeeMode: 'ALL',
+      maxOeeThreshold: 70,
       urgentMaintenanceOnly: false,
     },
     isBuiltIn: true,
@@ -144,6 +178,8 @@ export const BUILT_IN_QUICK_PRESETS: QuickFilterPreset[] = [
       uptimeMode: 'ALL',
       minUptimeHours: 18,
       shiftMode: 'NIGHT',
+      oeeMode: 'ALL',
+      maxOeeThreshold: 70,
       urgentMaintenanceOnly: false,
     },
     isBuiltIn: true,
@@ -163,6 +199,8 @@ export const BUILT_IN_QUICK_PRESETS: QuickFilterPreset[] = [
       uptimeMode: 'ALL',
       minUptimeHours: 18,
       shiftMode: 'ALL',
+      oeeMode: 'ALL',
+      maxOeeThreshold: 70,
       urgentMaintenanceOnly: false,
     },
     isBuiltIn: true,
@@ -182,6 +220,8 @@ export const BUILT_IN_QUICK_PRESETS: QuickFilterPreset[] = [
       uptimeMode: 'ALL',
       minUptimeHours: 18,
       shiftMode: 'ALL',
+      oeeMode: 'ALL',
+      maxOeeThreshold: 70,
       urgentMaintenanceOnly: false,
     },
     isBuiltIn: true,
@@ -201,6 +241,8 @@ export const BUILT_IN_QUICK_PRESETS: QuickFilterPreset[] = [
       uptimeMode: 'OVER_18H',
       minUptimeHours: 18,
       shiftMode: 'ALL',
+      oeeMode: 'ALL',
+      maxOeeThreshold: 70,
       urgentMaintenanceOnly: false,
     },
     isBuiltIn: true,

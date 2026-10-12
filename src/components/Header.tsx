@@ -16,6 +16,7 @@ import {
   HardDrive,
   Compass,
   Keyboard,
+  Wrench,
 } from 'lucide-react';
 import { FactoryStats } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -23,8 +24,8 @@ import { SystemDocumentationModal } from './SystemDocumentationModal';
 
 interface HeaderProps {
   stats: FactoryStats | null;
-  activeTab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices';
-  setActiveTab: (tab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices') => void;
+  activeTab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history';
+  setActiveTab: (tab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history') => void;
   isMuted: boolean;
   toggleMute: () => void;
   pushPermission: NotificationPermission;
@@ -39,6 +40,7 @@ interface HeaderProps {
   onlineMobileCount?: number;
   onStartTour?: () => void;
   onOpenShortcuts?: () => void;
+  shortcutUsageCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -59,6 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   onlineMobileCount = 5,
   onStartTour,
   onOpenShortcuts,
+  shortcutUsageCount,
 }) => {
   const [showDocModal, setShowDocModal] = useState(false);
 
@@ -189,11 +192,16 @@ export const Header: React.FC<HeaderProps> = ({
           {onOpenShortcuts && (
             <button
               onClick={onOpenShortcuts}
-              title="Xem danh sách phím tắt thao tác nhanh công nghiệp (Alt+1..5, Alt+K)"
+              title={`Quản lý phím tắt & telemetry KTV (Đã ghi nhận ${shortcutUsageCount || 0} lượt)`}
               className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/90 hover:border-amber-500/50 hover:bg-slate-800/90 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-amber-300 transition shadow-sm active:scale-95"
             >
               <Keyboard className="h-4 w-4 text-amber-400" />
               <span className="hidden xl:inline">Phím Tắt</span>
+              {typeof shortcutUsageCount === 'number' && shortcutUsageCount > 0 && (
+                <span className="flex items-center rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-mono font-bold text-amber-300 border border-amber-500/30">
+                  {shortcutUsageCount}
+                </span>
+              )}
               <kbd className="hidden sm:inline-block rounded bg-slate-800 border border-slate-700 px-1 py-0.2 text-[10px] font-mono text-slate-400">
                 Alt+K
               </kbd>
@@ -343,6 +351,28 @@ export const Header: React.FC<HeaderProps> = ({
                 {onlineMobileCount} online
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('history')}
+            title="Lịch Sử Bảo Trì & Sửa Chữa (Phím tắt: Alt+6)"
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
+              activeTab === 'history'
+                ? 'bg-slate-800 text-amber-400 shadow-sm font-bold'
+                : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+            }`}
+          >
+            <Wrench className="h-4 w-4 text-amber-400" />
+            <span>Lịch Sử Sửa Chữa</span>
+            <kbd
+              className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
+                activeTab === 'history'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
+                  : 'bg-slate-900 text-slate-500 border border-slate-800'
+              }`}
+            >
+              Alt+6
+            </kbd>
           </button>
         </nav>
 

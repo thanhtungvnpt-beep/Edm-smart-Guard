@@ -160,7 +160,7 @@ export interface NotificationLog {
   errorCode: string;
   recipientPhone: string;
   recipientName: string;
-  channel: 'PUSH_NOTIFICATION' | 'SMS' | 'URGENT_AUDIO';
+  channel: 'PUSH_NOTIFICATION' | 'SMS' | 'URGENT_AUDIO' | 'EMAIL';
   status: 'SENT' | 'DELIVERED' | 'ACKNOWLEDGED';
   previewText: string;
 }
@@ -744,7 +744,7 @@ let devices: Device[] = [
       wireSpeed: 12.0,
       vibration: 0.6,
       conductivity: 3.9,
-      oee: 89.6,
+      oee: 58.5,
     },
     nominalRanges: {
       dischargeVoltage: [48, 70],
@@ -808,7 +808,7 @@ let devices: Device[] = [
       wireSpeed: 0,
       vibration: 0.2,
       conductivity: 4.1,
-      oee: 84.5,
+      oee: 67.2,
     },
     nominalRanges: {
       dischargeVoltage: [40, 75],
@@ -997,6 +997,15 @@ app.post('/api/edm/trigger-alarm', async (req, res) => {
     }
 
     const tech = technicians.find((t) => t.id === device.assignedTechnicianId) || technicians[0];
+    const triggeredAt = new Date().toISOString();
+    const formattedStoppageTime = new Date().toLocaleString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
 
     // Alter telemetry to reflect anomaly
     if (errorCode === 'E-102') {
@@ -1013,7 +1022,7 @@ app.post('/api/edm/trigger-alarm', async (req, res) => {
     }
 
     device.status = 'ALARM_STOPPED';
-    device.lastEdmSignalTime = new Date().toISOString();
+    device.lastEdmSignalTime = triggeredAt;
     device.incidentHistoryCount += 1;
 
     const incidentId = `INC-${Date.now().toString().slice(-6)}`;
@@ -1023,22 +1032,32 @@ app.post('/api/edm/trigger-alarm', async (req, res) => {
       errorCode: errorCode || 'E-102',
       errorTitle: errorTitle || 'Sự cố dừng khẩn cấp từ hệ thống EDM',
       severity,
-      triggeredAt: new Date().toISOString(),
+      triggeredAt,
       status: 'ACTIVE',
       telemetrySnapshot: { ...device.telemetry },
       assignedTechnician: tech,
       pushDelivered: true,
-      pushDeliveredAt: new Date().toISOString(),
+      pushDeliveredAt: triggeredAt,
     };
 
     device.activeIncident = newIncident;
 
-    // Create Push Notification Entry (Simulating instant phone push to technician)
-    const notifText = `🚨 [EDM DỪNG MÁY KHẨN CẤP] Thiết bị ${device.code} (${device.name}) tại ${device.location} vừa báo dừng! Mã lỗi: ${newIncident.errorCode} - ${newIncident.errorTitle}. KTV ${tech.name} vui lòng tiếp nhận ngay!`;
+    // Format notification text containing device name, stoppage time, error code, and assigned technician
+    const errorString = errorCode
+      ? `[${errorCode}] ${errorTitle || 'Sự cố dừng máy khẩn cấp'}`
+      : 'Không có mã lỗi (Ngắt dừng khẩn cấp)';
+    const notifText = `🚨 [CẢNH BÁO DỪNG MÁY THEO THỜI GIAN THỰC]\n• Thiết bị: ${device.name} (${device.code})\n• Thời gian dừng máy: ${formattedStoppageTime}\n• Mã lỗi: ${errorString}\n• KTV chỉ định: ${tech.name} (${tech.phone})\n• Vị trí: ${device.location} — Yêu cầu tiếp nhận xử lý ngay!`;
+
+    // Find technician's mobile devices to record delivery
+    const techMobiles = mobileDevices.filter((m) => m.assignedTechnicianId === tech.id);
+    techMobiles.forEach((m) => {
+      m.lastPingTime = triggeredAt;
+      m.pushStatus = 'ACTIVE';
+    });
 
     const newNotification: NotificationLog = {
       id: `notif-${Date.now()}`,
-      timestamp: new Date().toISOString(),
+      timestamp: triggeredAt,
       deviceId: device.id,
       deviceName: device.name,
       errorCode: newIncident.errorCode,
@@ -1053,13 +1072,86 @@ app.post('/api/edm/trigger-alarm', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Hệ thống EDM đã ghi nhận dừng máy khẩn cấp! Đã phát thông báo đẩy tức thì đến điện thoại ${tech.phone} (${tech.name})`,
+      message: `Hệ thống EDM đã ghi nhận dừng máy! Đã ngay lập tức phát thông báo đẩy đến điện thoại ${tech.name} (${tech.phone})`,
       incident: newIncident,
       notification: newNotification,
+      stoppageTime: formattedStoppageTime,
+      assignedTechnician: tech,
+      deliveredToMobiles: techMobiles.map((m) => m.deviceName),
     });
   } catch (err: any) {
     console.error('Trigger alarm error:', err);
     res.status(500).json({ success: false, message: err.message || 'Lỗi phát sự cố EDM' });
+  }
+});
+
+// 5.1 Direct Report Machine Stoppage endpoint (from EDM sensor/gateway)
+app.post('/api/devices/:id/report-stop', async (req, res) => {
+  try {
+    const device = devices.find((d) => d.id === req.params.id);
+    if (!device) return res.status(404).json({ success: false, message: 'Device not found' });
+
+    const { errorCode, errorTitle, severity = 'CRITICAL' } = req.body;
+    const tech = technicians.find((t) => t.id === device.assignedTechnicianId) || technicians[0];
+    const triggeredAt = new Date().toISOString();
+    const formattedStoppageTime = new Date().toLocaleString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+
+    device.status = 'ALARM_STOPPED';
+    device.lastEdmSignalTime = triggeredAt;
+    device.incidentHistoryCount += 1;
+
+    const incidentId = `INC-${Date.now().toString().slice(-6)}`;
+    const newIncident: Incident = {
+      incidentId,
+      deviceId: device.id,
+      errorCode: errorCode || 'E-STOP',
+      errorTitle: errorTitle || 'Dừng máy đột ngột từ cảm biến EDM',
+      severity,
+      triggeredAt,
+      status: 'ACTIVE',
+      telemetrySnapshot: { ...device.telemetry },
+      assignedTechnician: tech,
+      pushDelivered: true,
+      pushDeliveredAt: triggeredAt,
+    };
+    device.activeIncident = newIncident;
+
+    const errorString = errorCode
+      ? `[${errorCode}] ${errorTitle || 'Dừng máy'}`
+      : 'Không có mã lỗi (Dừng đột ngột)';
+    const notifText = `🚨 [CẢNH BÁO DỪNG MÁY THEO THỜI GIAN THỰC]\n• Thiết bị: ${device.name} (${device.code})\n• Thời gian dừng máy: ${formattedStoppageTime}\n• Mã lỗi: ${errorString}\n• KTV chỉ định: ${tech.name} (${tech.phone})`;
+
+    const newNotification: NotificationLog = {
+      id: `notif-${Date.now()}`,
+      timestamp: triggeredAt,
+      deviceId: device.id,
+      deviceName: device.name,
+      errorCode: newIncident.errorCode,
+      recipientPhone: tech.phone,
+      recipientName: tech.name,
+      channel: 'PUSH_NOTIFICATION',
+      status: 'DELIVERED',
+      previewText: notifText,
+    };
+    notificationLogs.unshift(newNotification);
+
+    res.json({
+      success: true,
+      message: `Đã ghi nhận dừng máy và gửi thông báo đẩy đến điện thoại ${tech.name}`,
+      incident: newIncident,
+      notification: newNotification,
+      stoppageTime: formattedStoppageTime,
+      assignedTechnician: tech,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Lỗi báo dừng máy' });
   }
 });
 
@@ -1873,6 +1965,494 @@ app.post('/api/mobile-devices/broadcast', (req, res) => {
     data: log,
   });
 });
+
+// 16. Maintenance & Repair History Endpoints
+export interface MaintenanceRecordServer {
+  id: string;
+  deviceId: string;
+  deviceCode?: string;
+  deviceName?: string;
+  taskTitle: string;
+  taskType: 'PREVENTIVE' | 'CORRECTIVE' | 'PARTS_REPLACEMENT' | 'CALIBRATION' | 'OVERHAUL';
+  completedAt: string;
+  technicianName: string;
+  technicianRole?: string;
+  durationMinutes: number;
+  partsReplaced: string[];
+  findingsAndActions: string;
+  incidentDescription?: string;
+  repairActions?: string;
+  technicianNotes?: string;
+  operatingHoursAtMaintenance: number;
+  qualityPassed: boolean;
+  costEstimateVND?: number;
+  aiVerified?: boolean;
+}
+
+let maintenanceRecords: MaintenanceRecordServer[] = [
+  {
+    id: 'maint-01',
+    deviceId: 'dev-01',
+    deviceCode: 'EDM-W01',
+    deviceName: 'Máy Cắt Dây CNC Makino U6 H.E.A.T',
+    taskTitle: 'Bảo dưỡng định kỳ 500 giờ & Thay cụm dẫn hướng kim cương P-104',
+    taskType: 'PREVENTIVE',
+    completedAt: '2026-09-22T14:30:00Z',
+    technicianName: 'Lê Hoàng Nam',
+    technicianRole: 'Chuyên gia Cắt Dây EDM',
+    durationMinutes: 95,
+    partsReplaced: [
+      'Bộ dẫn hướng kim cương trên/dưới 0.25mm (Diamond Wire Guide)',
+      'Khối tiếp điện cacbua (Energizing Carbide Plate)',
+      'Lõi lọc giấy ion 3-micron',
+    ],
+    incidentDescription:
+      'Máy đạt ngưỡng 4,200 giờ vận hành. Cụm dẫn hướng kim cương trên xuất hiện vết xước li ti do xỉ cắt mạ bám dính, gây rung nhẹ dây khi cắt phôi dày.',
+    repairActions:
+      'Tháo dỡ toàn bộ cụm dẫn hướng trên/dưới, tẩy cặn siêu âm buồng súc, thay mới cụm kim cương 0.25mm P-104, thay tấm tiếp điện và căn chỉnh góc nghiêng U/V bằng thước chuẩn quang học.',
+    findingsAndActions:
+      'Cụm dẫn hướng kim cương trên có vết xước do xỉ mạ. Đã tháo rỡ, ngâm rửa siêu âm và thay mới bộ dẫn hướng kim cương 0.25mm.',
+    technicianNotes: 'Độ chính xác cắt thẳng sau bảo dưỡng đạt 0.0015mm trên phôi mẫu thép SKD11.',
+    operatingHoursAtMaintenance: 4210,
+    qualityPassed: true,
+    costEstimateVND: 6800000,
+    aiVerified: true,
+  },
+  {
+    id: 'maint-02',
+    deviceId: 'dev-01',
+    deviceCode: 'EDM-W01',
+    deviceName: 'Máy Cắt Dây CNC Makino U6 H.E.A.T',
+    taskTitle: 'Khắc phục khẩn cấp đứt dây cắt & Súc rửa vòi phun áp lực cao (E-102)',
+    taskType: 'CORRECTIVE',
+    completedAt: '2026-09-12T09:15:00Z',
+    technicianName: 'Nguyễn Văn Hùng',
+    technicianRole: 'Kỹ sư Trưởng Bảo Trì',
+    durationMinutes: 45,
+    partsReplaced: [
+      'Ống xả áp cao Upper Nozzle 4mm',
+      'Gioăng cao su làm kín nắp buồng phun',
+    ],
+    incidentDescription:
+      'Máy báo sự cố dừng khẩn cấp mã E-102 (Đứt dây cắt liên tục). Dây đồng ø0.25mm bị đứt ngay tại khe phóng điện do áp suất nước xả làm mát sụt giảm đột ngột dưới 0.7 MPa.',
+    repairActions:
+      'Tháo gỡ cụm vòi phun áp cao phía trên, phát hiện phoi sắt vụn làm nghẽn 35% tiết diện vòi. Tiến hành thông tắc siêu âm, thay vòi mới 4mm và gioăng làm kín. Điều chỉnh áp lực đạt 1.8 MPa.',
+    findingsAndActions:
+      'Vòi phun áp suất cao phía trên bị nghẹt 35% tiết diện do phoi sắt vụn. Áp suất xả chỉ đạt 0.7 MPa.',
+    technicianNotes: 'Sau khắc phục, máy chạy liên tục 48 giờ không còn phát sinh đứt dây tại khe phóng điện.',
+    operatingHoursAtMaintenance: 4140,
+    qualityPassed: true,
+    costEstimateVND: 2200000,
+    aiVerified: true,
+  },
+];
+
+app.get('/api/maintenance-records', (req, res) => {
+  const { deviceId, taskType, search } = req.query;
+  let result = [...maintenanceRecords];
+
+  if (deviceId && deviceId !== 'ALL') {
+    result = result.filter((r) => r.deviceId === deviceId);
+  }
+  if (taskType && taskType !== 'ALL') {
+    result = result.filter((r) => r.taskType === taskType);
+  }
+  if (typeof search === 'string' && search.trim()) {
+    const s = search.toLowerCase();
+    result = result.filter(
+      (r) =>
+        r.taskTitle.toLowerCase().includes(s) ||
+        (r.incidentDescription || '').toLowerCase().includes(s) ||
+        (r.repairActions || '').toLowerCase().includes(s) ||
+        (r.technicianName || '').toLowerCase().includes(s) ||
+        r.partsReplaced.some((p) => p.toLowerCase().includes(s))
+    );
+  }
+
+  res.json({ success: true, data: result });
+});
+
+app.post('/api/maintenance-records', (req, res) => {
+  const rec = req.body;
+  if (!rec.deviceId || !rec.taskTitle) {
+    return res.status(400).json({ success: false, message: 'Missing deviceId or taskTitle' });
+  }
+  const newRec: MaintenanceRecordServer = {
+    ...rec,
+    id: rec.id || `maint-${Date.now()}`,
+    completedAt: rec.completedAt || new Date().toISOString(),
+    partsReplaced: Array.isArray(rec.partsReplaced) ? rec.partsReplaced : [],
+  };
+  maintenanceRecords.unshift(newRec);
+  res.json({ success: true, data: newRec });
+});
+
+app.put('/api/maintenance-records/:id', (req, res) => {
+  const { id } = req.params;
+  const idx = maintenanceRecords.findIndex((r) => r.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, message: 'Record not found' });
+  }
+  maintenanceRecords[idx] = { ...maintenanceRecords[idx], ...req.body, id };
+  res.json({ success: true, data: maintenanceRecords[idx] });
+});
+
+app.delete('/api/maintenance-records/:id', (req, res) => {
+  const { id } = req.params;
+  maintenanceRecords = maintenanceRecords.filter((r) => r.id !== id);
+  res.json({ success: true, message: 'Deleted record successfully' });
+});
+
+// 17. Send Weekly Incident Summary Report to Management (Manual or Auto-Triggered)
+interface EmailScheduleConfigServer {
+  enabled: boolean;
+  recipientEmail: string;
+  recipientName: string;
+  recipientRole: string;
+  sendDayOfWeek: number;
+  sendHour: number;
+  sendMinute: number;
+  reportFormat: 'PDF' | 'CSV' | 'BOTH';
+  includeOnlyCorrective: boolean;
+  technicianSenderName: string;
+  customNotes: string;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  totalSentCount: number;
+}
+
+let serverEmailSchedule: EmailScheduleConfigServer = {
+  enabled: true,
+  recipientEmail: 'quanly.thang@factory-edm.vn',
+  recipientName: 'Trần Đức Thắng',
+  recipientRole: 'Giám Đốc Kỹ Thuật & Quản Lý Xưởng EDM',
+  sendDayOfWeek: 5, // Thứ Sáu
+  sendHour: 17, // 17:00
+  sendMinute: 0,
+  reportFormat: 'BOTH',
+  includeOnlyCorrective: false,
+  technicianSenderName: 'Nguyễn Văn Hùng (Kỹ sư Trưởng Bảo Trì)',
+  customNotes:
+    'Kính gửi Ban Quản Lý: Hệ thống tự động tổng hợp tình trạng vận hành và các sự cố dừng máy EDM trong tuần. Đề nghị Quản lý xem xét phụ tùng tiêu hao cần nhập thêm cho tuần tới.',
+  lastRunAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+  nextRunAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+  totalSentCount: 3,
+};
+
+let weeklyEmailDispatchLogs: any[] = [
+  {
+    id: 'dispatch-log-01',
+    sentAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    recipientEmail: 'quanly.thang@factory-edm.vn',
+    recipientName: 'Trần Đức Thắng',
+    technicianSender: 'Nguyễn Văn Hùng (Kỹ sư Trưởng)',
+    weekRange: 'Tuần W40 (28/09 - 04/10/2026)',
+    totalIncidents: 4,
+    criticalCount: 2,
+    totalDowntimeHours: 4.8,
+    estimatedCostVND: 12500000,
+    reportFormat: 'BOTH',
+    triggerType: 'AUTOMATIC_CRON',
+    status: 'DELIVERED',
+    deliveryReceiptId: 'REC-SMTP-20261004-9842',
+    previewSummary:
+      'Gửi tự động định kỳ cuối tuần Thứ 6 lúc 17:00: Tổng 4 sự cố (2 dừng máy khẩn cấp), hoàn tất nghiệm thu 100%. File đính kèm: Bao_Cao_W40.pdf, Bao_Cao_W40.csv',
+  },
+  {
+    id: 'dispatch-log-02',
+    sentAt: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString(),
+    recipientEmail: 'quanly.thang@factory-edm.vn',
+    recipientName: 'Trần Đức Thắng',
+    technicianSender: 'Lê Hoàng Nam (Chuyên gia EDM)',
+    weekRange: 'Tuần W39 (21/09 - 27/09/2026)',
+    totalIncidents: 3,
+    criticalCount: 1,
+    totalDowntimeHours: 3.2,
+    estimatedCostVND: 8600000,
+    reportFormat: 'PDF',
+    triggerType: 'AUTOMATIC_CRON',
+    status: 'DELIVERED',
+    deliveryReceiptId: 'REC-SMTP-20260927-4182',
+    previewSummary:
+      'Gửi tự động định kỳ cuối tuần: Tổng 3 sự cố, thay thế cụm dẫn hướng kim cương P-104 và lọc nước ion. File đính kèm: Bao_Cao_W39.pdf',
+  },
+];
+
+// Helper to format VND
+const formatVNDServer = (amount?: number) => {
+  if (!amount) return '0 ₫';
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+};
+
+// Generate HTML email body for manager
+function generateWeeklySummaryEmailHtml(params: {
+  managerName: string;
+  technicianSender: string;
+  weekRange: string;
+  totalIncidents: number;
+  criticalCount: number;
+  totalDowntimeHours: number;
+  estimatedCostVND: number;
+  summaryNotes: string;
+  reportFormat: string;
+  triggerType: string;
+  records: any[];
+}) {
+  const {
+    managerName,
+    technicianSender,
+    weekRange,
+    totalIncidents,
+    criticalCount,
+    totalDowntimeHours,
+    estimatedCostVND,
+    summaryNotes,
+    reportFormat,
+    triggerType,
+    records,
+  } = params;
+
+  const incidentRows = (records || []).slice(0, 8).map((r, i) => `
+    <tr style="border-bottom: 1px solid #e2e8f0; font-size: 12px;">
+      <td style="padding: 8px 6px; text-align: center; font-weight: bold; color: #475569;">${i + 1}</td>
+      <td style="padding: 8px 6px; font-family: monospace; font-weight: bold; color: #0284c7;">${r.deviceCode || r.deviceId || 'EDM-W01'}</td>
+      <td style="padding: 8px 6px; font-weight: 600; color: ${r.taskType === 'CORRECTIVE' ? '#dc2626' : '#16a34a'};">
+        ${r.taskType === 'CORRECTIVE' ? '⚠ Dừng máy khẩn' : 'Bảo dưỡng định kỳ'}
+      </td>
+      <td style="padding: 8px 6px; color: #1e293b;">
+        <strong>${r.taskTitle || 'Bảo trì máy'}</strong><br/>
+        <span style="color: #64748b; font-size: 11px;">${r.incidentDescription || r.repairActions || ''}</span>
+      </td>
+      <td style="padding: 8px 6px; font-size: 11px; color: #334155;">${r.technicianName || technicianSender}</td>
+      <td style="padding: 8px 6px; text-align: right; font-weight: bold; font-family: monospace; color: #b45309;">${formatVNDServer(r.costEstimateVND)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); padding: 24px; color: #ffffff;">
+        <div style="font-size: 11px; font-weight: bold; color: #38bdf8; letter-spacing: 1.5px; text-transform: uppercase;">
+          EDM SMARTGUARD SCADA • HỆ THỐNG BÁO CÁO TỰ ĐỘNG
+        </div>
+        <h1 style="font-size: 20px; font-weight: 800; margin: 8px 0 4px 0; color: #ffffff;">
+          Báo Cáo Tóm Tắt Sự Cố & Bảo Trì Định Kỳ Cuối Tuần
+        </h1>
+        <div style="font-size: 13px; color: #94a3b8;">
+          Thời gian: <strong>${weekRange}</strong> • Chế độ gửi: <span style="color: #34d399; font-weight: bold;">${triggerType === 'AUTOMATIC_CRON' ? 'Tự động định kỳ cuối tuần' : 'KTV gửi chủ động'}</span>
+        </div>
+      </div>
+
+      <div style="padding: 24px;">
+        <p style="font-size: 14px; color: #1e293b; margin-top: 0;">
+          Kính gửi Quản lý: <strong>${managerName}</strong>,
+        </p>
+        <p style="font-size: 13px; color: #475569; line-height: 1.6;">
+          Dưới đây là bản tóm tắt tình hình sự cố dừng máy và công tác bảo trì kỹ thuật cho toàn bộ phân xưởng máy gia công tia lửa điện (EDM) trong tuần qua.
+        </p>
+
+        <!-- KPI SUMMARY BOXES -->
+        <div style="display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 130px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
+            <div style="font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase;">Tổng Sự Cố</div>
+            <div style="font-size: 22px; font-weight: 800; color: #0284c7; margin-top: 4px;">${totalIncidents} <span style="font-size: 12px; font-weight: normal; color: #64748b;">vụ</span></div>
+          </div>
+          <div style="flex: 1; min-width: 130px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px;">
+            <div style="font-size: 11px; color: #b91c1c; font-weight: bold; text-transform: uppercase;">Sự Cố Khẩn Cấp</div>
+            <div style="font-size: 22px; font-weight: 800; color: #dc2626; margin-top: 4px;">${criticalCount} <span style="font-size: 12px; font-weight: normal; color: #64748b;">vụ</span></div>
+          </div>
+          <div style="flex: 1; min-width: 130px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px;">
+            <div style="font-size: 11px; color: #15803d; font-weight: bold; text-transform: uppercase;">Tổng Giờ Dừng/MTTR</div>
+            <div style="font-size: 22px; font-weight: 800; color: #16a34a; margin-top: 4px;">${totalDowntimeHours} <span style="font-size: 12px; font-weight: normal; color: #64748b;">giờ</span></div>
+          </div>
+          <div style="flex: 1; min-width: 130px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px;">
+            <div style="font-size: 11px; color: #b45309; font-weight: bold; text-transform: uppercase;">Chi Phí Linh Kiện</div>
+            <div style="font-size: 18px; font-weight: 800; color: #d97706; margin-top: 4px;">${formatVNDServer(estimatedCostVND)}</div>
+          </div>
+        </div>
+
+        <!-- NOTES BOX -->
+        <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 20px;">
+          <div style="font-size: 12px; font-weight: bold; color: #1e40af; margin-bottom: 4px;">Ghi chú & Đề xuất của Kỹ thuật viên:</div>
+          <div style="font-size: 13px; color: #1e293b; line-height: 1.5;">${summaryNotes}</div>
+        </div>
+
+        <!-- DETAILS TABLE -->
+        <div style="margin-top: 20px;">
+          <div style="font-size: 12px; font-weight: bold; color: #334155; margin-bottom: 8px; text-transform: uppercase;">Nhật ký các sự cố chính đã khắc phục:</div>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f1f5f9; color: #475569; font-size: 11px; text-transform: uppercase;">
+                <th style="padding: 8px 6px; text-align: center;">STT</th>
+                <th style="padding: 8px 6px; text-align: left;">Mã Máy</th>
+                <th style="padding: 8px 6px; text-align: left;">Phân Loại</th>
+                <th style="padding: 8px 6px; text-align: left;">Sự Cố & Khắc Phục</th>
+                <th style="padding: 8px 6px; text-align: left;">KTV</th>
+                <th style="padding: 8px 6px; text-align: right;">Chi Phí</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${incidentRows || '<tr><td colspan="6" style="padding: 16px; text-align: center; color: #94a3b8;">Không có sự cố nào trong tuần</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ATTACHMENT INFO -->
+        <div style="margin-top: 24px; padding: 12px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-size: 12px; font-weight: bold; color: #1e293b;">Tệp đính kèm tự động đính kèm:</div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+              ${reportFormat === 'BOTH' ? 'Bao_Cao_Su_Co_Tuan_EDM.pdf • Bao_Cao_Su_Co_Tuan_EDM.csv' : reportFormat === 'CSV' ? 'Bao_Cao_Su_Co_Tuan_EDM.csv' : 'Bao_Cao_Su_Co_Tuan_EDM.pdf'}
+            </div>
+          </div>
+          <span style="font-size: 11px; font-weight: bold; color: #15803d; background: #dcfce7; padding: 4px 8px; border-radius: 6px;">Đã sẵn sàng tải</span>
+        </div>
+
+        <!-- SIGNATURE -->
+        <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 12px; color: #64748b; display: flex; justify-content: space-between;">
+          <div>
+            Kỹ thuật viên phụ trách: <strong>${technicianSender}</strong><br/>
+            Hệ thống: EDM SmartGuard Industrial Cloud
+          </div>
+          <div style="text-align: right;">
+            Email tiếp nhận: <strong>${params.managerName}</strong><br/>
+            Trạng thái gửi: <span style="color: #16a34a; font-weight: bold;">Hoàn tất (Delivered)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 17.1 Get current email scheduler configuration
+app.get('/api/reports/email-schedule', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      schedule: serverEmailSchedule,
+      dispatchLogs: weeklyEmailDispatchLogs,
+    },
+  });
+});
+
+// 17.2 Update email scheduler configuration
+app.post('/api/reports/email-schedule', (req, res) => {
+  try {
+    const updated = req.body;
+    serverEmailSchedule = {
+      ...serverEmailSchedule,
+      ...updated,
+    };
+    res.json({
+      success: true,
+      message: 'Cập nhật cấu hình lịch tự động gửi báo cáo qua email thành công!',
+      data: serverEmailSchedule,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: 'Lỗi khi lưu cấu hình gửi email định kỳ' });
+  }
+});
+
+// 17.3 Send Weekly Incident Summary Report (Manual or Auto Trigger)
+app.post('/api/reports/send-weekly-summary', (req, res) => {
+  try {
+    const {
+      managerName = serverEmailSchedule.recipientName,
+      managerEmail = serverEmailSchedule.recipientEmail,
+      managerPhone = '0988.999.888',
+      technicianSender = serverEmailSchedule.technicianSenderName,
+      weekRange = '7 Ngày Gần Nhất',
+      totalIncidents = 0,
+      criticalCount = 0,
+      totalDowntimeHours = 0,
+      estimatedCostVND = 0,
+      summaryNotes = 'Báo cáo sự cố định kỳ cuối tuần từ phân xưởng EDM.',
+      reportFormat = 'BOTH',
+      triggerType = 'MANUAL_DISPATCH',
+      records = maintenanceRecords,
+    } = req.body;
+
+    const dispatchId = `dispatch-log-${Date.now()}`;
+    const deliveryReceiptId = `REC-SMTP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const htmlEmail = generateWeeklySummaryEmailHtml({
+      managerName,
+      technicianSender,
+      weekRange,
+      totalIncidents,
+      criticalCount,
+      totalDowntimeHours,
+      estimatedCostVND,
+      summaryNotes,
+      reportFormat,
+      triggerType,
+      records: records && records.length > 0 ? records : maintenanceRecords,
+    });
+
+    const newDispatchLog = {
+      id: dispatchId,
+      sentAt: new Date().toISOString(),
+      recipientEmail: managerEmail,
+      recipientName: managerName,
+      technicianSender,
+      weekRange,
+      totalIncidents,
+      criticalCount,
+      totalDowntimeHours,
+      estimatedCostVND,
+      reportFormat,
+      triggerType,
+      status: 'DELIVERED',
+      deliveryReceiptId,
+      previewSummary: `Đã gửi báo cáo tóm tắt tuần (${weekRange}) tới Quản lý ${managerName} (${managerEmail}): ${totalIncidents} sự cố (${criticalCount} khẩn cấp), downtime: ${totalDowntimeHours}h, chi phí: ${formatVNDServer(estimatedCostVND)}. File: ${reportFormat}.`,
+    };
+
+    weeklyEmailDispatchLogs.unshift(newDispatchLog);
+    serverEmailSchedule.totalSentCount = (serverEmailSchedule.totalSentCount || 0) + 1;
+    serverEmailSchedule.lastRunAt = new Date().toISOString();
+
+    // Also push to notification logs
+    const notifId = `rep-notif-${Date.now()}`;
+    const log: NotificationLog = {
+      id: notifId,
+      timestamp: new Date().toISOString(),
+      deviceId: 'report-hub',
+      deviceName: 'Báo Cáo Tóm Tắt Sự Cố Tuần (EDM)',
+      errorCode: 'WEEKLY-EMAIL-SENT',
+      recipientPhone: managerPhone || '0988.999.888',
+      recipientName: managerName,
+      channel: 'EMAIL',
+      status: 'DELIVERED',
+      previewText: `📧 [EMAIL ĐÃ GỬI QUẢN LÝ] Báo cáo tóm tắt sự cố ${weekRange} đã chuyển tới ${managerEmail} (${managerName}). Định dạng: ${reportFormat}.`,
+    };
+    notificationLogs.unshift(log);
+
+    res.json({
+      success: true,
+      message: `Đã tự động gửi email báo cáo tóm tắt sự cố tuần tới Quản lý ${managerName} (${managerEmail}) thành công!`,
+      data: {
+        sentAt: new Date().toISOString(),
+        dispatchLog: newDispatchLog,
+        deliveryReceipt: {
+          receiptId: deliveryReceiptId,
+          recipientEmail: managerEmail,
+          recipientName: managerName,
+          status: 'DELIVERED',
+          deliveryChannel: 'SMTP_GATEWAY_EDM_SECURE',
+          attachments: [
+            ...(reportFormat === 'PDF' || reportFormat === 'BOTH' ? ['Bao_Cao_Su_Co_Tuan_EDM.pdf'] : []),
+            ...(reportFormat === 'CSV' || reportFormat === 'BOTH' ? ['Bao_Cao_Su_Co_Tuan_EDM.csv'] : []),
+          ],
+        },
+        htmlPreview: htmlEmail,
+      },
+    });
+  } catch (err: any) {
+    console.error('Error sending weekly summary email:', err);
+    res.status(500).json({ success: false, message: 'Lỗi khi gửi email báo cáo sự cố tuần' });
+  }
+});
+
+
 
 // --- VITE DEV MIDDLEWARE / STATIC FILE SERVING ---
 async function startServer() {

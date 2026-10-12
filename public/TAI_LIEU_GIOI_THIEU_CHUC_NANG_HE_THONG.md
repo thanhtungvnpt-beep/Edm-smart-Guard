@@ -184,6 +184,24 @@ Khi máy gặp sự cố (như đứt dây liên tục E-102, quá nhiệt IGBT 
 - **Machine Dossier PDF Export:** Tạo phiếu lý lịch thiết bị chuẩn công nghiệp bao gồm lịch sử sửa chữa, biểu đồ vận hành, danh mục linh kiện thay thế và đánh giá OEE.
 - **CSV Data Export:** Xuất dữ liệu chuỗi thời gian telemetry và phân tích hiệu suất phục vụ báo cáo ERP / MES.
 
+### 3.11. Lưu Trữ & Tra Cứu Lịch Sử Bảo Trì Sửa Chữa Cho Từng Thiết Bị (Maintenance & Repair History Hub)
+- **Cơ sở dữ liệu lịch sử số hóa cho từng máy:**
+  - Lưu trữ chi tiết đầy đủ 5 thành phần cốt lõi của mỗi lần can thiệp:
+    1. **Ngày & giờ thực hiện:** Mốc thời gian hoàn thành nhiệm vụ.
+    2. **Mô tả sự cố (Incident Description):** Hiện tượng hư hỏng ban đầu, triệu chứng tiếng kêu, rung động, sụt áp, mã lỗi dừng máy.
+    3. **Hành động sửa chữa (Repair Actions):** Toàn bộ quy trình kỹ thuật đã xử lý, súc rửa, căn chỉnh khe hở, hiệu chuẩn thước quang, kiểm tra chạy thử.
+    4. **Bộ phận thay thế (Replacement Parts):** Danh mục linh kiện tiêu hao / phụ tùng thay mới (cụm kim cương, lõi lọc, phớt bơm...).
+    5. **Kỹ thuật viên thực hiện (Technician):** Tên kỹ thuật viên, vai trò chuyên môn và đánh giá nghiệm thu đạt chuẩn.
+- **Tìm kiếm & Bộ lọc đa chiều linh hoạt:**
+  - **Lọc theo Thiết Bị (By Device):** Xem toàn xưởng hoặc chọn riêng từng máy (`EDM-W01`, `EDM-W02`, `EDM-S01`, v.v.).
+  - **Lọc theo Ngày Tháng (By Date):** 7 ngày gần nhất, 30 ngày, 90 ngày hoặc tùy chọn khoảng ngày từ ngày - đến ngày.
+  - **Lọc theo Loại Sự Cố (By Incident Type):** Sửa chữa khẩn cấp (`CORRECTIVE`), Bảo dưỡng định kỳ (`PREVENTIVE`), Thay thế linh kiện (`PARTS_REPLACEMENT`), Hiệu chuẩn cơ khí (`CALIBRATION`), Đại tu (`OVERHAUL`).
+  - **Tìm kiếm tức thì (Instant Search):** Tìm theo từ khóa trong mô tả sự cố, hành động sửa chữa, tên linh kiện và kỹ thuật viên.
+- **Chế độ hiển thị đa dạng & Xuất dữ liệu:**
+  - Chuyển đổi linh hoạt giữa giao diện **Thẻ Chi Tiết (Timeline Cards)** và **Bảng Dữ Liệu Công Nghiệp (SCADA Table)**.
+  - Hỗ trợ xuất file CSV để nạp vào hệ thống ERP / bảo trì nhà máy và in báo cáo trực tiếp.
+  - Phím tắt truy cập nhanh công nghiệp: **`Alt + 6`**.
+
 ---
 
 ## 4. HƯỚNG DẪN THAO TÁC CƠ BẢN DÀNH CHO KỸ THUẬT VIÊN

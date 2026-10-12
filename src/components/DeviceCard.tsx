@@ -37,6 +37,85 @@ interface DeviceCardProps {
   onQuickSyncDirect?: (deviceId: string) => Promise<void>;
 }
 
+// Small circular OEE gauge indicator with color-coded system
+// Red for < 60%, Yellow for 60-80%, Green for > 80%
+export const CircularOeeGaugeIndicator: React.FC<{ oee: number; size?: number }> = ({
+  oee,
+  size = 34,
+}) => {
+  const colorConfig = useMemo(() => {
+    if (oee < 60) {
+      return {
+        text: 'text-red-400',
+        stroke: 'stroke-red-500',
+        bg: 'border-red-500/40 bg-red-950/40 text-red-300',
+        label: 'OEE Nghiêm trọng',
+      };
+    }
+    if (oee <= 80) {
+      return {
+        text: 'text-yellow-400',
+        stroke: 'stroke-yellow-400',
+        bg: 'border-yellow-500/40 bg-yellow-950/40 text-yellow-300',
+        label: 'OEE Cần Tối Ưu',
+      };
+    }
+    return {
+      text: 'text-emerald-400',
+      stroke: 'stroke-emerald-500',
+      bg: 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300',
+      label: 'OEE Tốt',
+    };
+  }, [oee]);
+
+  const clamped = Math.min(100, Math.max(0, oee));
+  const radius = 14;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <div
+      className={`flex items-center gap-1.5 rounded-xl border px-2 py-1 shadow-sm transition hover:scale-105 ${colorConfig.bg}`}
+      title={`Cảnh báo: Chỉ số OEE ${oee.toFixed(1)}% (< 70%). Cần kiểm tra tối ưu hóa!`}
+    >
+      <div className="relative flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
+        <svg className="-rotate-90" width={size} height={size} viewBox="0 0 36 36">
+          <circle
+            cx="18"
+            cy="18"
+            r={radius}
+            fill="none"
+            className="stroke-slate-800"
+            strokeWidth="3.5"
+          />
+          <circle
+            cx="18"
+            cy="18"
+            r={radius}
+            fill="none"
+            className={`${colorConfig.stroke} transition-all duration-500`}
+            strokeWidth="3.5"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+          />
+        </svg>
+        <span className={`absolute font-mono text-[9px] font-black ${colorConfig.text}`}>
+          {Math.round(oee)}%
+        </span>
+      </div>
+      <div className="flex flex-col text-left leading-none">
+        <span className="text-[10px] font-bold uppercase tracking-wider">
+          OEE {oee < 60 ? 'Thấp' : 'Cảnh Báo'}
+        </span>
+        <span className="text-[9px] text-slate-400 mt-0.5">
+          {oee.toFixed(1)}% &lt; 70%
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export const DeviceCard: React.FC<DeviceCardProps> = ({
   device,
   onOpenDiagnosis,
@@ -91,6 +170,11 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
         {/* Status Badge & Quick Actions Menu */}
         <div className="flex items-center gap-2">
+          {/* Small Circular OEE Gauge Indicator if machine's OEE is below 70% */}
+          {device.telemetry && device.telemetry.oee < 70 && (
+            <CircularOeeGaugeIndicator oee={device.telemetry.oee} size={32} />
+          )}
+
           {isAlarm && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-red-500/40 animate-bounce">
               <AlertTriangle className="h-3.5 w-3.5" />

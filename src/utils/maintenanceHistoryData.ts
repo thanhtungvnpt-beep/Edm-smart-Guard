@@ -5,6 +5,8 @@ export const INITIAL_MAINTENANCE_RECORDS: MaintenanceRecord[] = [
   {
     id: 'maint-01',
     deviceId: 'dev-01',
+    deviceCode: 'EDM-W01',
+    deviceName: 'Máy Cắt Dây CNC Makino U6 H.E.A.T',
     taskTitle: 'Bảo dưỡng định kỳ 500 giờ & Thay cụm dẫn hướng kim cương P-104',
     taskType: 'PREVENTIVE',
     completedAt: '2026-09-22T14:30:00Z',
@@ -16,6 +18,10 @@ export const INITIAL_MAINTENANCE_RECORDS: MaintenanceRecord[] = [
       'Khối tiếp điện cacbua (Energizing Carbide Plate)',
       'Lõi lọc giấy ion 3-micron',
     ],
+    incidentDescription:
+      'Máy đạt ngưỡng 4,200 giờ vận hành. Cụm dẫn hướng kim cương trên xuất hiện vết xước li ti do xỉ cắt mạ bám dính, gây rung nhẹ dây khi cắt phôi dày.',
+    repairActions:
+      'Tháo dỡ toàn bộ cụm dẫn hướng trên/dưới, tẩy cặn siêu âm buồng súc, thay mới cụm kim cương 0.25mm P-104, thay tấm tiếp điện và căn chỉnh góc nghiêng U/V bằng thước chuẩn quang học.',
     findingsAndActions:
       'Cụm dẫn hướng kim cương trên có vết xước do xỉ mạ. Đã tháo rỡ, ngâm rửa siêu âm và thay mới bộ dẫn hướng kim cương 0.25mm. Căn chỉnh góc nghiêng U/V bằng thước chuẩn quang học.',
     technicianNotes: 'Độ chính xác cắt thẳng sau bảo dưỡng đạt 0.0015mm trên phôi mẫu thép SKD11.',
@@ -27,6 +33,8 @@ export const INITIAL_MAINTENANCE_RECORDS: MaintenanceRecord[] = [
   {
     id: 'maint-02',
     deviceId: 'dev-01',
+    deviceCode: 'EDM-W01',
+    deviceName: 'Máy Cắt Dây CNC Makino U6 H.E.A.T',
     taskTitle: 'Khắc phục khẩn cấp đứt dây cắt & Súc rửa vòi phun áp lực cao (E-102)',
     taskType: 'CORRECTIVE',
     completedAt: '2026-09-12T09:15:00Z',
@@ -37,6 +45,10 @@ export const INITIAL_MAINTENANCE_RECORDS: MaintenanceRecord[] = [
       'Ống xả áp cao Upper Nozzle 4mm',
       'Gioăng cao su làm kín nắp buồng phun',
     ],
+    incidentDescription:
+      'Máy báo sự cố dừng khẩn cấp mã E-102 (Đứt dây cắt liên tục). Dây đồng ø0.25mm bị đứt ngay tại khe phóng điện do áp suất nước xả làm mát sụt giảm đột ngột dưới 0.7 MPa.',
+    repairActions:
+      'Tháo gỡ cụm vòi phun áp cao phía trên, phát hiện phoi sắt vụn làm nghẽn 35% tiết diện vòi. Tiến hành thông tắc siêu âm, thay vòi mới 4mm và gioăng làm kín. Điều chỉnh áp lực đạt 1.8 MPa.',
     findingsAndActions:
       'Vòi phun áp suất cao phía trên bị nghẹt 35% tiết diện do phoi sắt vụn. Áp suất xả chỉ đạt 0.7 MPa. Đã thông tắc bằng siêu âm, thay vòi mới và cân bằng áp lực đạt 1.8 MPa.',
     technicianNotes: 'Sau khắc phục, máy chạy liên tục 48 giờ không còn phát sinh đứt dây tại khe phóng điện.',
@@ -559,25 +571,72 @@ export const INITIAL_MAINTENANCE_RECORDS: MaintenanceRecord[] = [
   },
 ];
 
-const STORAGE_KEY = 'edm_smartguard_maintenance_records_v2';
+export const DEVICE_METADATA_MAP: Record<string, { code: string; name: string; model?: string; location?: string }> = {
+  'dev-01': { code: 'EDM-W01', name: 'Máy Cắt Dây CNC Makino U6 H.E.A.T', model: 'Makino U6 H.E.A.T', location: 'Xưởng Khuôn Mẫu Chính - Line 01' },
+  'dev-02': { code: 'EDM-W02', name: 'Máy Cắt Dây Siêu Chuẩn Sodick ALC600G', model: 'Sodick ALC600G', location: 'Xưởng Linh Kiện Bán Dẫn - Line 02' },
+  'dev-03': { code: 'EDM-S01', name: 'Máy Xung Điện Tỷ Mỷ GF AgieCharmilles FORM E 350', model: 'FORM E 350', location: 'Xưởng Khuôn Độ Chính Xác Cao - Cell B' },
+  'dev-04': { code: 'EDM-W03', name: 'Máy Cắt Dây Tốc Độ Cao Mitsubishi MV2400-S', model: 'Mitsubishi MV2400-S', location: 'Xưởng Cắt Dây Tốc Độ Cao - Line 03' },
+  'dev-05': { code: 'EDM-S02', name: 'Máy Xung Điện CNC Sodick AG40L Linear', model: 'Sodick AG40L Linear', location: 'Xưởng Khuôn Mẫu Điện Tử - Cell A' },
+  'dev-06': { code: 'EDM-D01', name: 'Máy Bắn Lỗ Tia Lửa Điện Heun APic 21', model: 'Heun APic 21', location: 'Xưởng Chuẩn Bị Phôi & Lỗ Mồi - Area D' },
+};
+
+const STORAGE_KEY = 'edm_smartguard_maintenance_records_v3';
+
+export function normalizeRecord(r: MaintenanceRecord): MaintenanceRecord {
+  const meta = DEVICE_METADATA_MAP[r.deviceId];
+  const deviceCode = r.deviceCode || meta?.code || r.deviceId;
+  const deviceName = r.deviceName || meta?.name || 'Máy gia công EDM';
+
+  // Determine incident description if missing
+  let incidentDescription = r.incidentDescription;
+  if (!incidentDescription) {
+    if (r.taskType === 'CORRECTIVE') {
+      incidentDescription = `Sự cố dừng máy khẩn cấp: ${r.taskTitle}. Cảnh báo báo động hệ số an toàn và ngưng chu trình phóng điện.`;
+    } else if (r.taskType === 'PREVENTIVE') {
+      incidentDescription = `Đến chu kỳ bảo dưỡng định kỳ theo giờ vận hành (${r.operatingHoursAtMaintenance} giờ). Ngăn ngừa hao mòn quá tải.`;
+    } else if (r.taskType === 'PARTS_REPLACEMENT') {
+      incidentDescription = `Hao mòn vật lý linh kiện tiêu hao: ${r.partsReplaced.length > 0 ? r.partsReplaced.join(', ') : r.taskTitle}.`;
+    } else if (r.taskType === 'CALIBRATION') {
+      incidentDescription = `Kiểm tra độ chính xác định kỳ và sai số vị trí trục cơ khí sau thời gian gia công cường độ cao.`;
+    } else {
+      incidentDescription = `Chu kỳ kiểm tu toàn diện máy định kỳ.`;
+    }
+  }
+
+  const repairActions = r.repairActions || r.findingsAndActions || 'Đã kiểm tra, vệ sinh, khắc phục sự cố và chạy thử nghiệm thu đạt chuẩn.';
+
+  return {
+    ...r,
+    deviceCode,
+    deviceName,
+    incidentDescription,
+    repairActions,
+  };
+}
 
 export function getStoredMaintenanceRecords(): MaintenanceRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_MAINTENANCE_RECORDS));
-      return INITIAL_MAINTENANCE_RECORDS;
+      // Check legacy v2
+      const legacyRaw = localStorage.getItem('edm_smartguard_maintenance_records_v2');
+      const baseRecords: MaintenanceRecord[] = legacyRaw ? JSON.parse(legacyRaw) : INITIAL_MAINTENANCE_RECORDS;
+      const normalized = baseRecords.map(normalizeRecord);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      return normalized;
     }
-    return JSON.parse(raw);
+    const parsed: MaintenanceRecord[] = JSON.parse(raw);
+    return parsed.map(normalizeRecord);
   } catch {
-    return INITIAL_MAINTENANCE_RECORDS;
+    return INITIAL_MAINTENANCE_RECORDS.map(normalizeRecord);
   }
 }
 
 export function saveMaintenanceRecord(record: MaintenanceRecord): MaintenanceRecord[] {
   try {
+    const normalized = normalizeRecord(record);
     const current = getStoredMaintenanceRecords();
-    const updated = [record, ...current];
+    const updated = [normalized, ...current];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     return updated;
   } catch (err) {
@@ -586,7 +645,33 @@ export function saveMaintenanceRecord(record: MaintenanceRecord): MaintenanceRec
   }
 }
 
+export function updateMaintenanceRecord(record: MaintenanceRecord): MaintenanceRecord[] {
+  try {
+    const normalized = normalizeRecord(record);
+    const current = getStoredMaintenanceRecords();
+    const updated = current.map((r) => (r.id === normalized.id ? normalized : r));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (err) {
+    console.error('Failed to update maintenance record:', err);
+    return INITIAL_MAINTENANCE_RECORDS;
+  }
+}
+
+export function deleteMaintenanceRecord(id: string): MaintenanceRecord[] {
+  try {
+    const current = getStoredMaintenanceRecords();
+    const updated = current.filter((r) => r.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (err) {
+    console.error('Failed to delete maintenance record:', err);
+    return INITIAL_MAINTENANCE_RECORDS;
+  }
+}
+
 export function getDeviceMaintenanceHistory(deviceId: string): MaintenanceRecord[] {
   const all = getStoredMaintenanceRecords();
   return all.filter((r) => r.deviceId === deviceId);
 }
+

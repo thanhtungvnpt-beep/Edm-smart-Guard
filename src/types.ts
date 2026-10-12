@@ -144,7 +144,7 @@ export interface NotificationLog {
   errorCode: string;
   recipientPhone: string;
   recipientName: string;
-  channel: 'PUSH_NOTIFICATION' | 'SMS' | 'URGENT_AUDIO';
+  channel: 'PUSH_NOTIFICATION' | 'SMS' | 'URGENT_AUDIO' | 'EMAIL';
   status: 'SENT' | 'DELIVERED' | 'ACKNOWLEDGED';
   previewText: string;
 }
@@ -194,14 +194,18 @@ export interface MobileDevice {
 export interface MaintenanceRecord {
   id: string;
   deviceId: string;
+  deviceCode?: string;
+  deviceName?: string;
   taskTitle: string;
   taskType: 'PREVENTIVE' | 'CORRECTIVE' | 'PARTS_REPLACEMENT' | 'CALIBRATION' | 'OVERHAUL';
-  completedAt: string;
-  technicianName: string;
+  completedAt: string; // Ngày thực hiện (ISO date string)
+  technicianName: string; // Kỹ thuật viên thực hiện
   technicianRole?: string;
   durationMinutes: number;
-  partsReplaced: string[];
-  findingsAndActions: string;
+  partsReplaced: string[]; // Bộ phận thay thế
+  findingsAndActions: string; // Tổng hợp phát hiện & xử lý kỹ thuật
+  incidentDescription?: string; // Mô tả sự cố / Hiện tượng hỏng hóc ban đầu
+  repairActions?: string; // Hành động sửa chữa / Quy trình khắc phục
   technicianNotes?: string;
   operatingHoursAtMaintenance: number;
   qualityPassed: boolean;
@@ -228,5 +232,80 @@ export interface MaintenanceReminder {
   instructions: string;
   isActive: boolean;
   createdAt: string;
+}
+
+export interface ShortcutTelemetryItem {
+  id: string;
+  combo: string;
+  action: string;
+  category: 'navigation' | 'operation';
+  count: number;
+  lastUsedAt: string | null;
+}
+
+export interface ShortcutTelemetryLog {
+  id: string;
+  shortcutId: string;
+  combo: string;
+  action: string;
+  timestamp: string;
+}
+
+export interface ShortcutTelemetryState {
+  items: Record<string, ShortcutTelemetryItem>;
+  totalCount: number;
+  sessionStartTime: string;
+  recentLogs: ShortcutTelemetryLog[];
+  lastRecordedShortcut: string | null;
+}
+
+export interface WeeklyEmailScheduleConfig {
+  enabled: boolean;
+  recipientEmail: string;
+  recipientName: string;
+  recipientRole: string;
+  sendDayOfWeek: number; // 0 = Sunday, 5 = Friday, 6 = Saturday
+  sendHour: number; // 0 - 23 (e.g. 17 = 17:00)
+  sendMinute: number; // e.g. 0
+  reportFormat: 'PDF' | 'CSV' | 'BOTH';
+  includeOnlyCorrective: boolean;
+  technicianSenderName: string;
+  customNotes: string;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  totalSentCount: number;
+}
+
+export interface WeeklyEmailReportDispatchLog {
+  id: string;
+  sentAt: string;
+  recipientEmail: string;
+  recipientName: string;
+  technicianSender: string;
+  weekRange: string;
+  totalIncidents: number;
+  criticalCount: number;
+  totalDowntimeHours: number;
+  estimatedCostVND: number;
+  reportFormat: 'PDF' | 'CSV' | 'BOTH';
+  triggerType: 'AUTOMATIC_CRON' | 'MANUAL_TEST' | 'MANUAL_DISPATCH';
+  status: 'DELIVERED' | 'FAILED';
+  deliveryReceiptId: string;
+  previewSummary: string;
+}
+
+export type PushNotificationSeverityFilter = 'ALL' | 'CRITICAL_ONLY' | 'HIGH_AND_CRITICAL';
+
+export interface PushNotificationFilterConfig {
+  severityFilter: PushNotificationSeverityFilter;
+  nightShiftMode: boolean; // Ca trực đêm
+  nightShiftStartHour: number; // Mặc định: 22 (22:00)
+  nightShiftEndHour: number; // Mặc định: 6 (06:00)
+  nightShiftSeverityFilter: PushNotificationSeverityFilter; // Mặc định: CRITICAL_ONLY
+  vibrationEnabled: boolean;
+  soundAlarmEnabled: boolean;
+  muteIdleAlarms: boolean;
+  autoAcknowledgeLowSeverity: boolean;
+  ignoredDeviceCodes: string[];
 }
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -40,6 +40,7 @@ import { AILearningsTab } from './components/AILearningsTab';
 import { DocumentsTab } from './components/DocumentsTab';
 import { NotificationsTab } from './components/NotificationsTab';
 import { MobileDevicesManagementTab } from './components/MobileDevicesManagementTab';
+import { MaintenanceHistoryTab } from './components/MaintenanceHistoryTab';
 import { EdmSimulatorModal } from './components/EdmSimulatorModal';
 import { PerformanceAnalytics } from './components/PerformanceAnalytics';
 import { FacilitySummaryCard } from './components/FacilitySummaryCard';
@@ -48,6 +49,12 @@ import { MachineDetailsModal } from './components/MachineDetailsModal';
 import { TechnicianStatusSidebar } from './components/TechnicianStatusSidebar';
 import { QRCodeScannerModal } from './components/QRCodeScannerModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { ShortcutTelemetryState } from './types';
+import {
+  getInitialShortcutTelemetry,
+  recordShortcutUse,
+  resetShortcutTelemetry,
+} from './utils/shortcutTelemetry';
 import { OfflineConnectivityBanner } from './components/OfflineConnectivityBanner';
 import { DashboardCardsContainer } from './components/DashboardCardsContainer';
 import {
@@ -85,7 +92,7 @@ export default function App() {
 
   // Navigation
   const [activeTab, setActiveTab] = useState<
-    'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices'
+    'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history'
   >('devices');
 
   // Filters
@@ -108,6 +115,14 @@ export default function App() {
   const [showTechSidebar, setShowTechSidebar] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  // Industrial Keyboard Shortcuts Telemetry State (Local State tracking usage frequency)
+  const [shortcutTelemetry, setShortcutTelemetry] = useState<ShortcutTelemetryState>(() =>
+    getInitialShortcutTelemetry()
+  );
+
+  const recordShortcut = useCallback((shortcutId: string) => {
+    setShortcutTelemetry((prev) => recordShortcutUse(prev, shortcutId));
+  }, []);
   const [showOnboardingTour, setShowOnboardingTour] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const completed = localStorage.getItem('smartguard_onboarding_completed');
@@ -445,6 +460,7 @@ export default function App() {
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
         if (e.key === '1' || e.code === 'Digit1' || e.code === 'Numpad1') {
           e.preventDefault();
+          recordShortcut('alt_1');
           setActiveTab('devices');
           soundManager.playBeep();
           showToast('⚡ [Alt+1] Chuyển tab: Giám Sát EDM Trực Tuyến');
@@ -452,6 +468,7 @@ export default function App() {
         }
         if (e.key === '2' || e.code === 'Digit2' || e.code === 'Numpad2') {
           e.preventDefault();
+          recordShortcut('alt_2');
           setActiveTab('learnings');
           soundManager.playBeep();
           showToast('⚡ [Alt+2] Chuyển tab: Bộ Não Tri Thức AI');
@@ -459,6 +476,7 @@ export default function App() {
         }
         if (e.key === '3' || e.code === 'Digit3' || e.code === 'Numpad3') {
           e.preventDefault();
+          recordShortcut('alt_3');
           setActiveTab('documents');
           soundManager.playBeep();
           showToast('⚡ [Alt+3] Chuyển tab: Kho Tài Liệu Kỹ Thuật (SOP/OEM)');
@@ -466,6 +484,7 @@ export default function App() {
         }
         if (e.key === '4' || e.code === 'Digit4' || e.code === 'Numpad4') {
           e.preventDefault();
+          recordShortcut('alt_4');
           setActiveTab('notifications');
           soundManager.playBeep();
           showToast('⚡ [Alt+4] Chuyển tab: Nhật Ký Bắn Push');
@@ -473,15 +492,25 @@ export default function App() {
         }
         if (e.key === '5' || e.code === 'Digit5' || e.code === 'Numpad5') {
           e.preventDefault();
+          recordShortcut('alt_5');
           setActiveTab('mobile-devices');
           soundManager.playBeep();
           showToast('⚡ [Alt+5] Chuyển tab: Quản Lý Thiết Bị Di Động');
+          return;
+        }
+        if (e.key === '6' || e.code === 'Digit6' || e.code === 'Numpad6') {
+          e.preventDefault();
+          recordShortcut('alt_6');
+          setActiveTab('history');
+          soundManager.playBeep();
+          showToast('⚡ [Alt+6] Chuyển tab: Hồ Sơ Lịch Sử Sửa Chữa & Bảo Trì');
           return;
         }
 
         // Alt + K or Alt + /: Toggle Industrial Keyboard Shortcuts Cheat Sheet
         if (e.key === 'k' || e.key === 'K' || e.key === '/' || e.key === '?') {
           e.preventDefault();
+          recordShortcut('alt_k');
           setShowKeyboardShortcuts((prev) => !prev);
           soundManager.playBeep();
           return;
@@ -490,6 +519,7 @@ export default function App() {
         // Alt + Q: Fast Open Physical Machine QR Code Scanner
         if (e.key === 'q' || e.key === 'Q') {
           e.preventDefault();
+          recordShortcut('alt_q');
           setShowQRScanner((prev) => !prev);
           soundManager.playBeep();
           showToast('⚡ [Alt+Q] Mở camera quét mã QR thiết bị EDM');
@@ -499,6 +529,7 @@ export default function App() {
         // Alt + T: Fast Open Technician On-Duty & Shift Sidebar
         if (e.key === 't' || e.key === 'T') {
           e.preventDefault();
+          recordShortcut('alt_t');
           setShowTechSidebar((prev) => !prev);
           soundManager.playBeep();
           return;
@@ -507,6 +538,7 @@ export default function App() {
         // Alt + M: Fast Mute / Unmute Siren Alarm
         if (e.key === 'm' || e.key === 'M') {
           e.preventDefault();
+          recordShortcut('alt_m');
           toggleMute();
           showToast(isMuted ? '⚡ [Alt+M] Đã BẬT còi báo động công nghiệp' : '⚡ [Alt+M] Đã TẮT còi báo động');
           return;
@@ -515,6 +547,7 @@ export default function App() {
         // Alt + F / Alt + S: Focus Machine / Error Code Search Box
         if (e.key === 'f' || e.key === 'F' || e.key === 's' || e.key === 'S') {
           e.preventDefault();
+          recordShortcut('alt_f');
           setActiveTab('devices');
           setTimeout(() => {
             const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
@@ -530,6 +563,7 @@ export default function App() {
         // Alt + R: Fast Refresh Data (fetchAllData)
         if (e.key === 'r' || e.key === 'R') {
           e.preventDefault();
+          recordShortcut('shift_r');
           soundManager.playBeep();
           fetchAllData();
           showToast('⚡ [Alt+R] Đã làm mới & đồng bộ dữ liệu toàn xưởng EDM!');
@@ -541,6 +575,7 @@ export default function App() {
       if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'r' || e.key === 'R' || e.code === 'KeyR')) {
         if (!isEditingText) {
           e.preventDefault();
+          recordShortcut('shift_r');
           soundManager.playBeep();
           fetchAllData();
           showToast('⚡ [Shift+R] Đã làm mới & đồng bộ dữ liệu thời gian thực từ EDM Gateway!');
@@ -551,14 +586,20 @@ export default function App() {
       // Standalone '?' key or Shift + '/' to view cheat sheet when not editing text
       if (!isEditingText && (e.key === '?' || (e.shiftKey && e.key === '/'))) {
         e.preventDefault();
+        recordShortcut('alt_k');
         setShowKeyboardShortcuts((prev) => !prev);
         soundManager.playBeep();
+      }
+
+      // Escape key tracking (telemetry for modal dismissals)
+      if (e.key === 'Escape') {
+        recordShortcut('escape');
       }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isMuted]);
+  }, [isMuted, recordShortcut]);
 
   // --- TRIGGER EDM ALARM ---
   const handleTriggerAlarm = async (deviceId: string, errorCode: string = 'E-102', errorTitle: string = 'Sự cố đứt dây & sụt áp phóng điện') => {
@@ -766,6 +807,7 @@ export default function App() {
           setShowOnboardingTour(true);
         }}
         onOpenShortcuts={() => setShowKeyboardShortcuts(true)}
+        shortcutUsageCount={shortcutTelemetry.totalCount}
       />
 
       {/* Offline Connectivity Banner */}
@@ -1056,6 +1098,16 @@ export default function App() {
             onBroadcast={handleBroadcastMobile}
           />
         )}
+
+        {/* TAB 6: MAINTENANCE & REPAIR HISTORY HUB */}
+        {activeTab === 'history' && (
+          <MaintenanceHistoryTab
+            devices={devices}
+            technicians={technicians}
+            onOpenMachineDetails={(device) => setDetailsDevice(device)}
+            onToast={(msg) => showToast(msg)}
+          />
+        )}
       </main>
 
       {/* --- POPUP MODALS --- */}
@@ -1154,7 +1206,7 @@ export default function App() {
         }}
       />
 
-      {/* 10. Industrial Keyboard Shortcuts Modal */}
+      {/* 10. Industrial Keyboard Shortcuts Modal & Telemetry Logger */}
       <KeyboardShortcutsModal
         isOpen={showKeyboardShortcuts}
         onClose={() => setShowKeyboardShortcuts(false)}
@@ -1162,6 +1214,10 @@ export default function App() {
           setActiveTab(tab);
           soundManager.playBeep();
         }}
+        telemetry={shortcutTelemetry}
+        onRecordShortcut={recordShortcut}
+        onResetTelemetry={() => setShortcutTelemetry(resetShortcutTelemetry())}
+        onSetTelemetry={setShortcutTelemetry}
       />
     </div>
   );

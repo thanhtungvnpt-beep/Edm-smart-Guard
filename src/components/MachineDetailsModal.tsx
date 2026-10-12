@@ -24,6 +24,7 @@ import {
   Printer,
   QrCode,
   Radio,
+  Search,
   ShieldCheck,
   Sparkles,
   Tag,
@@ -162,19 +163,70 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
   const [newTech, setNewTech] = useState(device.assignedTechnician?.name || 'Kỹ thuật viên EDM');
   const [newDuration, setNewDuration] = useState('60');
   const [newParts, setNewParts] = useState('');
+  const [newIncidentDesc, setNewIncidentDesc] = useState('');
+  const [newRepairActions, setNewRepairActions] = useState('');
   const [newFindings, setNewFindings] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [newHours, setNewHours] = useState('4250');
   const [formSuccess, setFormSuccess] = useState(false);
 
+  // Search & Date filter for machine maintenance records
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'CUSTOM'>('ALL');
+  const [historyStartDate, setHistoryStartDate] = useState('');
+  const [historyEndDate, setHistoryEndDate] = useState('');
+
   // Heuristic maintenance prediction
   const prediction = useMemo(() => calculatePredictedMaintenance(device), [device]);
 
-  // Filtered maintenance history
+  // Filtered maintenance history with search, type and date filters
   const filteredRecords = useMemo(() => {
-    if (filterType === 'ALL') return records;
-    return records.filter((r) => r.taskType === filterType);
-  }, [records, filterType]);
+    return records.filter((r) => {
+      // 1. Task Type Filter
+      if (filterType !== 'ALL' && r.taskType !== filterType) {
+        return false;
+      }
+
+      // 2. Date Filter
+      const recDate = new Date(r.completedAt);
+      const now = new Date();
+      if (dateRangeFilter === 'LAST_7_DAYS') {
+        const d7 = new Date();
+        d7.setDate(now.getDate() - 7);
+        if (recDate < d7) return false;
+      } else if (dateRangeFilter === 'LAST_30_DAYS') {
+        const d30 = new Date();
+        d30.setDate(now.getDate() - 30);
+        if (recDate < d30) return false;
+      } else if (dateRangeFilter === 'CUSTOM') {
+        if (historyStartDate) {
+          const s = new Date(historyStartDate);
+          s.setHours(0, 0, 0, 0);
+          if (recDate < s) return false;
+        }
+        if (historyEndDate) {
+          const e = new Date(historyEndDate);
+          e.setHours(23, 59, 59, 999);
+          if (recDate > e) return false;
+        }
+      }
+
+      // 3. Search Keyword
+      if (searchKeyword.trim()) {
+        const term = searchKeyword.toLowerCase().trim();
+        const inTitle = r.taskTitle.toLowerCase().includes(term);
+        const inIncident = (r.incidentDescription || '').toLowerCase().includes(term);
+        const inRepair = (r.repairActions || r.findingsAndActions || '').toLowerCase().includes(term);
+        const inParts = (r.partsReplaced || []).some((p) => p.toLowerCase().includes(term));
+        const inTech = r.technicianName.toLowerCase().includes(term);
+        if (!inTitle && !inIncident && !inRepair && !inParts && !inTech) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [records, filterType, dateRangeFilter, historyStartDate, historyEndDate, searchKeyword]);
 
   // Statistics for this machine's maintenance
   const totalCost = useMemo(() => {
@@ -193,6 +245,8 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
     setNewType('PARTS_REPLACEMENT');
     setNewParts(`${comp.name} [SKU: ${comp.partNumber}]`);
     setNewDuration(comp.estimatedLaborMinutes.toString());
+    setNewIncidentDesc(`Linh kiện đạt mức hao mòn ${comp.wearPercentage}%. Nguy cơ gây dừng máy ${comp.downtimeRiskHours}h nếu không xử lý.`);
+    setNewRepairActions(`Hành động: ${comp.preventiveAction}. Kho lưu trữ: ${comp.stockLocation}. Đã xuất kho dự trù.`);
     setNewFindings(
       `Linh kiện đạt mức hao mòn ${comp.wearPercentage}%. Thay thế phòng ngừa để tránh ${comp.downtimeRiskHours}h dừng máy. Hành động: ${comp.preventiveAction}`
     );
@@ -217,6 +271,8 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
     setNewDuration(task.estimatedDurationMinutes.toString());
     setNewHours(task.operatingHoursTarget.toString());
     setNewParts(task.recommendedParts.join(', '));
+    setNewIncidentDesc(`Đến định kỳ bảo dưỡng dịch vụ: ${task.taskTitle}. Mục tiêu giờ máy: ${task.operatingHoursTarget}h.`);
+    setNewRepairActions(`Kế hoạch thực hiện: ${task.instructions}. Theo tài liệu: ${task.sopDocumentTitle || 'SOP tiêu chuẩn'}.`);
     setNewFindings(`Kế hoạch thực hiện: ${task.instructions}`);
     setNewNotes(`Theo tài liệu: ${task.sopDocumentTitle || 'SOP tiêu chuẩn'}. Hạn hoàn thành: ${task.dueDate}`);
   };
@@ -234,6 +290,8 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
     const record: MaintenanceRecord = {
       id: `maint-${Date.now()}`,
       deviceId: device.id,
+      deviceCode: device.code,
+      deviceName: device.name,
       taskTitle: newTitle.trim(),
       taskType: newType,
       completedAt: new Date().toISOString(),
@@ -241,7 +299,17 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
       technicianRole: 'Kỹ thuật viên Bảo trì',
       durationMinutes: parseInt(newDuration, 10) || 60,
       partsReplaced: partsList,
+      incidentDescription:
+        newIncidentDesc.trim() ||
+        (newType === 'CORRECTIVE'
+          ? 'Máy báo sự cố dừng khẩn cấp. Phát hiện rung động và áp lực bất thường.'
+          : `Bảo dưỡng định kỳ theo định mức giờ máy ${newHours}h.`),
+      repairActions:
+        newRepairActions.trim() ||
+        newFindings.trim() ||
+        'Đã kiểm tra, vệ sinh cụm phóng điện, căn chỉnh khe hở và nghiệm thu hoạt động ổn định.',
       findingsAndActions:
+        newRepairActions.trim() ||
         newFindings.trim() ||
         'Đã kiểm tra, vệ sinh cụm phóng điện, căn chỉnh khe hở và nghiệm thu hoạt động ổn định.',
       technicianNotes: newNotes.trim() || 'Đã vận hành thử không tải và có tải đạt yêu cầu kỹ thuật.',
@@ -256,6 +324,8 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
     setShowAddForm(false);
     setNewTitle('');
     setNewParts('');
+    setNewIncidentDesc('');
+    setNewRepairActions('');
     setNewFindings('');
     setNewNotes('');
     setFormSuccess(true);
@@ -686,17 +756,35 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
                       />
                     </div>
 
-                    <div className="sm:col-span-2">
-                      <label className="block text-slate-300 mb-1 font-medium">
-                        Nội dung phát hiện & Biện pháp kỹ thuật đã xử lý
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={newFindings}
-                        onChange={(e) => setNewFindings(e.target.value)}
-                        placeholder="Ghi lại hiện trạng linh kiện, nguyên nhân hao mòn và kết quả sau khi căn chỉnh..."
-                        className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
+                    <div className="sm:col-span-2 space-y-3">
+                      <div>
+                        <label className="block text-red-300 mb-1 font-bold flex items-center gap-1">
+                          <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                          <span>Mô tả sự cố / Hiện tượng hư hỏng ban đầu</span>
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={newIncidentDesc}
+                          onChange={(e) => setNewIncidentDesc(e.target.value)}
+                          placeholder="Mô tả nguyên nhân dừng máy, tiếng kêu, rò rỉ, mã lỗi phát sinh..."
+                          className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-emerald-300 mb-1 font-bold flex items-center gap-1">
+                          <Wrench className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>Hành động sửa chữa & Quy trình kỹ thuật đã xử lý *</span>
+                        </label>
+                        <textarea
+                          rows={2}
+                          required
+                          value={newRepairActions}
+                          onChange={(e) => setNewRepairActions(e.target.value)}
+                          placeholder="Quy trình sửa chữa, súc rửa, căn chỉnh, thay thế linh kiện và kiểm tra nghiệm thu..."
+                          className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -718,37 +806,108 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
                 </form>
               )}
 
-              {/* FILTER BAR FOR MAINTENANCE RECORDS */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-2">
-                <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
-                  <span className="text-slate-400 flex items-center gap-1 pr-1">
-                    <Filter className="h-3 w-3" />
-                    Lọc:
-                  </span>
-                  {[
-                    { id: 'ALL', label: 'Tất cả' },
-                    { id: 'PREVENTIVE', label: 'Định kỳ' },
-                    { id: 'CORRECTIVE', label: 'Khắc phục' },
-                    { id: 'PARTS_REPLACEMENT', label: 'Thay linh kiện' },
-                    { id: 'CALIBRATION', label: 'Hiệu chuẩn' },
-                  ].map((f) => (
-                    <button
-                      key={f.id}
-                      onClick={() => setFilterType(f.id)}
-                      className={`rounded-lg px-2.5 py-1 font-medium transition ${
-                        filterType === f.id
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
+              {/* FILTER BAR FOR MAINTENANCE RECORDS: SEARCH & DATE & TYPE */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 space-y-2.5">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                  {/* Search text input */}
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchKeyword}
+                      onChange={(e) => setSearchKeyword(e.target.value)}
+                      placeholder="Tìm sự cố, hành động sửa chữa, linh kiện, KTV..."
+                      className="w-full rounded-xl bg-slate-900 border border-slate-800 pl-8 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    {searchKeyword && (
+                      <button
+                        onClick={() => setSearchKeyword('')}
+                        className="absolute right-2.5 top-2 text-slate-400 hover:text-white"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Date range filter */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Calendar className="h-3.5 w-3.5 text-amber-400" />
+                    <select
+                      value={dateRangeFilter}
+                      onChange={(e) => setDateRangeFilter(e.target.value as any)}
+                      className="rounded-xl bg-slate-900 border border-slate-800 px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
                     >
-                      {f.label}
-                    </button>
-                  ))}
+                      <option value="ALL">Toàn bộ thời gian</option>
+                      <option value="LAST_7_DAYS">7 ngày qua</option>
+                      <option value="LAST_30_DAYS">30 ngày qua</option>
+                      <option value="CUSTOM">Khoảng ngày tùy chọn</option>
+                    </select>
+                  </div>
                 </div>
 
-                <span className="text-[11px] font-mono text-slate-400">
-                  Hiển thị {filteredRecords.length}/{records.length} bản ghi
-                </span>
+                {/* Custom Date Inputs if selected */}
+                {dateRangeFilter === 'CUSTOM' && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800/60 text-xs">
+                    <span className="text-slate-400">Từ:</span>
+                    <input
+                      type="date"
+                      value={historyStartDate}
+                      onChange={(e) => setHistoryStartDate(e.target.value)}
+                      className="rounded-lg bg-slate-900 border border-slate-800 px-2 py-1 text-white text-xs"
+                    />
+                    <span className="text-slate-400">Đến:</span>
+                    <input
+                      type="date"
+                      value={historyEndDate}
+                      onChange={(e) => setHistoryEndDate(e.target.value)}
+                      className="rounded-lg bg-slate-900 border border-slate-800 px-2 py-1 text-white text-xs"
+                    />
+                    {(historyStartDate || historyEndDate) && (
+                      <button
+                        onClick={() => {
+                          setHistoryStartDate('');
+                          setHistoryEndDate('');
+                        }}
+                        className="text-xs text-amber-400 underline ml-1"
+                      >
+                        Xóa ngày
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Type buttons & result count */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                  <div className="flex items-center gap-1 overflow-x-auto text-xs">
+                    <span className="text-slate-400 flex items-center gap-1 pr-1">
+                      <Filter className="h-3 w-3" />
+                      Loại:
+                    </span>
+                    {[
+                      { id: 'ALL', label: 'Tất cả' },
+                      { id: 'PREVENTIVE', label: 'Định kỳ' },
+                      { id: 'CORRECTIVE', label: 'Sửa chữa khẩn' },
+                      { id: 'PARTS_REPLACEMENT', label: 'Thay linh kiện' },
+                      { id: 'CALIBRATION', label: 'Hiệu chuẩn' },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setFilterType(f.id)}
+                        className={`rounded-lg px-2 py-0.5 text-[11px] font-medium transition ${
+                          filterType === f.id
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <span className="text-[11px] font-mono text-slate-400">
+                    Hiển thị {filteredRecords.length}/{records.length} bản ghi
+                  </span>
+                </div>
               </div>
 
               {/* TIMELINE OF COMPLETED MAINTENANCE RECORDS */}
@@ -761,7 +920,7 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
                   filteredRecords.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4 hover:border-slate-700 transition space-y-2.5"
+                      className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4 hover:border-slate-700 transition space-y-3"
                     >
                       {/* Record Header */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -789,10 +948,28 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Findings and technical actions */}
-                      <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/60 p-3 rounded-xl border border-slate-800/60">
-                        {item.findingsAndActions}
-                      </p>
+                      {/* 2 Blocks: Mô tả sự cố & Hành động sửa chữa */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div className="rounded-xl border border-red-500/25 bg-red-950/15 p-3 space-y-1">
+                          <span className="font-bold text-red-300 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                            <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                            Mô Tả Sự Cố / Hiện Tượng:
+                          </span>
+                          <p className="text-slate-200 leading-relaxed">
+                            {item.incidentDescription || item.findingsAndActions}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/15 p-3 space-y-1">
+                          <span className="font-bold text-emerald-300 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                            <Wrench className="h-3.5 w-3.5 text-emerald-400" />
+                            Hành Động Sửa Chữa & Biện Pháp:
+                          </span>
+                          <p className="text-slate-200 leading-relaxed">
+                            {item.repairActions || item.findingsAndActions}
+                          </p>
+                        </div>
+                      </div>
 
                       {/* Parts replaced pill tags */}
                       {item.partsReplaced && item.partsReplaced.length > 0 && (
