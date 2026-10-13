@@ -67,6 +67,12 @@ export const SHORTCUT_DEFINITIONS: Record<string, { combo: string; action: strin
     category: 'operation',
     description: 'Focus con trỏ vào thanh tìm kiếm máy EDM hoặc tra cứu mã lỗi E-101..E-108',
   },
+  alt_e: {
+    combo: 'Alt + E',
+    action: 'Chẩn Đoán AI Khẩn Cấp (Emergency AI Diagnosis)',
+    category: 'operation',
+    description: 'Tự động mở Trợ Lý AI Chẩn Đoán cho thiết bị đang bị lỗi hoặc cảnh báo gần nhất để xử lý cấp bách',
+  },
   alt_k: {
     combo: 'Alt + K / ?',
     action: 'Mở Bảng Phím Tắt & Giám Sát Telemetry',
@@ -176,6 +182,14 @@ export const createInitialSeedTelemetry = (): ShortcutTelemetryState => {
       category: 'operation',
       count: 8,
       lastUsedAt: new Date(now.getTime() - 18 * 60 * 1000).toISOString(),
+    },
+    alt_e: {
+      id: 'alt_e',
+      combo: 'Alt + E',
+      action: 'Chẩn Đoán AI Khẩn Cấp (Emergency AI Diagnosis)',
+      category: 'operation',
+      count: 6,
+      lastUsedAt: new Date(now.getTime() - 9 * 60 * 1000).toISOString(),
     },
     alt_k: {
       id: 'alt_k',

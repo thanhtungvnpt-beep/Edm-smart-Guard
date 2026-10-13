@@ -1,4 +1,4 @@
-export type TopLevelCardId = 'facility-summary' | 'predictive-alerts' | 'performance-analytics';
+export type TopLevelCardId = 'facility-summary' | 'workshop-heatmap' | 'predictive-alerts' | 'performance-analytics';
 
 export interface TopLevelCardMeta {
   id: TopLevelCardId;
@@ -15,6 +15,13 @@ export const TOP_LEVEL_CARDS_META: Record<TopLevelCardId, TopLevelCardMeta> = {
     shortName: 'Chỉ Số Tổng Quan (KPIs)',
     description: 'Thống kê tức thời số máy đang chạy, dừng khẩn cấp, hiệu suất OEE trung bình và bộ lọc trạng thái máy.',
     category: 'Giám Sát Thời Gian Thực',
+  },
+  'workshop-heatmap': {
+    id: 'workshop-heatmap',
+    name: 'Bản Đồ Nhiệt Mật Độ Sự Cố Xưởng (Workshop Incident Heatmap)',
+    shortName: 'Bản Đồ Nhiệt Xưởng (Heatmap)',
+    description: 'Trực quan hóa mật độ sự cố máy móc và điểm nghẽn hạ tầng (điện áp, đường ống nước làm mát, khí nén) theo tọa độ địa lý xưởng gia công.',
+    category: 'Trực Quan Hóa Hạ Tầng',
   },
   'predictive-alerts': {
     id: 'predictive-alerts',
@@ -34,11 +41,12 @@ export const TOP_LEVEL_CARDS_META: Record<TopLevelCardId, TopLevelCardMeta> = {
 
 export const DEFAULT_TOP_LEVEL_CARDS_ORDER: TopLevelCardId[] = [
   'facility-summary',
+  'workshop-heatmap',
   'predictive-alerts',
   'performance-analytics',
 ];
 
-const STORAGE_KEY = 'edm_smartguard_dashboard_top_cards_order_v1';
+const STORAGE_KEY = 'edm_smartguard_dashboard_top_cards_order_v2';
 
 export function getStoredDashboardCardsOrder(): TopLevelCardId[] {
   try {
@@ -49,7 +57,7 @@ export function getStoredDashboardCardsOrder(): TopLevelCardId[] {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
       // Validate that all known IDs exist
-      const validIds: TopLevelCardId[] = ['facility-summary', 'predictive-alerts', 'performance-analytics'];
+      const validIds: TopLevelCardId[] = ['facility-summary', 'workshop-heatmap', 'predictive-alerts', 'performance-analytics'];
       const filtered = parsed.filter((id) => validIds.includes(id as TopLevelCardId)) as TopLevelCardId[];
       // Add any missing ones
       validIds.forEach((id) => {

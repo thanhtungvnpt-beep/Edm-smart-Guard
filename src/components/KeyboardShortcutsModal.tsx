@@ -163,6 +163,14 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       color: 'text-emerald-400',
     },
     {
+      id: 'alt_e',
+      key: 'Alt + E',
+      title: 'Chẩn Đoán AI Khẩn Cấp',
+      desc: 'Tự động mở Trợ Lý AI Chẩn Đoán cho thiết bị đang bị lỗi hoặc cảnh báo gần nhất để xử lý cấp bách',
+      icon: Sparkles,
+      color: 'text-rose-400',
+    },
+    {
       id: 'alt_q',
       key: 'Alt + Q',
       title: 'Quét QR Máy EDM',

@@ -44,6 +44,7 @@ import { MaintenanceHistoryTab } from './components/MaintenanceHistoryTab';
 import { EdmSimulatorModal } from './components/EdmSimulatorModal';
 import { PerformanceAnalytics } from './components/PerformanceAnalytics';
 import { FacilitySummaryCard } from './components/FacilitySummaryCard';
+import { WorkshopHeatmap } from './components/WorkshopHeatmap';
 import { PredictiveMaintenanceAlerts } from './components/PredictiveMaintenanceAlerts';
 import { MachineDetailsModal } from './components/MachineDetailsModal';
 import { TechnicianStatusSidebar } from './components/TechnicianStatusSidebar';
@@ -516,6 +517,28 @@ export default function App() {
           return;
         }
 
+        // Alt + E: Emergency AI Diagnosis for machine with recent error or warning
+        if (e.key === 'e' || e.key === 'E') {
+          e.preventDefault();
+          recordShortcut('alt_e');
+          soundManager.playBeep();
+
+          const targetDev =
+            devices.find((d) => d.status === 'ALARM_STOPPED') ||
+            devices.find((d) => d.status === 'WARNING') ||
+            (emergencyDevice ? devices.find((d) => d.id === emergencyDevice.id) : null) ||
+            devices.find((d) => d.status !== 'RUNNING') ||
+            devices[0];
+
+          if (targetDev) {
+            setDiagnosisDevice(targetDev);
+            showToast(`⚡ [Alt+E] Kích hoạt khẩn: Trợ Lý AI Chẩn Đoán cho ${targetDev.name} (${targetDev.code})`);
+          } else {
+            showToast('⚡ [Alt+E] Chưa có máy EDM nào trong hệ thống');
+          }
+          return;
+        }
+
         // Alt + Q: Fast Open Physical Machine QR Code Scanner
         if (e.key === 'q' || e.key === 'Q') {
           e.preventDefault();
@@ -599,7 +622,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isMuted, recordShortcut]);
+  }, [isMuted, recordShortcut, devices, emergencyDevice]);
 
   // --- TRIGGER EDM ALARM ---
   const handleTriggerAlarm = async (deviceId: string, errorCode: string = 'E-102', errorTitle: string = 'Sự cố đứt dây & sụt áp phóng điện') => {
@@ -845,6 +868,14 @@ export default function App() {
                         devices={devices}
                         activeFilter={deviceFilter}
                         onSelectFilter={(f) => setDeviceFilter(f)}
+                      />
+                    );
+                  case 'workshop-heatmap':
+                    return (
+                      <WorkshopHeatmap
+                        devices={devices}
+                        onOpenMachineDetails={(device) => setDetailsDevice(device)}
+                        onOpenDiagnosis={(device) => setDiagnosisDevice(device)}
                       />
                     );
                   case 'predictive-alerts':

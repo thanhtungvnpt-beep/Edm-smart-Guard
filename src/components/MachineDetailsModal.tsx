@@ -32,6 +32,16 @@ import {
   Wrench,
   X,
   Zap,
+  Pin,
+  StickyNote,
+  MessageSquare,
+  Send,
+  CheckSquare,
+  Square,
+  Trash2,
+  Copy,
+  Bookmark,
+  Check,
 } from 'lucide-react';
 import { Device, MaintenanceRecord } from '../types';
 import { calculatePredictedMaintenance } from '../utils/maintenancePrediction';
@@ -50,6 +60,14 @@ import { MaintenanceFrequencyChart } from './MaintenanceFrequencyChart';
 import { MaintenanceReminderModal } from './MaintenanceReminderModal';
 import { getDeviceMaintenanceReminders } from '../utils/maintenanceReminderData';
 import { getDeviceOperationalMetrics } from '../utils/operationalMetrics';
+import {
+  MachineQuickNote,
+  getDeviceQuickNotes,
+  addDeviceQuickNote,
+  toggleAcknowledgeQuickNote,
+  togglePinQuickNote,
+  deleteQuickNote,
+} from '../utils/machineQuickNotesStorage';
 
 interface MachineDetailsModalProps {
   device: Device;
@@ -64,7 +82,7 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
   onOpenDiagnosis,
   onTriggerAlarm,
 }) => {
-  const [activeTab, setActiveTab] = useState<'maintenance' | 'schedule' | 'prediction' | 'telemetry'>('maintenance');
+  const [activeTab, setActiveTab] = useState<'maintenance' | 'schedule' | 'prediction' | 'telemetry' | 'notes'>('maintenance');
   const [records, setRecords] = useState<MaintenanceRecord[]>(() =>
     getDeviceMaintenanceHistory(device.id)
   );
@@ -74,6 +92,34 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
   const [showPdfReport, setShowPdfReport] = useState<boolean>(false);
   const [showReminderModal, setShowReminderModal] = useState<boolean>(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  // QUICK NOTES STATE
+  const [quickNotes, setQuickNotes] = useState<MachineQuickNote[]>(() =>
+    getDeviceQuickNotes(device.id)
+  );
+  const [noteFilter, setNoteFilter] = useState<'ALL' | 'UNACKNOWLEDGED' | 'PINNED'>('ALL');
+  const [newNoteAuthor, setNewNoteAuthor] = useState<string>(
+    device.assignedTechnician?.name || 'Nguyễn Văn Hùng'
+  );
+  const [newNoteShift, setNewNoteShift] = useState<string>('Ca 2 (Chiều - 14:00-22:00)');
+  const [newNoteUrgency, setNewNoteUrgency] = useState<'NORMAL' | 'IMPORTANT' | 'CRITICAL_HANDOVER'>('IMPORTANT');
+  const [newNoteContent, setNewNoteContent] = useState<string>('');
+  const [newNoteIsPinned, setNewNoteIsPinned] = useState<boolean>(false);
+  const [newChecklistItems, setNewChecklistItems] = useState<{ id: string; label: string; checked: boolean }[]>([
+    { id: '1', label: 'Đã kiểm tra mức dầu/nước Deion bể chứa', checked: false },
+    { id: '2', label: 'Đã xả cặn thùng lọc phôi EDM', checked: false },
+    { id: '3', label: 'Ca sau chú ý cuộn dây đồng còn lại', checked: false },
+  ]);
+  const [customChecklistInput, setCustomChecklistInput] = useState<string>('');
+  const [copiedNoteId, setCopiedNoteId] = useState<string | null>(null);
+
+  const unacknowledgedCount = useMemo(() => {
+    return quickNotes.filter((n) => !n.acknowledgedByNextShift).length;
+  }, [quickNotes]);
+
+  const latestUnreadNote = useMemo(() => {
+    return quickNotes.find((n) => !n.acknowledgedByNextShift && (n.urgency === 'CRITICAL_HANDOVER' || n.urgency === 'IMPORTANT' || n.isPinned));
+  }, [quickNotes]);
 
   const activeRemindersCount = useMemo(() => {
     return getDeviceMaintenanceReminders(device.id).filter((r) => r.isActive).length;
@@ -332,6 +378,71 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
     setTimeout(() => setFormSuccess(false), 4000);
   };
 
+  // QUICK NOTES ACTION HANDLERS
+  const handleAddQuickNote = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNoteContent.trim()) return;
+
+    addDeviceQuickNote(device.id, {
+      deviceId: device.id,
+      technicianName: newNoteAuthor.trim() || 'KTV Trực Ca',
+      shift: newNoteShift,
+      content: newNoteContent.trim(),
+      urgency: newNoteUrgency,
+      isPinned: newNoteIsPinned,
+      acknowledgedByNextShift: false,
+      checklist: newChecklistItems.filter((c) => c.label.trim().length > 0),
+      tags: [newNoteShift.split(' ')[0], newNoteUrgency === 'CRITICAL_HANDOVER' ? 'Khẩn cấp' : 'Bàn giao'],
+    });
+
+    setQuickNotes(getDeviceQuickNotes(device.id));
+    setNewNoteContent('');
+    setNewNoteIsPinned(false);
+    setFormSuccess(true);
+    setTimeout(() => setFormSuccess(false), 3000);
+  };
+
+  const handleToggleAcknowledge = (noteId: string) => {
+    const updated = toggleAcknowledgeQuickNote(
+      device.id,
+      noteId,
+      device.assignedTechnician?.name || 'KTV Tiếp Nhận Ca'
+    );
+    setQuickNotes(updated);
+  };
+
+  const handleTogglePin = (noteId: string) => {
+    const updated = togglePinQuickNote(device.id, noteId);
+    setQuickNotes(updated);
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    const updated = deleteQuickNote(device.id, noteId);
+    setQuickNotes(updated);
+  };
+
+  const handleCopyNote = (note: MachineQuickNote) => {
+    const text = `[Ghi Chú ${device.code} - ${note.shift}]\nNgười ghi: ${note.technicianName}\nMức độ: ${note.urgency}\nNội dung: ${note.content}\n${note.checklist ? note.checklist.map((c) => `- [${c.checked ? 'x' : ' '}] ${c.label}`).join('\n') : ''}`;
+    navigator.clipboard.writeText(text);
+    setCopiedNoteId(note.id);
+    setTimeout(() => setCopiedNoteId(null), 2000);
+  };
+
+  const filteredQuickNotes = useMemo(() => {
+    let list = [...quickNotes];
+    if (noteFilter === 'UNACKNOWLEDGED') {
+      list = list.filter((n) => !n.acknowledgedByNextShift);
+    } else if (noteFilter === 'PINNED') {
+      list = list.filter((n) => n.isPinned);
+    }
+    // Sort pinned first, then newest
+    return list.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [quickNotes, noteFilter]);
+
   const getTaskTypeBadge = (type: MaintenanceRecord['taskType']) => {
     switch (type) {
       case 'PREVENTIVE':
@@ -490,12 +601,41 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
           </div>
         </div>
 
+        {/* STICKY QUICK NOTE HANDOVER ALERT BANNER (If there's an active handover note from previous shift) */}
+        {latestUnreadNote && activeTab !== 'notes' && (
+          <div
+            onClick={() => setActiveTab('notes')}
+            className={`flex items-center justify-between border-b px-5 py-2.5 text-xs cursor-pointer transition ${
+              latestUnreadNote.urgency === 'CRITICAL_HANDOVER'
+                ? 'border-red-500/40 bg-red-950/40 hover:bg-red-950/60 text-red-200'
+                : 'border-amber-500/30 bg-amber-950/40 hover:bg-amber-950/60 text-amber-200'
+            }`}
+          >
+            <div className="flex items-center gap-2 truncate">
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                latestUnreadNote.urgency === 'CRITICAL_HANDOVER'
+                  ? 'bg-red-500/20 text-red-400 animate-pulse'
+                  : 'bg-amber-500/20 text-amber-400'
+              }`}>
+                <Pin className="h-3 w-3" />
+              </span>
+              <span className="font-bold shrink-0">
+                📌 Ghi chú ca trước ({latestUnreadNote.shift} - {latestUnreadNote.technicianName}):
+              </span>
+              <span className="truncate text-slate-200">{latestUnreadNote.content}</span>
+            </div>
+            <span className="ml-3 shrink-0 rounded-lg bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[11px] font-bold text-amber-300 hover:text-white">
+              Xem & Tiếp Nhận Ca →
+            </span>
+          </div>
+        )}
+
         {/* TABS NAVIGATION */}
         <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/40 px-5 pt-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveTab('maintenance')}
-              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition shrink-0 ${
                 activeTab === 'maintenance'
                   ? 'border-amber-500 text-amber-400 font-bold'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -506,39 +646,60 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('notes')}
+              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition shrink-0 ${
+                activeTab === 'notes'
+                  ? 'border-amber-500 text-amber-400 font-bold'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <MessageSquare className="h-4 w-4" />
+              <span>Ghi Chú Nhanh (Quick Notes)</span>
+              {quickNotes.length > 0 && (
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono font-bold ${
+                  unacknowledgedCount > 0
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                    : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {quickNotes.length}
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => setActiveTab('schedule')}
-              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition shrink-0 ${
                 activeTab === 'schedule'
                   ? 'border-amber-500 text-amber-400 font-bold'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
               <Calendar className="h-4 w-4" />
-              <span>Lịch Bảo Dưỡng (Service Schedule)</span>
+              <span>Lịch Bảo Dưỡng</span>
             </button>
 
             <button
               onClick={() => setActiveTab('prediction')}
-              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition shrink-0 ${
                 activeTab === 'prediction'
                   ? 'border-amber-500 text-amber-400 font-bold'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
               <Sparkles className="h-4 w-4 text-amber-400" />
-              <span>Dự Báo & Linh Kiện AI (Predictive Insight)</span>
+              <span>Dự Báo & Linh Kiện AI</span>
             </button>
 
             <button
               onClick={() => setActiveTab('telemetry')}
-              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-xs sm:text-sm font-semibold transition shrink-0 ${
                 activeTab === 'telemetry'
                   ? 'border-amber-500 text-amber-400 font-bold'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
               <Activity className="h-4 w-4" />
-              <span>Thông Số & Cảm Biến</span>
+              <span>Thông Số Cảm Biến</span>
             </button>
           </div>
 
@@ -1316,6 +1477,427 @@ export const MachineDetailsModal: React.FC<MachineDetailsModalProps> = ({
                     </span>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================= TAB 5: QUICK NOTES & SHIFT HANDOVER ================= */}
+          {activeTab === 'notes' && (
+            <div className="space-y-6">
+              {/* Top Shift Handover Banner */}
+              <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-950 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
+                      <StickyNote className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Sổ Ghi Chú Nhanh &amp; Bàn Giao Ca Trực</span>
+                        <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] font-mono text-amber-300">
+                          Máy: {device.code}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Kỹ thuật viên để lại các ghi chú ngắn về thông số gia công, tình trạng vật tư, dung dịch điện môi hoặc lưu ý đặc biệt cho ca trực tiếp theo.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-xl p-1 shrink-0 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setNoteFilter('ALL')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition ${
+                        noteFilter === 'ALL'
+                          ? 'bg-amber-500 text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Tất cả ({quickNotes.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNoteFilter('UNACKNOWLEDGED')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition ${
+                        noteFilter === 'UNACKNOWLEDGED'
+                          ? 'bg-amber-500 text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Chưa tiếp nhận ({unacknowledgedCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNoteFilter('PINNED')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition ${
+                        noteFilter === 'PINNED'
+                          ? 'bg-amber-500 text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Đã ghim ({quickNotes.filter((n) => n.isPinned).length})
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form: Add New Quick Note */}
+              <form
+                onSubmit={handleAddQuickNote}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-xl space-y-3"
+              >
+                <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                    <Plus className="h-4 w-4" />
+                    <span>Thêm Ghi Chú / Bàn Giao Ca Mới</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    Lưu trữ tức thì trên máy trạm
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Kỹ thuật viên bàn giao:
+                    </label>
+                    <input
+                      type="text"
+                      value={newNoteAuthor}
+                      onChange={(e) => setNewNoteAuthor(e.target.value)}
+                      placeholder="Tên kỹ thuật viên..."
+                      className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Ca trực bàn giao:
+                    </label>
+                    <select
+                      value={newNoteShift}
+                      onChange={(e) => setNewNoteShift(e.target.value)}
+                      className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="Ca 1 (Sáng - 06:00-14:00)">Ca 1 (Sáng - 06:00-14:00)</option>
+                      <option value="Ca 2 (Chiều - 14:00-22:00)">Ca 2 (Chiều - 14:00-22:00)</option>
+                      <option value="Ca 3 (Đêm - 22:00-06:00)">Ca 3 (Đêm - 22:00-06:00)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Mức độ ưu tiên / tính chất:
+                    </label>
+                    <select
+                      value={newNoteUrgency}
+                      onChange={(e) => setNewNoteUrgency(e.target.value as any)}
+                      className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="NORMAL">🟢 Bình Thường (Theo dõi định kỳ)</option>
+                      <option value="IMPORTANT">🟡 Quan Trọng (Cần chú ý)</option>
+                      <option value="CRITICAL_HANDOVER">🔴 Bàn Giao Khẩn Cấp (Sự cố/Vật tư cấp bách)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                    Nội dung ghi chú bàn giao cho ca tiếp theo:
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={newNoteContent}
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    placeholder="Ví dụ: Phôi gia công hốc số 3 còn chạy 1h20p. Đã châm thêm 15L nước Deion lúc 20h. Ca đêm kiểm tra áp lực bơm lọc và độ căng dây đồng..."
+                    className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                {/* Quick Snippet Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="text-slate-400 text-[10px]">Mẫu nhanh:</span>
+                  {[
+                    '💧 Đã châm nước Deion đầy đủ',
+                    '⚡ Cuộn dây đồng còn ~30%',
+                    '🧯 Đã xả cặn thùng lọc phôi',
+                    '📐 Hoàn tất rà gá phôi G54',
+                    '⚠️ Áp suất bơm hơi tụt nhẹ',
+                    '⏱️ Dự kiến hoàn tất lúc 02:30',
+                  ].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() =>
+                        setNewNoteContent((prev) => (prev ? `${prev} • ${chip}` : chip))
+                      }
+                      className="rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 px-2 py-0.5 text-slate-300 hover:text-white transition"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Handover Checklist Section */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                      <CheckSquare className="h-3.5 w-3.5 text-amber-400" />
+                      Checklist Bàn Giao Ca:
+                    </span>
+                    <span className="text-[10px] text-slate-400">Tích chọn các hạng mục đã hoàn thành</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {newChecklistItems.map((item, idx) => (
+                      <label
+                        key={item.id}
+                        className="flex items-center gap-2 rounded-lg bg-slate-950/60 p-2 cursor-pointer border border-slate-800/80 hover:border-slate-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={(e) => {
+                            const updated = [...newChecklistItems];
+                            updated[idx].checked = e.target.checked;
+                            setNewChecklistItems(updated);
+                          }}
+                          className="rounded text-amber-500 focus:ring-amber-500"
+                        />
+                        <span className={`text-[11px] ${item.checked ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                          {item.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={customChecklistInput}
+                      onChange={(e) => setCustomChecklistInput(e.target.value)}
+                      placeholder="Thêm mục kiểm tra khác (ví dụ: Vệ sinh bàn từ, Đổi đầu kim cương)..."
+                      className="flex-1 rounded-lg bg-slate-950 border border-slate-800 px-3 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!customChecklistInput.trim()) return;
+                        setNewChecklistItems((prev) => [
+                          ...prev,
+                          {
+                            id: `chk-${Date.now()}`,
+                            label: customChecklistInput.trim(),
+                            checked: false,
+                          },
+                        ]);
+                        setCustomChecklistInput('');
+                      }}
+                      className="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-[11px] font-semibold text-slate-200"
+                    >
+                      + Thêm mục
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={newNoteIsPinned}
+                      onChange={(e) => setNewNoteIsPinned(e.target.checked)}
+                      className="rounded text-amber-500 focus:ring-amber-500"
+                    />
+                    <Pin className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Ghim ghi chú này lên đầu sổ bàn giao</span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    className="flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 px-5 py-2 text-xs font-bold text-slate-950 shadow-md shadow-amber-500/20 transition active:scale-95"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    <span>Lưu &amp; Bàn Giao Cho Ca Tiếp Theo</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Notes List */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Danh Sách Ghi Chú &amp; Lịch Sử Bàn Giao ({filteredQuickNotes.length})
+                  </h4>
+                  <span className="text-[11px] text-slate-400">
+                    Tự động sắp xếp ghi chú ghim và mới nhất
+                  </span>
+                </div>
+
+                {filteredQuickNotes.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-8 text-center text-xs text-slate-400">
+                    <StickyNote className="h-8 w-8 text-slate-600 mx-auto mb-2" />
+                    <span>Không có ghi chú nào phù hợp với bộ lọc hiện tại.</span>
+                  </div>
+                ) : (
+                  filteredQuickNotes.map((note) => {
+                    const isCritical = note.urgency === 'CRITICAL_HANDOVER';
+                    const isImportant = note.urgency === 'IMPORTANT';
+
+                    return (
+                      <div
+                        key={note.id}
+                        className={`rounded-2xl border p-4 text-xs transition ${
+                          note.isPinned
+                            ? 'border-amber-500/60 bg-gradient-to-r from-amber-950/20 via-slate-900/90 to-slate-950 shadow-lg shadow-amber-500/5'
+                            : isCritical
+                            ? 'border-red-500/50 bg-red-950/20'
+                            : isImportant
+                            ? 'border-amber-500/30 bg-slate-900/80'
+                            : 'border-slate-800 bg-slate-950/70'
+                        }`}
+                      >
+                        {/* Note Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {note.isPinned && (
+                              <span className="flex items-center gap-1 rounded-full bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300">
+                                <Pin className="h-3 w-3 fill-amber-300" />
+                                ĐÃ GHIM
+                              </span>
+                            )}
+
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-mono font-bold border ${
+                                isCritical
+                                  ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                                  : isImportant
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              }`}
+                            >
+                              {isCritical
+                                ? '🚨 BÀN GIAO KHẨN'
+                                : isImportant
+                                ? '⚠️ QUAN TRỌNG'
+                                : '🟢 THÔNG THƯỜNG'}
+                            </span>
+
+                            <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+                              {note.shift}
+                            </span>
+
+                            <span className="text-slate-400 text-[11px]">
+                              Bởi: <strong className="text-white">{note.technicianName}</strong>
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+                            <Clock className="h-3 w-3 text-slate-500" />
+                            <span>{new Date(note.createdAt).toLocaleString('vi-VN')}</span>
+                          </div>
+                        </div>
+
+                        {/* Note Body */}
+                        <p className="mt-3 text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap bg-slate-900/60 rounded-xl p-3 border border-slate-800/80">
+                          {note.content}
+                        </p>
+
+                        {/* Checklist items if any */}
+                        {note.checklist && note.checklist.length > 0 && (
+                          <div className="mt-3 rounded-xl bg-slate-950/80 border border-slate-800/80 p-3 space-y-1.5">
+                            <span className="text-[10px] font-bold text-slate-400 block mb-1">
+                              Mục Kiểm Tra Bàn Giao:
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                              {note.checklist.map((chk) => (
+                                <div
+                                  key={chk.id}
+                                  className="flex items-center gap-2 text-[11px]"
+                                >
+                                  {chk.checked ? (
+                                    <CheckSquare className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                  ) : (
+                                    <Square className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                  )}
+                                  <span className={chk.checked ? 'text-slate-200' : 'text-slate-400'}>
+                                    {chk.label}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Note Footer: Handover Acknowledgment Status and Actions */}
+                        <div className="mt-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-slate-800/80">
+                          {/* Acknowledgment Pill */}
+                          <div>
+                            {note.acknowledgedByNextShift ? (
+                              <div className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-semibold">
+                                <CheckCircle2 className="h-4 w-4" />
+                                <span>
+                                  Ca sau đã tiếp nhận bàn giao ({note.acknowledgedTechName || 'KTV Ca Tiếp'})
+                                </span>
+                                {note.acknowledgedAt && (
+                                  <span className="text-slate-500 font-mono text-[10px]">
+                                    • {new Date(note.acknowledgedAt).toLocaleTimeString('vi-VN')}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAcknowledge(note.id)}
+                                className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-300 hover:text-white transition active:scale-95"
+                              >
+                                <Check className="h-3.5 w-3.5 text-amber-400" />
+                                <span>Xác Nhận Tiếp Nhận Ca Bàn Giao</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Action Buttons: Pin, Copy, Delete */}
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePin(note.id)}
+                              className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition flex items-center gap-1 ${
+                                note.isPinned
+                                  ? 'border-amber-500/50 bg-amber-500/20 text-amber-300'
+                                  : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+                              }`}
+                              title={note.isPinned ? 'Bỏ ghim ghi chú' : 'Ghim ghi chú lên đầu'}
+                            >
+                              <Pin className="h-3 w-3" />
+                              <span>{note.isPinned ? 'Bỏ ghim' : 'Ghim'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleCopyNote(note)}
+                              className="rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-slate-400 hover:text-white transition flex items-center gap-1"
+                              title="Sao chép nội dung ghi chú"
+                            >
+                              <Copy className="h-3 w-3" />
+                              <span>{copiedNoteId === note.id ? 'Đã chép!' : 'Sao chép'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteNote(note.id)}
+                              className="rounded-lg border border-slate-800 bg-slate-900 hover:bg-red-950/50 hover:border-red-500/40 p-1.5 text-slate-400 hover:text-red-400 transition"
+                              title="Xóa ghi chú"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
