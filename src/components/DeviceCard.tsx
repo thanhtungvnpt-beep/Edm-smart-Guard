@@ -131,6 +131,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const isAlarm = device.status === 'ALARM_STOPPED';
   const isRunning = device.status === 'RUNNING';
   const isIdle = device.status === 'IDLE';
+  const isMaintenance = device.status === 'MAINTENANCE';
+  const isWarning = device.status === 'WARNING';
 
   // Heuristic calculation of Predicted Next Maintenance Date based on 30-day performance
   const prediction = useMemo(() => calculatePredictedMaintenance(device), [device]);
@@ -141,6 +143,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 shadow-xl ${
         isAlarm
           ? 'border-red-500/80 bg-red-950/20 shadow-red-950/50 ring-2 ring-red-500/40 animate-pulse'
+          : isMaintenance
+          ? 'border-blue-500/80 bg-blue-950/20 shadow-blue-950/40 ring-1 ring-blue-500/30'
+          : isWarning
+          ? 'border-amber-500/70 bg-amber-950/20 shadow-amber-950/30 ring-1 ring-amber-500/30'
           : isRunning
           ? 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-900/90'
           : 'border-slate-800/80 bg-slate-900/40'
@@ -179,6 +185,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-red-500/40 animate-bounce">
               <AlertTriangle className="h-3.5 w-3.5" />
               DỪNG MÁY!
+            </span>
+          )}
+          {isMaintenance && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/20 border border-blue-500/50 px-2.5 py-0.5 text-xs font-bold text-blue-300 shadow-sm shadow-blue-500/20">
+              <Wrench className="h-3.5 w-3.5 text-blue-400 animate-spin" style={{ animationDuration: '6s' }} />
+              Đang Bảo Trì
+            </span>
+          )}
+          {isWarning && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+              Cảnh Báo
             </span>
           )}
           {isRunning && (

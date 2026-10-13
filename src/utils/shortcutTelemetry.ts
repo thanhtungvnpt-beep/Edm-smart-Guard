@@ -73,6 +73,12 @@ export const SHORTCUT_DEFINITIONS: Record<string, { combo: string; action: strin
     category: 'operation',
     description: 'Tự động mở Trợ Lý AI Chẩn Đoán cho thiết bị đang bị lỗi hoặc cảnh báo gần nhất để xử lý cấp bách',
   },
+  alt_c: {
+    combo: 'Alt + C',
+    action: 'Bật / Tắt Giao Diện Tương Phản Cao (High Contrast)',
+    category: 'operation',
+    description: 'Chuyển đổi giao diện tương phản cao hỗ trợ KTV quan sát tốt trong môi trường xưởng thiếu sáng hoặc chói sáng',
+  },
   alt_k: {
     combo: 'Alt + K / ?',
     action: 'Mở Bảng Phím Tắt & Giám Sát Telemetry',
@@ -190,6 +196,14 @@ export const createInitialSeedTelemetry = (): ShortcutTelemetryState => {
       category: 'operation',
       count: 6,
       lastUsedAt: new Date(now.getTime() - 9 * 60 * 1000).toISOString(),
+    },
+    alt_c: {
+      id: 'alt_c',
+      combo: 'Alt + C',
+      action: 'Bật / Tắt Giao Diện Tương Phản Cao (High Contrast)',
+      category: 'operation',
+      count: 4,
+      lastUsedAt: new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
     },
     alt_k: {
       id: 'alt_k',

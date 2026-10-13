@@ -17,6 +17,7 @@ import {
   Compass,
   Keyboard,
   Wrench,
+  Contrast,
 } from 'lucide-react';
 import { FactoryStats } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -41,6 +42,8 @@ interface HeaderProps {
   onStartTour?: () => void;
   onOpenShortcuts?: () => void;
   shortcutUsageCount?: number;
+  isHighContrast?: boolean;
+  onToggleHighContrast?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -62,11 +65,17 @@ export const Header: React.FC<HeaderProps> = ({
   onStartTour,
   onOpenShortcuts,
   shortcutUsageCount,
+  isHighContrast = false,
+  onToggleHighContrast,
 }) => {
   const [showDocModal, setShowDocModal] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md">
+    <header className={`sticky top-0 z-40 border-b transition-colors duration-200 ${
+      isHighContrast
+        ? 'border-yellow-400 bg-black'
+        : 'border-slate-800 bg-slate-950/95 backdrop-blur-md'
+    }`}>
       {/* Top Banner: Industrial IoT Telemetry Header */}
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5 sm:px-6">
         <div className="flex items-center gap-3">
@@ -110,6 +119,28 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* In-App PWA Install Button */}
           <PWAInstallButton />
+
+          {/* High Contrast Mode Toggle Button for Low-Light or Glare Workshop */}
+          {onToggleHighContrast && (
+            <button
+              onClick={onToggleHighContrast}
+              title={
+                isHighContrast
+                  ? '⚡ Tắt chế độ tương phản cao (Alt + C)'
+                  : '⚡ Bật chế độ tương phản cao (High Contrast - Alt + C): Hỗ trợ KTV làm việc khi xưởng thiếu sáng hoặc chói sáng'
+              }
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 shadow-sm ${
+                isHighContrast
+                  ? 'border-yellow-400 bg-yellow-400 text-slate-950 font-black ring-2 ring-yellow-400/40'
+                  : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-yellow-400/60 hover:text-yellow-400'
+              }`}
+            >
+              <Contrast className={`h-4 w-4 ${isHighContrast ? 'text-slate-950 fill-slate-950' : 'text-yellow-400'}`} />
+              <span className="hidden sm:inline">
+                {isHighContrast ? 'Tương Phản: BẬT' : 'Tương Phản Cao'}
+              </span>
+            </button>
+          )}
 
           {/* Sound Alarm Toggle */}
           <button

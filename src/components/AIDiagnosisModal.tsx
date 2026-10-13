@@ -43,14 +43,22 @@ import {
   Wrench,
   X,
   Zap,
+  Timer,
+  Play,
+  Pause,
+  RotateCcw,
+  Users,
+  PackageCheck,
+  Hourglass,
 } from 'lucide-react';
-import { AIDiagnosis, Device } from '../types';
+import { AIDiagnosis, Device, RepairEtaAnalysis } from '../types';
 import { getDeviceMaintenanceHistory } from '../utils/maintenanceHistoryData';
 import {
   get30DayErrorCodeFrequency,
   COMMON_EDM_ERROR_CODES,
   ErrorCodeDayBucket,
 } from '../utils/errorCodeFrequency';
+import { estimateRepairEtaWithAI, EtaEstimationOptions } from '../utils/repairEtaEstimator';
 
 interface AIDiagnosisModalProps {
   device: Device | null;
@@ -120,6 +128,98 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
   );
   const [showRcaGuidance, setShowRcaGuidance] = useState<boolean>(true);
   const [rcaCopySuccess, setRcaCopySuccess] = useState<boolean>(false);
+
+  // AI Repair ETA & Historical Benchmark States
+  const [etaAssistantsCount, setEtaAssistantsCount] = useState<number>(1);
+  const [etaHasSpareParts, setEtaHasSpareParts] = useState<boolean>(true);
+  const [showEtaCustomizer, setShowEtaCustomizer] = useState<boolean>(false);
+  const [etaCopySuccess, setEtaCopySuccess] = useState<boolean>(false);
+
+  // Live Repair Stopwatch Tracker
+  const [isStopwatchRunning, setIsStopwatchRunning] = useState<boolean>(false);
+  const [stopwatchSeconds, setStopwatchSeconds] = useState<number>(0);
+  const stopwatchIntervalRef = useRef<any>(null);
+
+  // Computed AI Repair ETA Analysis
+  const repairEtaAnalysis: RepairEtaAnalysis = useMemo(() => {
+    if (
+      diagnosis?.repairEtaAnalysis &&
+      etaAssistantsCount === 1 &&
+      etaHasSpareParts &&
+      selectedErrorCode === (device.activeIncident?.errorCode || 'E-102')
+    ) {
+      return diagnosis.repairEtaAnalysis;
+    }
+
+    return estimateRepairEtaWithAI(device, selectedErrorCode, {
+      technicianName: device.assignedTechnician?.name,
+      assistantsCount: etaAssistantsCount,
+      hasSparePartsReady: etaHasSpareParts,
+      voiceSymptoms: appliedVoiceSymptoms || voiceSymptoms,
+    });
+  }, [
+    diagnosis?.repairEtaAnalysis,
+    device,
+    selectedErrorCode,
+    etaAssistantsCount,
+    etaHasSpareParts,
+    appliedVoiceSymptoms,
+    voiceSymptoms,
+  ]);
+
+  // Live Stopwatch Effect
+  useEffect(() => {
+    if (isStopwatchRunning) {
+      stopwatchIntervalRef.current = setInterval(() => {
+        setStopwatchSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (stopwatchIntervalRef.current) {
+        clearInterval(stopwatchIntervalRef.current);
+      }
+    }
+    return () => {
+      if (stopwatchIntervalRef.current) {
+        clearInterval(stopwatchIntervalRef.current);
+      }
+    };
+  }, [isStopwatchRunning]);
+
+  const handleResetStopwatch = () => {
+    setIsStopwatchRunning(false);
+    setStopwatchSeconds(0);
+  };
+
+  const handleCopyEtaReport = () => {
+    const text = `=== BÁO CÁO DỰ BÁO THỜI GIAN SỬA CHỮA (AI REPAIR ETA) ===
+Thiết bị: ${device.code} - ${device.name} (${device.model})
+Mã sự cố: [${selectedErrorCode}]
+Thời gian ước tính hoàn tất (ETA): ~${repairEtaAnalysis.estimatedMinutes} phút
+Dự kiến bàn giao máy: ${repairEtaAnalysis.estimatedCompletionTime}
+Độ phức tạp kỹ thuật: ${repairEtaAnalysis.complexityLevel}
+Độ tin cậy AI: ${repairEtaAnalysis.confidenceScore}% (${repairEtaAnalysis.confidenceLevel})
+
+ĐỐI CHIẾU LỊCH SỬ XƯỞNG:
+- Số ca sửa tương tự: ${repairEtaAnalysis.historicalBenchmark.sampleCount} lần
+- Thời gian trung bình quá khứ: ${repairEtaAnalysis.historicalBenchmark.averageMinutes} phút
+- Nhanh nhất từng đạt: ${repairEtaAnalysis.historicalBenchmark.minMinutes} phút (${repairEtaAnalysis.historicalBenchmark.fastestTechnician || 'KTV'})
+- Lâu nhất từng ghi nhận: ${repairEtaAnalysis.historicalBenchmark.maxMinutes} phút
+- Linh kiện thường thay: ${repairEtaAnalysis.historicalBenchmark.mostFrequentPartsReplaced.join(', ')}
+
+PHÂN BỔ THỜI GIAN THEO GIAI ĐOẠN:
+${repairEtaAnalysis.stagedBreakdown.map((s) => `- ${s.stageName}: ~${s.durationMinutes} phút\n  Thao tác: ${s.description}`).join('\n')}
+
+LƯU Ý RỦI RO & MẸO RÚT NGẮN TIẾN ĐỘ:
+${repairEtaAnalysis.aiAccelerationTips.map((tip) => `⚡ ${tip}`).join('\n')}
+${repairEtaAnalysis.riskDelayFactors.map((r) => `⚠️ ${r}`).join('\n')}
+Thời gian khởi tạo: ${new Date().toLocaleTimeString('vi-VN')} - ${new Date().toLocaleDateString('vi-VN')}
+`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setEtaCopySuccess(true);
+      setTimeout(() => setEtaCopySuccess(false), 2500);
+    }
+  };
 
   // Keep selected error code synchronized if device active incident changes
   useEffect(() => {
@@ -1494,6 +1594,452 @@ Ngày trích xuất: ${new Date().toLocaleDateString('vi-VN')}
                       <div className="flex items-center gap-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 px-2.5 py-1 text-blue-300">
                         <BookOpen className="h-3.5 w-3.5" />
                         <span>{diagnosis.matchedDocsCount} tài liệu SOP/OEM</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ========================================================================= */}
+                  {/* AI REPAIR ETA & HISTORICAL BENCHMARK ANALYSIS HUB */}
+                  {/* ========================================================================= */}
+                  <div className="rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-cyan-950/30 via-slate-900 to-slate-950 p-5 shadow-2xl space-y-4">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-cyan-500/20 pb-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-600/20 border border-cyan-500/40 text-cyan-400">
+                          <Timer className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-base font-bold text-white flex items-center gap-1.5">
+                              <span>Ước Tính Thời Gian Sửa Chữa (AI Repair ETA)</span>
+                              <Sparkles className="h-4 w-4 text-cyan-400" />
+                            </h3>
+                            <span className="rounded bg-cyan-500/20 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-mono font-bold text-cyan-300">
+                              Mã Lỗi: [{selectedErrorCode}]
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-300">
+                            Phân tích đối chiếu dữ liệu lịch sử sự cố xưởng & cảm biến hiện trường để dự báo chính xác thời điểm hoàn tất.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Header Actions */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setShowEtaCustomizer((prev) => !prev)}
+                          className={`flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                            showEtaCustomizer
+                              ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300'
+                              : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
+                          }`}
+                          title="Tùy chỉnh số lượng KTV và điều kiện phụ tùng để AI tính lại ETA"
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          <span>Tùy Chỉnh Hiện Trường</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleCopyEtaReport}
+                          className="flex items-center gap-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-cyan-500/50 px-3 py-1.5 text-xs text-slate-300 hover:text-white transition font-mono"
+                          title="Sao chép báo cáo dự báo ETA gửi Quản lý ca trực"
+                        >
+                          {etaCopySuccess ? (
+                            <>
+                              <Check className="h-3.5 w-3.5 text-emerald-400" />
+                              <span className="text-emerald-300 font-bold">Đã chép!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3.5 w-3.5 text-cyan-400" />
+                              <span>Sao Chép ETA</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* HERO ETA STATS ROW */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {/* Big ETA Countdown Stat */}
+                      <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/40 p-3.5 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-xs text-cyan-300">
+                          <span className="font-semibold">Thời Gian Dự Kiến (ETA):</span>
+                          <Clock className="h-4 w-4 text-cyan-400" />
+                        </div>
+                        <div className="mt-2">
+                          <div className="text-2xl font-black text-white font-mono flex items-baseline gap-1">
+                            <span>~{repairEtaAnalysis.estimatedMinutes}</span>
+                            <span className="text-sm font-normal text-cyan-300">Phút</span>
+                          </div>
+                          <div className="text-[11px] text-cyan-200/90 font-mono mt-0.5">
+                            Dự kiến xong: <strong>{repairEtaAnalysis.estimatedCompletionTime}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Confidence Score */}
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-xs text-slate-400">
+                          <span>Độ Tin Cậy AI:</span>
+                          <Brain className="h-4 w-4 text-purple-400" />
+                        </div>
+                        <div className="mt-2">
+                          <div className="text-xl font-bold text-emerald-400 font-mono flex items-center gap-2">
+                            <span>{repairEtaAnalysis.confidenceScore}%</span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              {repairEtaAnalysis.confidenceLevel === 'VERY_HIGH' ? 'RẤT CAO' : 'CAO'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Dựa trên {repairEtaAnalysis.historicalBenchmark.sampleCount} ca sửa chữa trong lịch sử
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Complexity Level */}
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-xs text-slate-400">
+                          <span>Độ Phức Tạp:</span>
+                          <Wrench className="h-4 w-4 text-amber-400" />
+                        </div>
+                        <div className="mt-2">
+                          <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-bold font-mono border ${
+                            repairEtaAnalysis.complexityLevel === 'SIMPLE'
+                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                              : repairEtaAnalysis.complexityLevel === 'STANDARD'
+                              ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                              : 'bg-red-500/20 border-red-500/40 text-red-300'
+                          }`}>
+                            {repairEtaAnalysis.complexityLevel === 'SIMPLE'
+                              ? 'ĐƠN GIẢN (≤30p)'
+                              : repairEtaAnalysis.complexityLevel === 'STANDARD'
+                              ? 'TIÊU CHUẨN (30-50p)'
+                              : 'PHỨC TẠP (>50p)'}
+                          </span>
+                          <p className="text-[10px] text-slate-400 mt-1 truncate">
+                            {repairEtaAnalysis.stagedBreakdown.length} giai đoạn thao tác
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Historical Average MTTR Comparison */}
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-xs text-slate-400">
+                          <span>Trung Bình Lịch Sử:</span>
+                          <History className="h-4 w-4 text-cyan-400" />
+                        </div>
+                        <div className="mt-2">
+                          <div className="text-xl font-bold text-white font-mono">
+                            {repairEtaAnalysis.historicalBenchmark.averageMinutes} <span className="text-xs text-slate-400 font-normal">phút</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                            <span className="text-emerald-400 font-bold">Kỷ lục: {repairEtaAnalysis.historicalBenchmark.minMinutes}p</span>
+                            <span>•</span>
+                            <span className="text-slate-400">Tối đa: {repairEtaAnalysis.historicalBenchmark.maxMinutes}p</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* LIVE REPAIR STOPWATCH WIDGET */}
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl transition ${
+                          isStopwatchRunning
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse'
+                            : 'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}>
+                          <Hourglass className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white">Đồng Hồ Bấm Giờ Thao Tác Sửa Chữa (Live Stopwatch)</span>
+                            {isStopwatchRunning && (
+                              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-400">
+                            Bấm đếm giờ khi KTV bắt đầu thao tác tại máy để theo dõi tiến độ thực tế so với ETA của AI.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Stopwatch Controls & Counter */}
+                      <div className="flex items-center gap-3 self-end sm:self-center">
+                        <div className="font-mono text-xl font-black text-amber-300 bg-slate-900 border border-slate-800 px-3 py-1 rounded-xl">
+                          {Math.floor(stopwatchSeconds / 60).toString().padStart(2, '0')}:{(stopwatchSeconds % 60).toString().padStart(2, '0')}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsStopwatchRunning((prev) => !prev)}
+                          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition shadow-sm active:scale-95 ${
+                            isStopwatchRunning
+                              ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                          }`}
+                        >
+                          {isStopwatchRunning ? (
+                            <>
+                              <Pause className="h-3.5 w-3.5" />
+                              <span>Tạm Dừng</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-3.5 w-3.5" />
+                              <span>Bắt Đầu</span>
+                            </>
+                          )}
+                        </button>
+
+                        {stopwatchSeconds > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleResetStopwatch}
+                            className="p-1.5 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white transition"
+                            title="Đặt lại đồng hồ về 0"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Progress against ETA */}
+                    {stopwatchSeconds > 0 && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-mono text-slate-300">
+                          <span>
+                            Tiến độ thực tế:{' '}
+                            <strong className="text-amber-300">
+                              {(stopwatchSeconds / 60).toFixed(1)} / {repairEtaAnalysis.estimatedMinutes} phút
+                            </strong>{' '}
+                            ({Math.min(100, Math.round(((stopwatchSeconds / 60) / repairEtaAnalysis.estimatedMinutes) * 100))}%)
+                          </span>
+                          <span className={
+                            stopwatchSeconds / 60 > repairEtaAnalysis.estimatedMinutes
+                              ? 'text-red-400 font-bold'
+                              : 'text-emerald-400 font-bold'
+                          }>
+                            {stopwatchSeconds / 60 > repairEtaAnalysis.estimatedMinutes
+                              ? '⚠️ Đã vượt quá ETA dự kiến'
+                              : '🟢 Tiến độ trong tầm kiểm soát'}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                          <div
+                            className={`h-full transition-all duration-300 rounded-full ${
+                              stopwatchSeconds / 60 > repairEtaAnalysis.estimatedMinutes
+                                ? 'bg-red-500'
+                                : stopwatchSeconds / 60 > repairEtaAnalysis.estimatedMinutes * 0.8
+                                ? 'bg-amber-400'
+                                : 'bg-emerald-500'
+                            }`}
+                            style={{
+                              width: `${Math.min(100, ((stopwatchSeconds / 60) / repairEtaAnalysis.estimatedMinutes) * 100)}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ON-SITE CONDITIONS CUSTOMIZER DRAWER (Adjust Technicians & Parts) */}
+                    {showEtaCustomizer && (
+                      <div className="rounded-xl border border-cyan-500/30 bg-slate-950 p-3.5 space-y-3 animate-in fade-in">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                          <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                            <Users className="h-3.5 w-3.5" />
+                            <span>Điều Kiện Hiện Trường & Tài Nguyên Thực Tế</span>
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            AI tự động tái ước tính ETA khi thay đổi
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          {/* Technician Count Option */}
+                          <div>
+                            <label className="block text-slate-400 font-medium mb-1">
+                              Số lượng kỹ thuật viên xử lý:
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setEtaAssistantsCount(1)}
+                                className={`flex-1 rounded-lg border py-1.5 px-2 font-semibold transition ${
+                                  etaAssistantsCount === 1
+                                    ? 'bg-cyan-600/30 border-cyan-500 text-cyan-200'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                1 KTV Độc Lập
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEtaAssistantsCount(2)}
+                                className={`flex-1 rounded-lg border py-1.5 px-2 font-semibold transition ${
+                                  etaAssistantsCount === 2
+                                    ? 'bg-cyan-600/30 border-cyan-500 text-cyan-200'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                2 KTV Phối Hợp (-20% time)
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Spare Parts Availability Option */}
+                          <div>
+                            <label className="block text-slate-400 font-medium mb-1">
+                              Tình trạng phụ tùng thay thế:
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setEtaHasSpareParts(true)}
+                                className={`flex-1 rounded-lg border py-1.5 px-2 font-semibold transition ${
+                                  etaHasSpareParts
+                                    ? 'bg-emerald-600/30 border-emerald-500 text-emerald-200'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                Sẵn Trong Tủ Line (-8p)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEtaHasSpareParts(false)}
+                                className={`flex-1 rounded-lg border py-1.5 px-2 font-semibold transition ${
+                                  !etaHasSpareParts
+                                    ? 'bg-amber-600/30 border-amber-500 text-amber-200'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                Chưa Xuất Kho (+12p)
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* STAGED REPAIR DURATION TIMELINE (4 STAGES) */}
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Layers className="h-4 w-4 text-cyan-400" />
+                          <span>Phân Bổ Thời Gian Theo Giai Đoạn Thao Tác:</span>
+                        </h4>
+                        <span className="text-[11px] font-mono text-cyan-300">
+                          Tổng cộng: {repairEtaAnalysis.estimatedMinutes} phút
+                        </span>
+                      </div>
+
+                      {/* Visual Proportional Duration Bar */}
+                      <div className="h-3 w-full rounded-full overflow-hidden flex bg-slate-800 gap-0.5">
+                        {repairEtaAnalysis.stagedBreakdown.map((stage, idx) => {
+                          const percentage = Math.round((stage.durationMinutes / repairEtaAnalysis.estimatedMinutes) * 100);
+                          const colors = ['bg-indigo-500', 'bg-cyan-500', 'bg-amber-500', 'bg-emerald-500'];
+                          return (
+                            <div
+                              key={idx}
+                              title={`${stage.stageName}: ~${stage.durationMinutes} phút (${percentage}%)`}
+                              className={`${colors[idx % colors.length]} h-full transition-all hover:opacity-80`}
+                              style={{ width: `${percentage}%` }}
+                            ></div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Stage Cards Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                        {repairEtaAnalysis.stagedBreakdown.map((stage, idx) => {
+                          const badgeColors = [
+                            'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+                            'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+                            'bg-amber-500/20 text-amber-300 border-amber-500/30',
+                            'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+                          ];
+                          return (
+                            <div
+                              key={idx}
+                              className="rounded-xl border border-slate-800/90 bg-slate-950/60 p-3 space-y-1.5 text-xs"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-bold text-white truncate">{stage.stageName}</span>
+                                <span className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-full border ${badgeColors[idx % badgeColors.length]}`}>
+                                  ~{stage.durationMinutes} phút
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">
+                                {stage.description}
+                              </p>
+                              {stage.recommendedTools && stage.recommendedTools.length > 0 && (
+                                <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 pt-1 border-t border-slate-800/60">
+                                  <Wrench className="h-3 w-3 text-slate-500 shrink-0" />
+                                  <span className="truncate">{stage.recommendedTools.join(' • ')}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* HISTORICAL BENCHMARK & RISK/TIPS ROW */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
+                      {/* Left: Historical Correlation Rationale */}
+                      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-2">
+                        <div className="flex items-center gap-2 text-cyan-400 font-bold font-mono">
+                          <History className="h-4 w-4" />
+                          <span>Đối Chiếu Dữ Liệu Lịch Sử Sửa Chữa Xưởng:</span>
+                        </div>
+                        <p className="text-slate-300 leading-relaxed text-[11px]">
+                          {repairEtaAnalysis.historicalCorrelationRationale}
+                        </p>
+                        <div className="pt-2 border-t border-slate-800/80 space-y-1">
+                          <span className="text-[11px] text-slate-400 font-semibold">Các yếu tố AI phân tích:</span>
+                          <ul className="list-disc list-inside text-[11px] text-slate-300 space-y-0.5">
+                            {repairEtaAnalysis.influencingFactors.map((factor, i) => (
+                              <li key={i}>{factor}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      {/* Right: AI Speed-Up Tips & Delay Risks */}
+                      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-2.5">
+                        <div>
+                          <div className="flex items-center gap-1.5 text-emerald-400 font-bold mb-1">
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span>Mẹo AI Rút Ngắn Thời Gian Sửa Chữa:</span>
+                          </div>
+                          <ul className="space-y-1 text-[11px] text-emerald-200/90">
+                            {repairEtaAnalysis.aiAccelerationTips.map((tip, i) => (
+                              <li key={i} className="flex items-start gap-1.5">
+                                <span className="text-emerald-400 font-bold">⚡</span>
+                                <span>{tip}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800/80">
+                          <div className="flex items-center gap-1.5 text-amber-400 font-bold mb-1">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <span>Rủi Ro Tiềm Ẩn Gây Trễ Hạn (Từ Lịch Sử):</span>
+                          </div>
+                          <ul className="space-y-1 text-[11px] text-amber-200/90">
+                            {repairEtaAnalysis.riskDelayFactors.map((risk, i) => (
+                              <li key={i} className="flex items-start gap-1.5">
+                                <span className="text-amber-400 font-bold">•</span>
+                                <span>{risk}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -1,1 +1,104 @@
 @import "tailwindcss";
+
+/* ================= HIGH CONTRAST MODE (Industrial Anti-Glare & Low-Light) ================= */
+html.high-contrast,
+.high-contrast {
+  color-scheme: dark;
+}
+
+.high-contrast body,
+.high-contrast .min-h-screen {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+.high-contrast header {
+  background-color: #050505 !important;
+  border-bottom: 2px solid #eab308 !important;
+}
+
+/* Elevate borders and contrast on cards */
+.high-contrast .border-slate-800,
+.high-contrast .border-slate-700,
+.high-contrast .border-slate-800\/80,
+.high-contrast .border-slate-800\/50,
+.high-contrast .border-slate-800\/40 {
+  border-color: #cbd5e1 !important;
+  border-width: 1.5px !important;
+}
+
+.high-contrast .bg-slate-950,
+.high-contrast .bg-slate-950\/90,
+.high-contrast .bg-slate-950\/80,
+.high-contrast .bg-slate-950\/70,
+.high-contrast .bg-slate-950\/60,
+.high-contrast .bg-slate-950\/40,
+.high-contrast .bg-slate-900,
+.high-contrast .bg-slate-900\/90,
+.high-contrast .bg-slate-900\/80,
+.high-contrast .bg-slate-900\/70,
+.high-contrast .bg-slate-900\/60,
+.high-contrast .bg-slate-900\/50 {
+  background-color: #080808 !important;
+}
+
+/* High contrast text overrides */
+.high-contrast .text-slate-500,
+.high-contrast .text-slate-400 {
+  color: #e2e8f0 !important;
+  font-weight: 500 !important;
+}
+
+.high-contrast .text-slate-300,
+.high-contrast .text-slate-200,
+.high-contrast .text-slate-100 {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+/* Crisp interactive form controls */
+.high-contrast input,
+.high-contrast select,
+.high-contrast textarea {
+  background-color: #000000 !important;
+  border: 2px solid #ffffff !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.high-contrast input:focus,
+.high-contrast select:focus,
+.high-contrast textarea:focus {
+  border-color: #facc15 !important;
+  outline: 2px solid #facc15 !important;
+}
+
+/* Saturated high-contrast badges & status indicators */
+.high-contrast .text-emerald-400,
+.high-contrast .text-emerald-300 {
+  color: #4ade80 !important;
+  font-weight: 700 !important;
+}
+
+.high-contrast .text-amber-400,
+.high-contrast .text-amber-300 {
+  color: #fde047 !important;
+  font-weight: 700 !important;
+}
+
+.high-contrast .text-red-400,
+.high-contrast .text-rose-400 {
+  color: #f87171 !important;
+  font-weight: 700 !important;
+}
+
+.high-contrast .text-cyan-400,
+.high-contrast .text-cyan-300 {
+  color: #38bdf8 !important;
+  font-weight: 700 !important;
+}
+
+/* Button borders in high contrast */
+.high-contrast button {
+  border-width: 1.5px;
+}

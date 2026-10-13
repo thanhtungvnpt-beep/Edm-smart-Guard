@@ -97,7 +97,7 @@ export default function App() {
   >('devices');
 
   // Filters
-  const [deviceFilter, setDeviceFilter] = useState<'ALL' | 'ALARM' | 'RUNNING' | 'WIRE_EDM' | 'SINKER_EDM'>('ALL');
+  const [deviceFilter, setDeviceFilter] = useState<'ALL' | 'ALARM' | 'RUNNING' | 'MAINTENANCE' | 'IDLE' | 'WIRE_EDM' | 'SINKER_EDM'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilterCriteria>(DEFAULT_ADVANCED_FILTERS);
@@ -152,6 +152,41 @@ export default function App() {
     } else {
       showToast('Đã TẮT thông báo bảo dưỡng dự đoán toàn xưởng (Chế độ yên lặng hạm đội).');
     }
+  };
+
+  // High Contrast Mode for Workshop Glare and Dim Light
+  const [isHighContrast, setIsHighContrast] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('edm_high_contrast_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (isHighContrast) {
+        document.documentElement.classList.add('high-contrast');
+      } else {
+        document.documentElement.classList.remove('high-contrast');
+      }
+    } catch {}
+  }, [isHighContrast]);
+
+  const toggleHighContrast = () => {
+    setIsHighContrast((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('edm_high_contrast_mode', String(next));
+      } catch {}
+      soundManager.playBeep();
+      showToast(
+        next
+          ? '👁️ [High Contrast] Đã BẬT chế độ tương phản cao cho xưởng thiếu sáng & chói sáng'
+          : '👁️ [High Contrast] Đã TẮT chế độ tương phản cao'
+      );
+      return next;
+    });
   };
 
   // Dashboard Top-Level Cards Layout Order (Drag-and-Drop Customizable)
@@ -539,6 +574,14 @@ export default function App() {
           return;
         }
 
+        // Alt + C: Toggle High Contrast Mode (Anti-Glare / Low-Light Workshop)
+        if (e.key === 'c' || e.key === 'C') {
+          e.preventDefault();
+          recordShortcut('alt_c');
+          toggleHighContrast();
+          return;
+        }
+
         // Alt + Q: Fast Open Physical Machine QR Code Scanner
         if (e.key === 'q' || e.key === 'Q') {
           e.preventDefault();
@@ -622,7 +665,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isMuted, recordShortcut, devices, emergencyDevice]);
+  }, [isMuted, recordShortcut, devices, emergencyDevice, isHighContrast]);
 
   // --- TRIGGER EDM ALARM ---
   const handleTriggerAlarm = async (deviceId: string, errorCode: string = 'E-102', errorTitle: string = 'Sự cố đứt dây & sụt áp phóng điện') => {
@@ -721,6 +764,42 @@ export default function App() {
     }
   };
 
+  const handleSetDeviceStatus = async (
+    deviceId: string,
+    status: Device['status'],
+    note?: string
+  ) => {
+    try {
+      const res = await fetch(`/api/devices/${deviceId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          technicianName: 'Kỹ thuật viên (Khẩu lệnh giọng nói)',
+          note: note || 'Cập nhật qua khẩu lệnh rảnh tay Voice Assistant',
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.device) {
+        setDevices((prev) =>
+          prev.map((d) => (d.id === data.device.id ? { ...d, ...data.device } : d))
+        );
+        showToast(`🎙️ ${data.message}`);
+        soundManager.playBeep();
+        fetchAllData();
+      } else {
+        showToast(data.message || 'Cập nhật trạng thái thất bại');
+      }
+    } catch (e) {
+      console.error('Error updating status via voice:', e);
+      // Fallback local update
+      setDevices((prev) =>
+        prev.map((d) => (d.id === deviceId ? { ...d, status } : d))
+      );
+      showToast(`🎙️ Đã cập nhật trạng thái máy sang ${status} (Cục bộ)`);
+    }
+  };
+
   // Filtered devices list with both basic and advanced telemetry filters
   const filteredDevices = devices.filter((d) => {
     const term = searchTerm.toLowerCase().trim();
@@ -745,6 +824,8 @@ export default function App() {
     let matchesFilter = true;
     if (deviceFilter === 'ALARM') matchesFilter = d.status === 'ALARM_STOPPED';
     else if (deviceFilter === 'RUNNING') matchesFilter = d.status === 'RUNNING';
+    else if (deviceFilter === 'MAINTENANCE') matchesFilter = d.status === 'MAINTENANCE';
+    else if (deviceFilter === 'IDLE') matchesFilter = d.status === 'IDLE';
     else if (deviceFilter === 'WIRE_EDM') matchesFilter = d.type === 'WIRE_EDM';
     else if (deviceFilter === 'SINKER_EDM') matchesFilter = d.type === 'SINKER_EDM';
 
@@ -807,7 +888,7 @@ export default function App() {
   }, [advancedFilters]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans transition-colors duration-200 ${isHighContrast ? 'high-contrast' : ''}`}>
       {/* Top Navbar */}
       <Header
         stats={stats}
@@ -831,6 +912,8 @@ export default function App() {
         }}
         onOpenShortcuts={() => setShowKeyboardShortcuts(true)}
         shortcutUsageCount={shortcutTelemetry.totalCount}
+        isHighContrast={isHighContrast}
+        onToggleHighContrast={toggleHighContrast}
       />
 
       {/* Offline Connectivity Banner */}
@@ -902,6 +985,14 @@ export default function App() {
                 onChange={(val) => setSearchTerm(val)}
                 devices={devices}
                 onToast={(msg) => showToast(msg)}
+                onSetDeviceStatus={handleSetDeviceStatus}
+                onOpenDiagnosis={(device) => setDiagnosisDevice(device)}
+                onOpenMachineDetails={(device) => setDetailsDevice(device)}
+                onOpenQRScanner={() => setShowQRScanner(true)}
+                onToggleHighContrast={toggleHighContrast}
+                isHighContrast={isHighContrast}
+                onSelectFilter={(f) => setDeviceFilter(f)}
+                onOpenShortcuts={() => setShowKeyboardShortcuts(true)}
               />
 
               {/* Status Filter Buttons and QR Scanner */}
@@ -935,6 +1026,16 @@ export default function App() {
                   }`}
                 >
                   Sự Cố Dừng ({devices.filter((d) => d.status === 'ALARM_STOPPED').length})
+                </button>
+                <button
+                  onClick={() => setDeviceFilter('MAINTENANCE')}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                    deviceFilter === 'MAINTENANCE'
+                      ? 'bg-blue-600 text-white font-bold'
+                      : 'text-blue-400 hover:bg-blue-500/10'
+                  }`}
+                >
+                  Bảo Trì ({devices.filter((d) => d.status === 'MAINTENANCE').length})
                 </button>
                 <button
                   onClick={() => setDeviceFilter('RUNNING')}

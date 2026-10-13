@@ -35,6 +35,38 @@ export interface HistoryCorrelationInsight {
   preventiveActionAdvised?: string;
 }
 
+export interface RepairStageEta {
+  stageName: string;
+  durationMinutes: number;
+  description: string;
+  recommendedTools?: string[];
+}
+
+export interface HistoricalRepairBenchmark {
+  sampleCount: number;
+  averageMinutes: number;
+  minMinutes: number;
+  maxMinutes: number;
+  fastestTechnician?: string;
+  mostFrequentPartsReplaced: string[];
+  pastOccurrencesDates: string[];
+}
+
+export interface RepairEtaAnalysis {
+  estimatedMinutes: number;
+  estimatedCompletionTime: string;
+  confidenceScore: number;
+  confidenceLevel: 'VERY_HIGH' | 'HIGH' | 'MODERATE';
+  complexityLevel: 'SIMPLE' | 'STANDARD' | 'COMPLEX' | 'CRITICAL';
+  historicalBenchmark: HistoricalRepairBenchmark;
+  stagedBreakdown: RepairStageEta[];
+  influencingFactors: string[];
+  riskDelayFactors: string[];
+  aiAccelerationTips: string[];
+  historicalCorrelationRationale: string;
+  generatedAt: string;
+}
+
 export interface AIDiagnosis {
   rootCause: string;
   confidenceScore: number;
@@ -48,6 +80,7 @@ export interface AIDiagnosis {
   matchedDocsCount: number;
   generatedAt: string;
   historyCorrelation?: HistoryCorrelationInsight;
+  repairEtaAnalysis?: RepairEtaAnalysis;
 }
 
 export interface HumanResolution {

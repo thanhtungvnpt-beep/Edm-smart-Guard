@@ -27,6 +27,7 @@ import {
   FileSpreadsheet,
   RefreshCw,
   Info,
+  Contrast,
 } from 'lucide-react';
 import {
   ShortcutTelemetryState,
@@ -169,6 +170,14 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       desc: 'Tự động mở Trợ Lý AI Chẩn Đoán cho thiết bị đang bị lỗi hoặc cảnh báo gần nhất để xử lý cấp bách',
       icon: Sparkles,
       color: 'text-rose-400',
+    },
+    {
+      id: 'alt_c',
+      key: 'Alt + C',
+      title: 'Tương Phản Cao (High Contrast)',
+      desc: 'Bật / Tắt chế độ tương phản cao hỗ trợ KTV làm việc khi xưởng thiếu sáng hoặc chói sáng',
+      icon: Contrast,
+      color: 'text-yellow-400',
     },
     {
       id: 'alt_q',
