@@ -30,6 +30,7 @@ export type VoiceActionType =
   | 'SET_FILTER'
   | 'OPEN_QR'
   | 'OPEN_SHORTCUTS'
+  | 'OPEN_RCA'
   | 'SEARCH';
 
 export interface ParsedVoiceAction {
@@ -55,6 +56,7 @@ interface VoiceSearchBarProps {
   isHighContrast?: boolean;
   onSelectFilter?: (filter: any) => void;
   onOpenShortcuts?: () => void;
+  onOpenRCA?: (deviceId?: string, errorCode?: string) => void;
 }
 
 // Smart device resolver for EDM machines: matches codes like "EDM-01", "EDM-W01", "W01", "máy 1", "Makino", etc.
@@ -234,6 +236,29 @@ export function parseVoiceAction(transcript: string, devices: Device[]): ParsedV
     };
   }
 
+  // 5.5 Action: AI Root Cause Analysis ("Phân tích nguyên nhân gốc rễ", "Mở module RCA", "Phân tích dừng máy")
+  if (
+    text.includes('gốc rễ') ||
+    text.includes('root cause') ||
+    text.includes('rca') ||
+    (text.includes('nguyên nhân') && (text.includes('dừng') || text.includes('sự cố') || text.includes('lỗi'))) ||
+    text.includes('phân tích sự cố')
+  ) {
+    const dev =
+      resolveDeviceFromVoice(text, devices) ||
+      devices.find((d) => d.status === 'ALARM_STOPPED') ||
+      devices.find((d) => d.status === 'WARNING') ||
+      devices[0];
+
+    return {
+      type: 'OPEN_RCA',
+      title: dev ? `Phân Tích Nguyên Nhân Gốc Rễ ${dev.code}` : 'Mở Module AI Phân Tích Nguyên Nhân Gốc Rễ',
+      description: 'Khởi chạy phân tích 5-Whys, Ishikawa và giải pháp khắc phục sự cố dừng máy',
+      targetDevice: dev || undefined,
+      rawTranscript: transcript,
+    };
+  }
+
   // 6. Action: High Contrast Mode ("Bật chế độ tương phản cao", "Tắt tương phản cao", "High contrast")
   if (
     text.includes('tương phản') ||
@@ -335,6 +360,7 @@ export const VoiceSearchBar: React.FC<VoiceSearchBarProps> = ({
   isHighContrast,
   onSelectFilter,
   onOpenShortcuts,
+  onOpenRCA,
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [interimText, setInterimText] = useState('');
@@ -460,6 +486,15 @@ export const VoiceSearchBar: React.FC<VoiceSearchBarProps> = ({
           onOpenShortcuts();
           if (onToast) {
             onToast(`⌨️ [Giọng Nói] Đã mở Bảng Phím Tắt`);
+          }
+        }
+        break;
+
+      case 'OPEN_RCA':
+        if (onOpenRCA) {
+          onOpenRCA(action.targetDevice?.id, action.targetDevice?.activeIncident?.errorCode || 'E-102');
+          if (onToast) {
+            onToast(`⚡ [Giọng Nói] Đã mở Module AI Phân Tích Nguyên Nhân Gốc Rễ (RCA)`);
           }
         }
         break;

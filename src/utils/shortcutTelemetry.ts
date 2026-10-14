@@ -37,6 +37,18 @@ export const SHORTCUT_DEFINITIONS: Record<string, { combo: string; action: strin
     category: 'navigation',
     description: 'Lưu trữ, tra cứu và lọc hồ sơ bảo dưỡng, sửa chữa và thay thế linh kiện',
   },
+  alt_7: {
+    combo: 'Alt + 7',
+    action: 'Chuyển tab Phân Tích Gốc Rễ AI (RCA)',
+    category: 'navigation',
+    description: 'Khởi chạy Module AI phân tích nguyên nhân gốc rễ sự cố dừng máy & đề xuất giải pháp sửa chữa',
+  },
+  alt_8: {
+    combo: 'Alt + 8',
+    action: 'Chuyển tab Quản Lý Kho Phụ Tùng',
+    category: 'navigation',
+    description: 'Theo dõi tồn kho linh kiện, cảnh báo thiếu hụt vật tư thay thế và tạo đơn đặt hàng khẩn cấp',
+  },
   shift_r: {
     combo: 'Shift + R / Alt + R',
     action: 'Làm Mới & Đồng Bộ Dữ Liệu Xưởng',

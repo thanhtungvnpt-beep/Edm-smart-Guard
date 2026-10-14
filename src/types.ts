@@ -342,3 +342,136 @@ export interface PushNotificationFilterConfig {
   ignoredDeviceCodes: string[];
 }
 
+export interface RootCauseCategoryItem {
+  category: 'MAN' | 'MACHINE' | 'MATERIAL' | 'METHOD' | 'MEASUREMENT' | 'ENVIRONMENT';
+  categoryLabel: string;
+  causes: string[];
+  impactScore: number; // 0 - 100
+}
+
+export interface WhyStep {
+  level: number; // 1 to 5
+  question: string;
+  answer: string;
+  evidence: string;
+}
+
+export interface StoppageActionStep {
+  stepNumber: number;
+  phase: 'IMMEDIATE_QUICK_FIX' | 'CORRECTIVE_REPAIR' | 'LONG_TERM_PREVENTION';
+  actionTitle: string;
+  actionDetail: string;
+  estimatedMinutes: number;
+  requiredTools: string[];
+  requiredParts?: string[];
+  safetyNotice?: string;
+  difficulty: 'EASY' | 'MEDIUM' | 'EXPERT';
+}
+
+export interface RootCauseAnalysisResult {
+  id: string;
+  deviceId: string;
+  deviceCode: string;
+  deviceName: string;
+  targetErrorCode?: string;
+  targetIncidentSummary: string;
+  analyzedAt: string;
+  analyzedRecordsCount: number;
+  primaryRootCause: string;
+  confidenceScore: number; // 0 - 100%
+  recurrenceProbability: number; // 0 - 100%
+  failureMechanismDeepDive: string;
+  ishikawaCategories: RootCauseCategoryItem[];
+  fiveWhysChain: WhyStep[];
+  quickFixSolution: {
+    summary: string;
+    estimatedMinutes: number;
+    steps: string[];
+  };
+  permanentRepairSolution: {
+    summary: string;
+    estimatedMinutes: number;
+    steps: string[];
+    preventionPolicy: string;
+  };
+  actionSteps: StoppageActionStep[];
+  recommendedParts: {
+    name: string;
+    partNumber: string;
+    urgency: 'IMMEDIATE' | 'NEXT_SHIFT' | 'SCHEDULED';
+    inStockEstimate?: number;
+  }[];
+  criticalSafetyGuidelines: string[];
+  historicalPrecedents: {
+    recordId: string;
+    date: string;
+    technician: string;
+    similarityScore: number;
+    lessonLearned: string;
+  }[];
+}
+
+export type SparePartCategory =
+  | 'FILTRATION'
+  | 'POWER_FEED_CONTACTS'
+  | 'WIRE_DRIVE'
+  | 'DIELECTRIC_FLUID'
+  | 'MECHANICAL_AXIS'
+  | 'PNEUMATIC_VALVES'
+  | 'ELECTRONICS'
+  | 'CONSUMABLES';
+
+export interface SparePart {
+  id: string;
+  partNumber: string; // SKU e.g. FLT-EDM-300
+  name: string;
+  category: SparePartCategory;
+  categoryLabel: string;
+  compatibleModels: string[];
+  currentStock: number;
+  minSafetyStock: number;
+  unit: string;
+  unitPriceUSD: number;
+  binLocation: string; // e.g. "Kệ A2-03 (Kho Cơ Điện)"
+  leadTimeDays: number;
+  supplier: string;
+  lastRestockDate: string;
+  status: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+  criticality: 'CRITICAL' | 'HIGH' | 'STANDARD';
+  description: string;
+  specifications?: string;
+}
+
+export interface StockTransaction {
+  id: string;
+  partId: string;
+  partNumber: string;
+  partName: string;
+  type: 'ISSUE' | 'RECEIPT' | 'ADJUST' | 'REQUISITION';
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  timestamp: string;
+  technicianName: string;
+  targetDeviceId?: string;
+  targetDeviceCode?: string;
+  reason: string;
+  workOrderOrIncidentId?: string;
+}
+
+export interface PurchaseOrderRequest {
+  id: string;
+  partId: string;
+  partNumber: string;
+  partName: string;
+  quantityRequested: number;
+  urgency: 'EMERGENCY_DOWNTIME' | 'RESTOCK_WARNING' | 'SCHEDULED_PM';
+  requestedBy: string;
+  requestedAt: string;
+  status: 'PENDING_APPROVAL' | 'ORDERED' | 'RECEIVED' | 'REJECTED';
+  estimatedArrivalDate: string;
+  supplier: string;
+  notes?: string;
+  targetDeviceCode?: string;
+}
+

@@ -18,6 +18,8 @@ import {
   Keyboard,
   Wrench,
   Contrast,
+  Sparkles,
+  Package,
 } from 'lucide-react';
 import { FactoryStats } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -25,8 +27,8 @@ import { SystemDocumentationModal } from './SystemDocumentationModal';
 
 interface HeaderProps {
   stats: FactoryStats | null;
-  activeTab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history';
-  setActiveTab: (tab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history') => void;
+  activeTab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history' | 'root-cause-analysis' | 'spare-parts';
+  setActiveTab: (tab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history' | 'root-cause-analysis' | 'spare-parts') => void;
   isMuted: boolean;
   toggleMute: () => void;
   pushPermission: NotificationPermission;
@@ -403,6 +405,53 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               Alt+6
+            </kbd>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('root-cause-analysis')}
+            title="Module AI Phân Tích Nguyên Nhân Gốc Rễ (Phím tắt: Alt+7)"
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
+              activeTab === 'root-cause-analysis'
+                ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 shadow-sm font-bold'
+                : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className="h-4 w-4 text-cyan-400" />
+            <span>Phân Tích Gốc Rễ (RCA AI)</span>
+            <kbd
+              className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
+                activeTab === 'root-cause-analysis'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold'
+                  : 'bg-slate-900 text-slate-500 border border-slate-800'
+              }`}
+            >
+              Alt+7
+            </kbd>
+            <span className="rounded bg-gradient-to-r from-cyan-500/20 to-purple-500/20 px-1.5 py-0.2 text-[10px] font-bold text-cyan-300 border border-cyan-500/30">
+              AI 4.0
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('spare-parts')}
+            title="Quản Lý Kho Phụ Tùng & Cảnh Báo Thiếu Hụt (Phím tắt: Alt+8)"
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
+              activeTab === 'spare-parts'
+                ? 'bg-blue-950/80 text-cyan-300 border border-cyan-500/40 shadow-sm font-bold'
+                : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+            }`}
+          >
+            <Package className="h-4 w-4 text-cyan-400" />
+            <span>Kho Phụ Tùng</span>
+            <kbd
+              className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
+                activeTab === 'spare-parts'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold'
+                  : 'bg-slate-900 text-slate-500 border border-slate-800'
+              }`}
+            >
+              Alt+8
             </kbd>
           </button>
         </nav>

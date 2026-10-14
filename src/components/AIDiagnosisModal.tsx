@@ -50,8 +50,15 @@ import {
   Users,
   PackageCheck,
   Hourglass,
+  Package,
+  ShoppingCart,
+  ArrowDownRight,
+  AlertOctagon,
+  MapPin,
+  Truck,
+  ArrowRight,
 } from 'lucide-react';
-import { AIDiagnosis, Device, RepairEtaAnalysis } from '../types';
+import { AIDiagnosis, Device, RepairEtaAnalysis, SparePart } from '../types';
 import { getDeviceMaintenanceHistory } from '../utils/maintenanceHistoryData';
 import {
   get30DayErrorCodeFrequency,
@@ -59,11 +66,19 @@ import {
   ErrorCodeDayBucket,
 } from '../utils/errorCodeFrequency';
 import { estimateRepairEtaWithAI, EtaEstimationOptions } from '../utils/repairEtaEstimator';
+import {
+  getStoredSpareParts,
+  matchRecommendedPartToInventory,
+  createQuickPurchaseOrder,
+  issueSparePart,
+} from '../utils/sparePartsStorage';
 
 interface AIDiagnosisModalProps {
   device: Device | null;
   onClose: () => void;
   onOpenRepairReport: (device: Device) => void;
+  onOpenRCA?: (deviceId?: string, errorCode?: string) => void;
+  onOpenInventory?: (partIdOrSku?: string) => void;
 }
 
 // Preset real-world symptoms commonly observed during EDM breakdown
@@ -79,6 +94,8 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
   device,
   onClose,
   onOpenRepairReport,
+  onOpenRCA,
+  onOpenInventory,
 }) => {
   if (!device) return null;
 
@@ -139,6 +156,97 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
   const [isStopwatchRunning, setIsStopwatchRunning] = useState<boolean>(false);
   const [stopwatchSeconds, setStopwatchSeconds] = useState<number>(0);
   const stopwatchIntervalRef = useRef<any>(null);
+
+  // Spare Parts Inventory State & Real-time Shortage Alerts
+  const [sparePartsList, setSparePartsList] = useState<SparePart[]>(() => getStoredSpareParts());
+  const [inventoryActionNotice, setInventoryActionNotice] = useState<string | null>(null);
+
+  // Sync inventory when modal is opened
+  useEffect(() => {
+    setSparePartsList(getStoredSpareParts());
+  }, []);
+
+  // Map each recommended part to inventory item & stock status
+  const inventoryMatches = useMemo(() => {
+    if (!diagnosis || !diagnosis.recommendedParts || diagnosis.recommendedParts.length === 0) {
+      return [];
+    }
+    return diagnosis.recommendedParts.map((partStr) => {
+      const match = matchRecommendedPartToInventory(partStr, sparePartsList);
+      return {
+        originalStr: partStr,
+        ...match,
+      };
+    });
+  }, [diagnosis, sparePartsList]);
+
+  const outOfStockParts = useMemo(() => {
+    return inventoryMatches.filter((m) => m.stockStatus === 'OUT_OF_STOCK');
+  }, [inventoryMatches]);
+
+  const lowStockParts = useMemo(() => {
+    return inventoryMatches.filter((m) => m.stockStatus === 'LOW_STOCK');
+  }, [inventoryMatches]);
+
+  const inStockParts = useMemo(() => {
+    return inventoryMatches.filter((m) => m.stockStatus === 'IN_STOCK');
+  }, [inventoryMatches]);
+
+  // Bulk order missing parts
+  const handleOrderAllMissingParts = () => {
+    if (outOfStockParts.length === 0) return;
+    let count = 0;
+    outOfStockParts.forEach((m) => {
+      if (m.part) {
+        createQuickPurchaseOrder(
+          m.part.id,
+          m.part.minSafetyStock * 2 || 4,
+          'Kỹ thuật viên ca trực',
+          device.code,
+          `Đặt khẩn cấp từ AI Diagnosis cho máy ${device.code} (${device.name})`
+        );
+        count++;
+      }
+    });
+    setSparePartsList(getStoredSpareParts());
+    setInventoryActionNotice(`✓ Đã tạo đơn đặt hàng khẩn cấp (PO) cho ${count} linh kiện thiếu hụt!`);
+    setTimeout(() => setInventoryActionNotice(null), 5000);
+  };
+
+  // Quick issue part (-1) for this machine
+  const handleQuickIssuePart = (part: SparePart) => {
+    const res = issueSparePart(
+      part.id,
+      1,
+      'Kỹ thuật viên sửa chữa',
+      device.code,
+      `Xuất cho sự cố ${device.activeIncident?.errorCode || 'EDM'} trên máy ${device.code}`
+    );
+    if (res.success) {
+      setSparePartsList(getStoredSpareParts());
+      setInventoryActionNotice(`✓ ${res.message}`);
+      setTimeout(() => setInventoryActionNotice(null), 4000);
+    } else {
+      setInventoryActionNotice(`❌ ${res.message}`);
+      setTimeout(() => setInventoryActionNotice(null), 4000);
+    }
+  };
+
+  // Quick single part PO order
+  const handleQuickOrderSinglePart = (part: SparePart) => {
+    const res = createQuickPurchaseOrder(
+      part.id,
+      part.minSafetyStock * 2 || 3,
+      'Kỹ thuật viên ca trực',
+      device.code,
+      `Yêu cầu đặt khẩn cấp từ AI Diagnosis cho máy ${device.code}`
+    );
+    if (res.success) {
+      setSparePartsList(getStoredSpareParts());
+      setInventoryActionNotice(`✓ ${res.message}`);
+      setTimeout(() => setInventoryActionNotice(null), 5000);
+    }
+  };
 
   // Computed AI Repair ETA Analysis
   const repairEtaAnalysis: RepairEtaAnalysis = useMemo(() => {
@@ -1920,6 +2028,16 @@ Ngày trích xuất: ${new Date().toLocaleDateString('vi-VN')}
                                 Chưa Xuất Kho (+12p)
                               </button>
                             </div>
+
+                            {/* Inventory Shortage Warning Badge within ETA */}
+                            {outOfStockParts.length > 0 && (
+                              <div className="mt-2 rounded-lg bg-red-950/40 border border-red-500/40 p-2 text-[11px] text-red-300 flex items-center gap-1.5 animate-pulse">
+                                <AlertOctagon className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                                <span>
+                                  🚨 Cảnh báo kho: Có {outOfStockParts.length} linh kiện hết hàng trong kho. Kỹ thuật viên không thể bắt đầu thay thế ngay (chờ giao hàng ~{outOfStockParts[0].leadTimeDays} ngày).
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2110,41 +2228,300 @@ Ngày trích xuất: ${new Date().toLocaleDateString('vi-VN')}
                   </div>
 
                   {/* REQUIRED TOOLS & SPARE PARTS */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Tools */}
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                      <h4 className="flex items-center gap-2 text-xs font-bold uppercase text-slate-300 tracking-wider mb-2.5">
-                        <Wrench className="h-4 w-4 text-amber-400" />
-                        <span>Dụng Cụ Cần Chuẩn Bị</span>
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {diagnosis.requiredTools.map((t, idx) => (
-                          <span
-                            key={idx}
-                            className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs text-slate-200 border border-slate-700"
-                          >
-                            🔧 {t}
+                  {/* REQUIRED TOOLS */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+                    <h4 className="flex items-center gap-2 text-xs font-bold uppercase text-slate-300 tracking-wider mb-2.5">
+                      <Wrench className="h-4 w-4 text-amber-400" />
+                      <span>Dụng Cụ Cần Chuẩn Bị</span>
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {diagnosis.requiredTools.map((t, idx) => (
+                        <span
+                          key={idx}
+                          className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs text-slate-200 border border-slate-700"
+                        >
+                          🔧 {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* REAL-TIME SPARE PARTS INVENTORY & SHORTAGE ALERTS MODULE */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 space-y-4">
+                    {/* Header with Title & Real-Time Stock Status Badge */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-800/80 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 shrink-0">
+                          <Package className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-bold uppercase text-white tracking-wider">
+                              Vật Tư & Phụ Tùng Dự Phòng (Khả Dụng Trong Kho)
+                            </h4>
+                            <span className="rounded bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.2 text-[10px] font-mono text-cyan-300 font-bold hidden sm:inline-block">
+                              Live Inventory Check
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Đối chiếu linh kiện AI đề xuất với lượng tồn thực tế trong kho phụ tùng xưởng
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Overall Stock Status Indicator */}
+                      <div className="shrink-0 flex items-center gap-2">
+                        {outOfStockParts.length > 0 ? (
+                          <span className="rounded-full bg-red-500/20 border border-red-500/50 px-3 py-1 text-[11px] font-mono font-black text-red-300 animate-pulse flex items-center gap-1.5 shadow-md shadow-red-950/40">
+                            <AlertOctagon className="h-3.5 w-3.5" />
+                            CÓ {outOfStockParts.length} MÃ HẾT HÀNG!
                           </span>
-                        ))}
+                        ) : lowStockParts.length > 0 ? (
+                          <span className="rounded-full bg-amber-500/20 border border-amber-500/50 px-3 py-1 text-[11px] font-mono font-bold text-amber-300 flex items-center gap-1.5">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            {lowStockParts.length} MÃ DƯỚI NGƯỠNG AN TOÀN
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-[11px] font-mono font-semibold text-emerald-300 flex items-center gap-1.5">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                            ĐỦ VẬT TƯ THAY THẾ
+                          </span>
+                        )}
+
+                        {onOpenInventory && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenInventory()}
+                            className="rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                            title="Mở tab Quản Lý Kho Phụ Tùng"
+                          >
+                            <Package className="h-3.5 w-3.5 text-cyan-400" />
+                            <span className="hidden sm:inline">Mở Kho</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {/* Spare Parts */}
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                      <h4 className="flex items-center gap-2 text-xs font-bold uppercase text-slate-300 tracking-wider mb-2.5">
-                        <Zap className="h-4 w-4 text-cyan-400" />
-                        <span>Vật Tư / Phụ Tùng Dự Phòng</span>
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {diagnosis.recommendedParts.map((p, idx) => (
-                          <span
-                            key={idx}
-                            className="rounded-lg bg-cyan-950/50 border border-cyan-500/30 px-2.5 py-1 text-xs text-cyan-200"
-                          >
-                            📦 {p}
-                          </span>
-                        ))}
+                    {/* Action Toast Feedback Banner */}
+                    {inventoryActionNotice && (
+                      <div className="rounded-xl bg-cyan-950/60 border border-cyan-500/40 px-3.5 py-2 text-xs text-cyan-200 flex items-center justify-between gap-2 shadow-md animate-fadeIn">
+                        <span className="font-semibold">{inventoryActionNotice}</span>
+                        <button
+                          onClick={() => setInventoryActionNotice(null)}
+                          className="text-cyan-400 hover:text-white"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
                       </div>
+                    )}
+
+                    {/* CRITICAL SHORTAGE ALERT BANNER */}
+                    {(outOfStockParts.length > 0 || lowStockParts.length > 0) && (
+                      <div className="rounded-2xl border border-red-500/50 bg-gradient-to-r from-red-950/40 via-slate-900 to-red-950/20 p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/20 text-red-400 shrink-0 mt-0.5">
+                            <AlertOctagon className="h-5 w-5 animate-pulse" />
+                          </div>
+                          <div>
+                            <h5 className="font-bold text-red-300 text-sm">
+                              CẢNH BÁO THIẾU HỤT KHO VẬT TƯ SỬA CHỮA (SPARE PARTS SHORTAGE)
+                            </h5>
+                            <p className="text-slate-300 mt-1 leading-relaxed">
+                              {outOfStockParts.length > 0 ? (
+                                <>
+                                  Có <strong className="text-red-400">{outOfStockParts.length} phụ tùng HẾT HÀNG</strong> trong kho ({outOfStockParts.map((o) => o.part?.partNumber || o.originalStr.split('(')[0].trim()).join(', ')}). Thời gian khắc phục sự cố (MTTR) thực tế sẽ bị kéo dài thêm do phải chờ giao hàng từ nhà cung cấp!
+                                </>
+                              ) : (
+                                <>
+                                  Có <strong className="text-amber-400">{lowStockParts.length} phụ tùng dưới ngưỡng an toàn</strong>. Sau khi xuất thay thế cho sự cố này, kho xưởng sẽ cạn kiệt mã vật tư tương ứng.
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {outOfStockParts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleOrderAllMissingParts}
+                            className="shrink-0 rounded-xl bg-red-500 hover:bg-red-400 text-slate-950 font-bold px-3.5 py-2 text-xs transition shadow-lg shadow-red-500/30 flex items-center gap-1.5 cursor-pointer self-start sm:self-center"
+                          >
+                            <ShoppingCart className="h-4 w-4" />
+                            <span>Đặt Hàng Khẩn Cấp ({outOfStockParts.length} mã)</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* LIST OF DETAILED RECOMMENDED PARTS CARDS */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {inventoryMatches.map((item, idx) => {
+                        const isOut = item.stockStatus === 'OUT_OF_STOCK';
+                        const isLow = item.stockStatus === 'LOW_STOCK';
+                        const isIn = item.stockStatus === 'IN_STOCK';
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`rounded-2xl border p-4 transition flex flex-col justify-between ${
+                              isOut
+                                ? 'border-red-500/60 bg-gradient-to-br from-red-950/25 via-slate-900 to-slate-950 shadow-md ring-1 ring-red-500/20'
+                                : isLow
+                                ? 'border-amber-500/40 bg-gradient-to-br from-amber-950/15 via-slate-900 to-slate-950'
+                                : 'border-slate-800 bg-slate-950/70 hover:border-slate-700'
+                            }`}
+                          >
+                            {/* Card Top: Name, SKU, Status Badge */}
+                            <div>
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  {item.part ? (
+                                    <span className="font-mono text-xs font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2 py-0.5 rounded">
+                                      {item.part.partNumber}
+                                    </span>
+                                  ) : (
+                                    <span className="font-mono text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                                      OEM Part
+                                    </span>
+                                  )}
+                                  <h5 className="font-bold text-white text-xs sm:text-sm mt-1.5 line-clamp-1 leading-snug">
+                                    {item.part?.name || item.originalStr}
+                                  </h5>
+                                </div>
+
+                                <div className="shrink-0">
+                                  {isOut ? (
+                                    <span className="rounded-full bg-red-500/20 border border-red-500/50 px-2.5 py-0.5 text-[10px] font-mono font-black text-red-300 animate-pulse flex items-center gap-1">
+                                      <AlertOctagon className="h-3 w-3" />
+                                      HẾT HÀNG (0/{item.minSafe} {item.unit})
+                                    </span>
+                                  ) : isLow ? (
+                                    <span className="rounded-full bg-amber-500/20 border border-amber-500/50 px-2.5 py-0.5 text-[10px] font-mono font-bold text-amber-300 flex items-center gap-1">
+                                      <AlertTriangle className="h-3 w-3" />
+                                      TỒN THẤP ({item.stockCount}/{item.minSafe} {item.unit})
+                                    </span>
+                                  ) : isIn ? (
+                                    <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-mono font-semibold text-emerald-300 flex items-center gap-1">
+                                      <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                                      SẴN HÀNG ({item.stockCount} {item.unit})
+                                    </span>
+                                  ) : (
+                                    <span className="rounded-full bg-slate-800 border border-slate-700 px-2.5 py-0.5 text-[10px] font-mono text-slate-400">
+                                      Chưa đăng ký kho
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Inventory Location & Details */}
+                              <div className="mt-3 rounded-xl bg-slate-900/60 border border-slate-800/80 p-2.5 space-y-1 text-xs">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-slate-400 flex items-center gap-1">
+                                    <MapPin className="h-3 w-3 text-cyan-400 shrink-0" />
+                                    <span>Vị trí kho:</span>
+                                  </span>
+                                  <span className="font-mono font-bold text-slate-200 truncate">
+                                    {item.binLocation}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-slate-400 flex items-center gap-1">
+                                    <Clock className="h-3 w-3 text-amber-400 shrink-0" />
+                                    <span>Thời gian đặt hàng (Lead time):</span>
+                                  </span>
+                                  <span className={`font-mono font-bold ${isOut ? 'text-red-400' : 'text-slate-300'}`}>
+                                    ~{item.leadTimeDays} ngày làm việc
+                                  </span>
+                                </div>
+
+                                {item.part?.supplier && (
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-slate-400">Nhà cung cấp:</span>
+                                    <span className="text-slate-300 truncate">{item.part.supplier}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Shortage Note for technician */}
+                              {isOut && (
+                                <p className="mt-2 text-[11px] text-red-300 font-medium leading-relaxed bg-red-950/30 border border-red-500/30 p-2 rounded-lg">
+                                  ⚠️ Không thể thay thế ngay lập tức. Cần tạo đơn đặt hàng khẩn cấp hoặc điều chuyển phụ tùng từ máy dự phòng.
+                                </p>
+                              )}
+                              {isLow && (
+                                <p className="mt-2 text-[11px] text-amber-300/90 leading-relaxed bg-amber-950/20 border border-amber-500/30 p-2 rounded-lg">
+                                  ℹ️ Còn {item.stockCount} {item.unit} đủ để thay thế, nhưng cần đặt hàng bổ sung ngay để duy trì mức an toàn.
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Actions on this part */}
+                            <div className="mt-3.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-xs">
+                              {/* If Out of stock: Quick PO Button */}
+                              {isOut && item.part && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickOrderSinglePart(item.part!)}
+                                  className="flex-1 rounded-xl py-1.5 px-2 bg-red-500 hover:bg-red-400 text-slate-950 font-bold transition flex items-center justify-center gap-1 shadow-md shadow-red-500/20 cursor-pointer"
+                                >
+                                  <ShoppingCart className="h-3.5 w-3.5" />
+                                  <span>Đặt Hàng Khẩn Cấp (+{item.minSafe * 2 || 4} {item.unit})</span>
+                                </button>
+                              )}
+
+                              {/* If Low stock: Both Issue and Reorder */}
+                              {isLow && item.part && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickIssuePart(item.part!)}
+                                    className="flex-1 rounded-xl py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                                    title="Xuất 1 đơn vị dùng cho máy này"
+                                  >
+                                    <ArrowDownRight className="h-3.5 w-3.5" />
+                                    <span>Xuất Dùng (-1)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickOrderSinglePart(item.part!)}
+                                    className="flex-1 rounded-xl py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                                    title="Tạo đơn PO đặt bổ sung kho"
+                                  >
+                                    <ShoppingCart className="h-3.5 w-3.5" />
+                                    <span>Đặt Bổ Sung</span>
+                                  </button>
+                                </>
+                              )}
+
+                              {/* If In Stock: Issue for this machine */}
+                              {isIn && item.part && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickIssuePart(item.part!)}
+                                  className="flex-1 rounded-xl py-1.5 px-2 bg-emerald-600/80 hover:bg-emerald-500 text-white font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-950/30"
+                                >
+                                  <ArrowDownRight className="h-3.5 w-3.5" />
+                                  <span>Xuất Kho Cho Máy {device.code} (-1 {item.unit})</span>
+                                </button>
+                              )}
+
+                              {/* Direct navigation to inventory tab */}
+                              {onOpenInventory && (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenInventory(item.part?.partNumber || item.originalStr)}
+                                  className="rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-2.5 py-1.5 font-bold transition flex items-center gap-1 cursor-pointer shrink-0"
+                                  title="Xem chi tiết linh kiện này trong kho"
+                                >
+                                  <span>Chi tiết</span>
+                                  <ArrowRight className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </>
@@ -2266,6 +2643,19 @@ Ngày trích xuất: ${new Date().toLocaleDateString('vi-VN')}
             >
               Đóng
             </button>
+
+            {onOpenRCA && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenRCA(device.id, device.activeIncident?.errorCode || frequencySummary?.errorCode || 'E-102');
+                }}
+                className="flex items-center gap-1.5 rounded-xl border border-cyan-500/50 bg-gradient-to-r from-cyan-950/90 to-slate-900 hover:from-cyan-900/90 hover:to-slate-800 px-4 py-2 text-xs font-bold text-cyan-300 shadow-md shadow-cyan-500/20 transition active:scale-95"
+              >
+                <Sparkles className="h-4 w-4 text-cyan-400 animate-pulse" />
+                <span>Phân Tích Gốc Rễ Đa Chiều (5-Whys & RCA)</span>
+              </button>
+            )}
 
             <button
               onClick={() => {

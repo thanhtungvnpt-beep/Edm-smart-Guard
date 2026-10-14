@@ -28,6 +28,7 @@ import {
   RefreshCw,
   Info,
   Contrast,
+  Package,
 } from 'lucide-react';
 import {
   ShortcutTelemetryState,
@@ -42,7 +43,7 @@ import {
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectTab?: (tab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history') => void;
+  onSelectTab?: (tab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history' | 'root-cause-analysis' | 'spare-parts') => void;
   telemetry: ShortcutTelemetryState;
   onRecordShortcut?: (shortcutId: string) => void;
   onResetTelemetry?: () => void;
@@ -151,6 +152,26 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       icon: Wrench,
       color: 'text-amber-400',
       badgeBg: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+    },
+    {
+      id: 'alt_7',
+      key: 'Alt + 7',
+      tabId: 'root-cause-analysis' as const,
+      title: 'Phân Tích Gốc Rễ AI (RCA)',
+      desc: 'Module AI phân tích nguyên nhân gốc rễ sự cố dừng máy (5-Whys, Ishikawa) và giải pháp sửa chữa',
+      icon: Sparkles,
+      color: 'text-cyan-400',
+      badgeBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
+    },
+    {
+      id: 'alt_8',
+      key: 'Alt + 8',
+      tabId: 'spare-parts' as const,
+      title: 'Kho Phụ Tùng & Vật Tư',
+      desc: 'Theo dõi tồn kho linh kiện thay thế, cảnh báo thiếu hụt vật tư và quản lý đơn đặt hàng khẩn cấp',
+      icon: Package,
+      color: 'text-cyan-400',
+      badgeBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
     },
   ];
 

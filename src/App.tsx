@@ -41,6 +41,8 @@ import { DocumentsTab } from './components/DocumentsTab';
 import { NotificationsTab } from './components/NotificationsTab';
 import { MobileDevicesManagementTab } from './components/MobileDevicesManagementTab';
 import { MaintenanceHistoryTab } from './components/MaintenanceHistoryTab';
+import { AIRootCauseAnalysisModule } from './components/AIRootCauseAnalysisModule';
+import { SparePartsInventoryTab } from './components/SparePartsInventoryTab';
 import { EdmSimulatorModal } from './components/EdmSimulatorModal';
 import { PerformanceAnalytics } from './components/PerformanceAnalytics';
 import { FacilitySummaryCard } from './components/FacilitySummaryCard';
@@ -93,8 +95,11 @@ export default function App() {
 
   // Navigation
   const [activeTab, setActiveTab] = useState<
-    'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history'
+    'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history' | 'root-cause-analysis' | 'spare-parts'
   >('devices');
+  const [rcaDeviceTargetId, setRcaDeviceTargetId] = useState<string>('ALL');
+  const [rcaErrorCodeTarget, setRcaErrorCodeTarget] = useState<string>('E-102');
+  const [inventoryTargetPartId, setInventoryTargetPartId] = useState<string>('');
 
   // Filters
   const [deviceFilter, setDeviceFilter] = useState<'ALL' | 'ALARM' | 'RUNNING' | 'MAINTENANCE' | 'IDLE' | 'WIRE_EDM' | 'SINKER_EDM'>('ALL');
@@ -540,6 +545,22 @@ export default function App() {
           setActiveTab('history');
           soundManager.playBeep();
           showToast('⚡ [Alt+6] Chuyển tab: Hồ Sơ Lịch Sử Sửa Chữa & Bảo Trì');
+          return;
+        }
+        if (e.key === '7' || e.code === 'Digit7' || e.code === 'Numpad7') {
+          e.preventDefault();
+          recordShortcut('alt_7');
+          setActiveTab('root-cause-analysis');
+          soundManager.playBeep();
+          showToast('⚡ [Alt+7] Chuyển tab: Module AI Phân Tích Nguyên Nhân Gốc Rễ (RCA)');
+          return;
+        }
+        if (e.key === '8' || e.code === 'Digit8' || e.code === 'Numpad8') {
+          e.preventDefault();
+          recordShortcut('alt_8');
+          setActiveTab('spare-parts');
+          soundManager.playBeep();
+          showToast('⚡ [Alt+8] Chuyển tab: Quản Lý Kho Phụ Tùng & Vật Tư');
           return;
         }
 
@@ -993,6 +1014,11 @@ export default function App() {
                 isHighContrast={isHighContrast}
                 onSelectFilter={(f) => setDeviceFilter(f)}
                 onOpenShortcuts={() => setShowKeyboardShortcuts(true)}
+                onOpenRCA={(devId, errCode) => {
+                  if (devId) setRcaDeviceTargetId(devId);
+                  if (errCode) setRcaErrorCodeTarget(errCode);
+                  setActiveTab('root-cause-analysis');
+                }}
               />
 
               {/* Status Filter Buttons and QR Scanner */}
@@ -1237,6 +1263,36 @@ export default function App() {
             devices={devices}
             technicians={technicians}
             onOpenMachineDetails={(device) => setDetailsDevice(device)}
+            onOpenRCA={(devId, errCode) => {
+              if (devId) setRcaDeviceTargetId(devId);
+              if (errCode) setRcaErrorCodeTarget(errCode);
+              setActiveTab('root-cause-analysis');
+              showToast('⚡ Chuyển tới Module AI Phân Tích Nguyên Nhân Gốc Rễ (RCA)');
+            }}
+            onToast={(msg) => showToast(msg)}
+          />
+        )}
+
+        {/* TAB 7: AI INDUSTRIAL ROOT CAUSE ANALYSIS & STOPPAGE RESOLUTION MODULE */}
+        {activeTab === 'root-cause-analysis' && (
+          <AIRootCauseAnalysisModule
+            devices={devices}
+            technicians={technicians}
+            initialDeviceId={rcaDeviceTargetId}
+            initialErrorCode={rcaErrorCodeTarget}
+            onOpenMachineDetails={(device) => setDetailsDevice(device)}
+            onOpenRepairReport={(device) => setRepairDevice(device)}
+            onNavigateTab={(tab) => setActiveTab(tab)}
+            onToast={(msg) => showToast(msg)}
+          />
+        )}
+
+        {/* TAB 8: SPARE PARTS INVENTORY & SHORTAGE MANAGEMENT */}
+        {activeTab === 'spare-parts' && (
+          <SparePartsInventoryTab
+            devices={devices}
+            onOpenMachineDetails={(device) => setDetailsDevice(device)}
+            initialFilterPartId={inventoryTargetPartId}
             onToast={(msg) => showToast(msg)}
           />
         )}
@@ -1271,6 +1327,18 @@ export default function App() {
           device={diagnosisDevice}
           onClose={() => setDiagnosisDevice(null)}
           onOpenRepairReport={(d) => setRepairDevice(d)}
+          onOpenRCA={(devId, errCode) => {
+            if (devId) setRcaDeviceTargetId(devId);
+            if (errCode) setRcaErrorCodeTarget(errCode);
+            setActiveTab('root-cause-analysis');
+            showToast('⚡ Mở Module AI Phân Tích Nguyên Nhân Gốc Rễ (RCA)');
+          }}
+          onOpenInventory={(partIdOrSku) => {
+            if (partIdOrSku) setInventoryTargetPartId(partIdOrSku);
+            setDiagnosisDevice(null);
+            setActiveTab('spare-parts');
+            showToast('⚡ Chuyển tới Module Quản Lý Kho Phụ Tùng');
+          }}
         />
       )}
 

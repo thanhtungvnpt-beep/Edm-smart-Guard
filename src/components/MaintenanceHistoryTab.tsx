@@ -44,6 +44,7 @@ interface MaintenanceHistoryTabProps {
   devices: Device[];
   technicians: Technician[];
   onOpenMachineDetails?: (device: Device) => void;
+  onOpenRCA?: (deviceId?: string, errorCode?: string) => void;
   onToast?: (message: string) => void;
 }
 
@@ -53,6 +54,7 @@ export const MaintenanceHistoryTab: React.FC<MaintenanceHistoryTabProps> = ({
   devices,
   technicians,
   onOpenMachineDetails,
+  onOpenRCA,
   onToast,
 }) => {
   // Master records state from persistent localStorage
@@ -491,6 +493,21 @@ export const MaintenanceHistoryTab: React.FC<MaintenanceHistoryTabProps> = ({
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* AI Root Cause Analysis Module Quick Launch */}
+          {onOpenRCA && (
+            <button
+              onClick={() => onOpenRCA(selectedDeviceId !== 'ALL' ? selectedDeviceId : undefined)}
+              title="Khởi chạy Module AI phân tích nguyên nhân gốc rễ (5-Whys, Ishikawa) cho các sự cố dừng máy"
+              className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/80 via-slate-900 to-cyan-950/80 hover:from-cyan-900/80 hover:to-slate-800 px-3.5 py-2 text-xs font-bold text-cyan-300 transition active:scale-95 shadow-md shadow-cyan-500/20 cursor-pointer"
+            >
+              <Sparkles className="h-4 w-4 text-cyan-400 animate-pulse" />
+              <span>Phân Tích Gốc Rễ AI (RCA)</span>
+              <span className="rounded bg-cyan-500/20 px-1 py-0.2 text-[9px] font-mono text-cyan-300 font-bold border border-cyan-500/30">
+                5-Whys
+              </span>
+            </button>
+          )}
+
           {/* Báo Cáo Tóm Tắt Tuần (CSV / PDF / Tự Động Email Quản Lý) */}
           <button
             onClick={() => setShowWeeklyReportModal(true)}
