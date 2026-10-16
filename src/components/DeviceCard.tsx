@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
+  Check,
   Clock,
   Gauge,
   History,
@@ -21,12 +22,15 @@ import {
 import { Device } from '../types';
 import { calculatePredictedMaintenance } from '../utils/maintenancePrediction';
 import { getDeviceOperationalMetrics } from '../utils/operationalMetrics';
+import { calculateAIVibrationCurrentSchedule } from '../utils/aiPredictiveMaintenanceScheduler';
 import { MachineHealthArcGauge } from './MachineHealthArcGauge';
 import { DeviceQuickActionsMenu } from './DeviceQuickActionsMenu';
 import { DeviceQuickActionsModal, QuickActionMode } from './DeviceQuickActionsModal';
 
 interface DeviceCardProps {
   device: Device;
+  isSelected?: boolean;
+  onToggleSelect?: (deviceId: string) => void;
   onOpenDiagnosis: (device: Device) => void;
   onOpenRepairReport: (device: Device) => void;
   onTriggerAlarm: (deviceId: string) => void;
@@ -35,6 +39,7 @@ interface DeviceCardProps {
   onOpenMachineDetails?: (device: Device) => void;
   onQuickActionSuccess?: (device: Device, message: string) => void;
   onQuickSyncDirect?: (deviceId: string) => Promise<void>;
+  onOpenPredictiveDetails?: (device: Device) => void;
 }
 
 // Small circular OEE gauge indicator with color-coded system
@@ -118,6 +123,8 @@ export const CircularOeeGaugeIndicator: React.FC<{ oee: number; size?: number }>
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({
   device,
+  isSelected = false,
+  onToggleSelect,
   onOpenDiagnosis,
   onOpenRepairReport,
   onTriggerAlarm,
@@ -126,6 +133,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   onOpenMachineDetails,
   onQuickActionSuccess,
   onQuickSyncDirect,
+  onOpenPredictiveDetails,
 }) => {
   const [quickActionMode, setQuickActionMode] = useState<QuickActionMode>(null);
   const isAlarm = device.status === 'ALARM_STOPPED';
@@ -134,14 +142,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const isMaintenance = device.status === 'MAINTENANCE';
   const isWarning = device.status === 'WARNING';
 
-  // Heuristic calculation of Predicted Next Maintenance Date based on 30-day performance
+  // AI-Driven Predictive Maintenance Schedule based on Vibration & Sensor Current
+  const aiSchedule = useMemo(() => calculateAIVibrationCurrentSchedule(device), [device]);
   const prediction = useMemo(() => calculatePredictedMaintenance(device), [device]);
   const opMetrics = useMemo(() => getDeviceOperationalMetrics(device), [device]);
 
   return (
     <div
       className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 shadow-xl ${
-        isAlarm
+        isSelected
+          ? 'ring-2 ring-amber-400 border-amber-400 shadow-amber-500/20 bg-amber-950/20'
+          : isAlarm
           ? 'border-red-500/80 bg-red-950/20 shadow-red-950/50 ring-2 ring-red-500/40 animate-pulse'
           : isMaintenance
           ? 'border-blue-500/80 bg-blue-950/20 shadow-blue-950/40 ring-1 ring-blue-500/30'
@@ -154,23 +165,48 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     >
       {/* Top Header Strip */}
       <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3 bg-slate-950/40">
-        <div
-          onClick={() => onOpenMachineDetails && onOpenMachineDetails(device)}
-          title="Bấm để xem chi tiết máy & lịch sử các lần bảo dưỡng hoàn thành"
-          className="flex items-center gap-2.5 cursor-pointer group/title"
-        >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 font-mono text-xs font-bold text-amber-400 border border-slate-700 group-hover/title:border-amber-500 group-hover/title:bg-amber-500/10 transition">
-            {device.code}
-          </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-white text-sm sm:text-base leading-tight group-hover/title:text-amber-400 transition">
-                {device.name}
-              </h3>
+        <div className="flex items-center gap-2.5">
+          {/* Batch Selection Checkbox */}
+          {onToggleSelect && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect(device.id);
+              }}
+              title={
+                isSelected
+                  ? 'Bỏ chọn máy này khỏi thao tác hàng loạt'
+                  : 'Chọn máy này để thao tác hàng loạt (Batch Action)'
+              }
+              className={`flex h-6 w-6 items-center justify-center rounded-lg border transition-all active:scale-95 shrink-0 ${
+                isSelected
+                  ? 'border-amber-400 bg-amber-500 text-slate-950 shadow-md shadow-amber-500/40 font-bold'
+                  : 'border-slate-700 bg-slate-900/90 text-transparent hover:border-amber-400/80 hover:text-slate-500'
+              }`}
+            >
+              <Check className={`h-3.5 w-3.5 ${isSelected ? 'stroke-[3]' : 'opacity-0'}`} />
+            </button>
+          )}
+
+          <div
+            onClick={() => onOpenMachineDetails && onOpenMachineDetails(device)}
+            title="Bấm để xem chi tiết máy & lịch sử các lần bảo dưỡng hoàn thành"
+            className="flex items-center gap-2.5 cursor-pointer group/title"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 font-mono text-xs font-bold text-amber-400 border border-slate-700 group-hover/title:border-amber-500 group-hover/title:bg-amber-500/10 transition">
+              {device.code}
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-white text-sm sm:text-base leading-tight group-hover/title:text-amber-400 transition">
+                  {device.name}
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400">
+                {device.model} • {device.location}
+              </p>
             </div>
-            <p className="text-xs text-slate-400">
-              {device.model} • {device.location}
-            </p>
           </div>
         </div>
 
@@ -449,61 +485,93 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           </div>
         </div>
 
-        {/* PREDICTED NEXT MAINTENANCE DATE (Heuristic based on 30-day performance) */}
+        {/* AI-DRIVEN PREDICTED MAINTENANCE SCHEDULE (Vibration & Sensor Current) */}
         <div
-          onClick={() => onOpenMachineDetails && onOpenMachineDetails(device)}
-          title="Bấm để xem lịch sử bảo dưỡng và dự báo chi tiết của thiết bị này"
-          className={`rounded-xl border p-2.5 text-xs transition cursor-pointer hover:border-amber-500/60 ${
-            prediction.urgencyLevel === 'IMMEDIATE'
-              ? 'border-red-500/70 bg-red-950/40 text-red-200 ring-1 ring-red-500/50'
-              : prediction.urgencyLevel === 'URGENT'
-              ? 'border-amber-500/60 bg-amber-950/30 text-amber-200'
-              : prediction.urgencyLevel === 'UPCOMING'
-              ? 'border-cyan-500/40 bg-cyan-950/20 text-cyan-200'
-              : 'border-slate-800 bg-slate-950/50 text-slate-300'
+          onClick={() => (onOpenPredictiveDetails ? onOpenPredictiveDetails(device) : onOpenMachineDetails?.(device))}
+          title="Bấm để xem chi tiết phân tích AI dự báo bảo trì theo phổ rung động & dòng điện"
+          className={`rounded-xl border p-2.5 text-xs transition cursor-pointer hover:border-amber-400/80 hover:shadow-lg ${
+            aiSchedule.urgency === 'CRITICAL_URGENT'
+              ? 'border-red-500/70 bg-red-950/40 text-red-200 ring-1 ring-red-500/50 shadow-red-950/40'
+              : aiSchedule.urgency === 'HIGH_WARNING'
+              ? 'border-amber-500/60 bg-amber-950/30 text-amber-200 shadow-amber-950/30'
+              : 'border-slate-800 bg-slate-950/60 text-slate-300'
           }`}
         >
+          {/* Schedule Title & Time */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 font-semibold min-w-0">
-              <CalendarClock
+              <Sparkles
                 className={`h-4 w-4 shrink-0 ${
-                  prediction.urgencyLevel === 'IMMEDIATE'
+                  aiSchedule.urgency === 'CRITICAL_URGENT'
                     ? 'text-red-400 animate-pulse'
-                    : prediction.urgencyLevel === 'URGENT'
+                    : aiSchedule.urgency === 'HIGH_WARNING'
                     ? 'text-amber-400'
-                    : prediction.urgencyLevel === 'UPCOMING'
-                    ? 'text-cyan-400'
-                    : 'text-emerald-400'
+                    : 'text-amber-400'
                 }`}
               />
-              <span className="text-slate-300 text-[11px] truncate">Dự đoán bảo dưỡng:</span>
-              <span className="font-mono font-bold text-amber-400">
-                {prediction.predictedDateStr}
+              <span className="text-slate-300 text-[11px] truncate font-medium">Dự báo bảo trì AI:</span>
+              <span className="font-mono font-bold text-amber-300 text-xs truncate">
+                {aiSchedule.predictedDateFormatted}
               </span>
             </div>
 
-            {/* Days remaining urgency badge */}
             <span
               className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                prediction.urgencyLevel === 'IMMEDIATE'
+                aiSchedule.urgency === 'CRITICAL_URGENT'
                   ? 'bg-red-500 text-white animate-pulse'
-                  : prediction.urgencyLevel === 'URGENT'
+                  : aiSchedule.urgency === 'HIGH_WARNING'
                   ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
-                  : prediction.urgencyLevel === 'UPCOMING'
-                  ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300'
                   : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
               }`}
             >
-              {prediction.daysRemaining === 0 ? 'Khẩn Cấp' : `Còn ${prediction.daysRemaining} ngày`}
+              {aiSchedule.hoursRemaining <= 24
+                ? `Còn ${aiSchedule.hoursRemaining}h`
+                : `Còn ~${aiSchedule.daysRemaining} ngày`}
             </span>
           </div>
 
-          <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60 pt-1.5">
-            <span className="truncate pr-2 text-slate-300 text-[10px]" title={prediction.primaryMaintenanceTask}>
-              🛠️ {prediction.primaryMaintenanceTask}
+          {/* Dual Sensor Chips: Vibration & Sensor Current */}
+          <div className="mt-2 grid grid-cols-2 gap-1.5 font-mono text-[11px]">
+            <div className="flex items-center justify-between rounded-lg bg-slate-900/80 px-2 py-1 border border-slate-800">
+              <span className="text-slate-400 flex items-center gap-1 text-[10px]">
+                <Activity className="h-3 w-3 text-cyan-400" />
+                Rung:
+              </span>
+              <span className={`font-bold ${
+                aiSchedule.vibrationAnalysis.status === 'CRITICAL'
+                  ? 'text-red-400'
+                  : aiSchedule.vibrationAnalysis.status === 'ELEVATED'
+                  ? 'text-amber-400'
+                  : 'text-cyan-300'
+              }`}>
+                {aiSchedule.vibrationAnalysis.currentValue.toFixed(2)} mm/s
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg bg-slate-900/80 px-2 py-1 border border-slate-800">
+              <span className="text-slate-400 flex items-center gap-1 text-[10px]">
+                <Zap className="h-3 w-3 text-amber-400" />
+                Dòng:
+              </span>
+              <span className={`font-bold ${
+                aiSchedule.currentAnalysis.status === 'CRITICAL'
+                  ? 'text-red-400'
+                  : aiSchedule.currentAnalysis.status === 'ELEVATED'
+                  ? 'text-amber-400'
+                  : 'text-amber-300'
+              }`}>
+                {aiSchedule.currentAnalysis.currentValue.toFixed(1)} A
+              </span>
+            </div>
+          </div>
+
+          {/* AI Diagnostic Snippet */}
+          <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-800/60 pt-1.5">
+            <span className="truncate pr-2 text-slate-300 font-sans" title={aiSchedule.aiDiagnosticSummary}>
+              💡 {aiSchedule.aiDiagnosticSummary}
             </span>
-            <span className="font-mono text-[10px] text-slate-400 shrink-0">
-              Độ bền: <strong className="text-white font-bold">{prediction.healthScore}%</strong>
+            <span className="font-mono text-amber-400 hover:underline shrink-0 font-semibold">
+              Chi tiết AI →
             </span>
           </div>
         </div>

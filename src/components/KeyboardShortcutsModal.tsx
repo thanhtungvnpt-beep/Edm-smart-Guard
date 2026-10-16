@@ -243,8 +243,8 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
     {
       id: 'escape',
       key: 'Esc',
-      title: 'Đóng Cửa Sổ Modal',
-      desc: 'Đóng modal chi tiết, chẩn đoán AI hoặc báo cáo đang mở',
+      title: 'Đóng Modal / Hủy Chọn Hàng Loạt',
+      desc: 'Đóng modal đang mở hoặc hủy bỏ lựa chọn máy hàng loạt trên thanh tác vụ nổi',
       icon: X,
       color: 'text-slate-400',
     },

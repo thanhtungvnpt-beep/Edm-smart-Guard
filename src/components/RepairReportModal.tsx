@@ -13,6 +13,12 @@ import {
   Wrench,
   X,
   Zap,
+  Lightbulb,
+  CheckSquare,
+  HelpCircle,
+  ThumbsUp,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import { AILearning, Device, Technician } from '../types';
 import { soundManager } from '../utils/audio';
@@ -83,23 +89,22 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
     // 2. Machine complexity multiplier
     let complexityFactor = 1.0;
     if (machineModel.toLowerCase().includes('makino') || machineModel.toLowerCase().includes('heat')) {
-      complexityFactor = 1.05; // 5-axis high precision wire cut with AWF
+      complexityFactor = 1.05;
     } else if (machineModel.toLowerCase().includes('sodick')) {
-      complexityFactor = 1.0; // Linear motor drive
+      complexityFactor = 1.0;
     } else if (machineModel.toLowerCase().includes('fanuc')) {
-      complexityFactor = 0.95; // Standard high speed
+      complexityFactor = 0.95;
     } else if (machineType.toLowerCase().includes('sinker')) {
       complexityFactor = 1.0;
     }
 
-    // 3. Technician past efficiency calculation on similar machine types
+    // 3. Technician past efficiency calculation
     const pastRecords = getStoredMaintenanceRecords().filter(
       (r) =>
         r.technicianName.toLowerCase().includes(technician.name.toLowerCase()) ||
         technician.name.toLowerCase().includes(r.technicianName.toLowerCase())
     );
 
-    // Records on similar machine brand or model
     const similarBrandRecords = pastRecords.filter(
       (r) =>
         r.taskTitle.toLowerCase().includes(machineBrand.toLowerCase()) ||
@@ -107,28 +112,25 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
         r.deviceId === device.id
     );
 
-    // AI learnings contributed by this technician
     const techLearnings = learnings.filter(
       (l) =>
         l.discoveredBy.toLowerCase().includes(technician.name.toLowerCase()) ||
         technician.name.toLowerCase().includes(l.discoveredBy.toLowerCase())
     );
 
-    let efficiencyMultiplier = 0.85; // Default: trained technician is 15% faster
+    let efficiencyMultiplier = 0.85;
     let pastAverageMinutes = baseMinutes;
     let completedSimilarCount = Math.max(similarBrandRecords.length, techLearnings.length, 1);
 
     if (similarBrandRecords.length > 0) {
       const totalPastDuration = similarBrandRecords.reduce((sum, r) => sum + (r.durationMinutes || 40), 0);
       pastAverageMinutes = Math.round(totalPastDuration / similarBrandRecords.length);
-      // Ratio between past average and general benchmark
       const ratio = pastAverageMinutes / baseMinutes;
       efficiencyMultiplier = Math.min(1.2, Math.max(0.65, ratio));
     } else if (technician.role.toLowerCase().includes('chuyên gia') || technician.role.toLowerCase().includes('trưởng')) {
-      efficiencyMultiplier = 0.78; // Senior master: ~22% faster
+      efficiencyMultiplier = 0.78;
     }
 
-    // Final AI Estimated Time to Repair (ETTR)
     const rawEstimated = baseMinutes * efficiencyMultiplier * complexityFactor;
     const estimatedMinutes = Math.max(15, Math.round(rawEstimated));
     const rangeMin = Math.max(12, estimatedMinutes - 4);
@@ -149,16 +151,26 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
     };
   }, [errorCode, machineModel, machineBrand, machineType, technician, device.id, learnings]);
 
+  // Form states
   const [actualRootCause, setActualRootCause] = useState(
     'Đầu dẫn hướng kim cương Diamond Wire Guide bị bám cặn muội than do phôi cắt dày 80mm'
   );
   const [fixSummary, setFixSummary] = useState(
-    'Tháo nắp bảo vệ cụm đầu phun trên, dùng que gỗ vi sợi tẩm dung môi tẩy rửa Makino Cleaner lau sạch cặn xỉ trong khe dẫn hướng, thay đoạn dây đồng mới và tăng áp suất xả nước phụ lên 1.3 Bar.'
+    'Tháo nắp bảo vệ cụm đầu phun trên, dùng que nỉ tẩm dung môi tẩy rửa chuyên dụng lau sạch cặn xỉ trong rãnh dẫn hướng, xỏ lại đoạn dây đồng 0.25mm mới và tăng áp suất xả nước phụ lên 1.35 Bar.'
   );
-  const [partsReplaced, setPartsReplaced] = useState('Đoạn dây cắt 0.25mm, que nỉ vệ sinh');
+  const [solutionOutcome, setSolutionOutcome] = useState<
+    'RESOLVED_PERMANENTLY' | 'TEMPORARY_BYPASS' | 'TUNED_PARAMETERS' | 'REPLACED_PARTS'
+  >('RESOLVED_PERMANENTLY');
+  const [aiRecommendationAccuracy, setAiRecommendationAccuracy] = useState<
+    'VERY_ACCURATE' | 'PARTIALLY_ACCURATE' | 'INACCURATE' | 'NOT_APPLICABLE'
+  >('VERY_ACCURATE');
+  const [practicalTipsForAI, setPracticalTipsForAI] = useState(
+    'Khi gặp góc lượn sắc R<0.3mm trên phôi SKD11, hãy giảm thông số dòng đỉnh IP 15% trước khi tháo đầu dẫn để tránh đứt dây oan.'
+  );
+  const [partsReplaced, setPartsReplaced] = useState('Đoạn dây đồng 0.25mm, que nỉ vệ sinh đầu dẫn kim cương');
   const [durationMinutes, setDurationMinutes] = useState<number>(aiEttrAnalysis.estimatedMinutes);
   const [aiRating, setAiRating] = useState(5);
-  const [notes, setNotes] = useState('Không cần thay cả cụm đầu dẫn kim cương mới, chỉ cần lau sạch là chạy ổn định.');
+  const [notes, setNotes] = useState('AI gợi ý kiểm tra áp lực nước rất chính xác, tiết kiệm hơn 20 phút chẩn đoán mò!');
   const [submitting, setSubmitting] = useState(false);
   const [appliedEttrToast, setAppliedEttrToast] = useState(false);
 
@@ -185,6 +197,9 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
           durationMinutes: Number(durationMinutes),
           aiHelpfulRating: aiRating,
           technicianNotes: notes,
+          solutionOutcome,
+          aiRecommendationAccuracy,
+          practicalTipsForAI,
         }),
       });
 
@@ -201,12 +216,11 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
     }
   };
 
-  // Compare actual duration with AI estimation
   const timeDifference = durationMinutes - aiEttrAnalysis.estimatedMinutes;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl border border-emerald-500/50 bg-slate-950 p-6 shadow-2xl shadow-emerald-950/40">
+      <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl border border-emerald-500/50 bg-slate-950 p-5 sm:p-6 shadow-2xl shadow-emerald-950/40">
         {/* Header Ribbon */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-3">
@@ -216,14 +230,14 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-white">
-                  Nghiệm Thu Khắc Phục & Dạy Cho AI
+                  Nghiệm Thu Khắc Phục & Huấn Luyện AI
                 </h2>
                 <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-400 border border-emerald-500/30">
-                  Human-in-the-Loop
+                  Human-in-the-Loop Feedback
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Kinh nghiệm của bạn sẽ được AI tổng hợp và ghi nhớ để giúp các ca sửa sau nhanh hơn!
+                Phản hồi của bạn giúp AI học giải pháp thực chiến, ghi nhớ mẹo xử lý và hoàn thiện thuật toán chẩn đoán!
               </p>
             </div>
           </div>
@@ -252,7 +266,7 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
         </div>
 
         {/* AI ESTIMATED TIME TO REPAIR (ETTR) PANEL */}
-        <div className="mt-4 rounded-2xl border border-indigo-500/40 bg-gradient-to-br from-indigo-950/40 via-purple-950/30 to-slate-900 p-4.5 shadow-lg">
+        <div className="mt-4 rounded-2xl border border-indigo-500/40 bg-gradient-to-br from-indigo-950/40 via-purple-950/30 to-slate-900 p-4 shadow-lg">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-500/20 pb-3">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-300">
@@ -296,33 +310,6 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
             </div>
           </div>
 
-          {/* Breakdown Metric Chips */}
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-mono">
-            <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-2 flex items-center gap-2">
-              <Gauge className="h-4 w-4 text-cyan-400 shrink-0" />
-              <div>
-                <span className="text-slate-400 block text-[10px]">Định mức lỗi {errorCode}</span>
-                <strong className="text-cyan-300">{aiEttrAnalysis.baseMinutes} phút chuẩn</strong>
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-2 flex items-center gap-2">
-              <Award className="h-4 w-4 text-emerald-400 shrink-0" />
-              <div>
-                <span className="text-slate-400 block text-[10px]">Hiệu suất KTV {machineBrand}</span>
-                <strong className="text-emerald-300">{aiEttrAnalysis.efficiencyPercent}% tốc độ ({aiEttrAnalysis.completedSimilarCount} ca trước)</strong>
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-2 flex items-center gap-2">
-              <Wrench className="h-4 w-4 text-purple-400 shrink-0" />
-              <div>
-                <span className="text-slate-400 block text-[10px]">Hệ số dòng {machineType}</span>
-                <strong className="text-purple-300">{aiEttrAnalysis.complexityFactor}x độ phức tạp</strong>
-              </div>
-            </div>
-          </div>
-
           {appliedEttrToast && (
             <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 rounded-lg px-2.5 py-1">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
@@ -333,6 +320,71 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          {/* Section: AI Feedback & Solution Evaluation */}
+          <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-cyan-300 font-semibold text-xs border-b border-slate-800 pb-2">
+              <Lightbulb className="h-4 w-4 text-amber-400" />
+              <span>Phản hồi giải pháp cho AI: Độ chính xác & Kết quả thực tế</span>
+            </div>
+
+            {/* AI Recommendation Accuracy */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">
+                AI chẩn đoán ban đầu có chuẩn xác không?
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                {[
+                  { id: 'VERY_ACCURATE', label: 'Rất chính xác (100%)', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+                  { id: 'PARTIALLY_ACCURATE', label: 'Đúng một phần', badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+                  { id: 'INACCURATE', label: 'Chưa sát thực tế', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+                  { id: 'NOT_APPLICABLE', label: 'Không khả dụng', badge: 'bg-slate-800 text-slate-300 border-slate-700' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setAiRecommendationAccuracy(item.id as any)}
+                    className={`rounded-xl border p-2 text-left transition ${
+                      aiRecommendationAccuracy === item.id
+                        ? `${item.badge} ring-1 ring-emerald-400 font-bold`
+                        : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="block text-[11px] leading-tight">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Solution Outcome */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">
+                Kết quả nghiệm thu giải pháp kỹ thuật viên thực hiện:
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                {[
+                  { id: 'RESOLVED_PERMANENTLY', label: 'Khắc phục triệt để', desc: 'Đảm bảo không tái phát' },
+                  { id: 'TEMPORARY_BYPASS', label: 'Bypass tạm thời', desc: 'Chạy gấp kịp đơn' },
+                  { id: 'TUNED_PARAMETERS', label: 'Cân chỉnh thông số', desc: 'Chỉnh C-Condition' },
+                  { id: 'REPLACED_PARTS', label: 'Thay mới linh kiện', desc: 'Lắp cụm phụ tùng mới' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSolutionOutcome(item.id as any)}
+                    className={`rounded-xl border p-2 text-left transition ${
+                      solutionOutcome === item.id
+                        ? 'border-emerald-500 bg-emerald-950/40 text-emerald-300 ring-1 ring-emerald-500 font-bold'
+                        : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="block text-[11px] text-white font-medium">{item.label}</span>
+                    <span className="block text-[9px] text-slate-400">{item.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Actual Root Cause */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -351,11 +403,11 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
           {/* Actual Fix Applied */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              2. Phương án và mẹo kỹ thuật bạn đã áp dụng thành công (AI sẽ học phần này):
+              2. Phương án và giải pháp thực tế đã khắc phục thành công:
             </label>
             <textarea
               required
-              rows={3}
+              rows={2}
               value={fixSummary}
               onChange={(e) => setFixSummary(e.target.value)}
               placeholder="Mô tả cụ thể thao tác: tháo van nào, dùng hóa chất gì, chỉnh thông số C-Condition nào..."
@@ -363,11 +415,26 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
             />
           </div>
 
+          {/* Practical Tips For AI & Next Technicians */}
+          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-3">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-300 mb-1.5">
+              <Lightbulb className="h-4 w-4 text-amber-400" />
+              <span>3. Mẹo thực chiến KTV truyền đạt lại cho Bộ Não AI (AI Learning Tips):</span>
+            </label>
+            <textarea
+              rows={2}
+              value={practicalTipsForAI}
+              onChange={(e) => setPracticalTipsForAI(e.target.value)}
+              placeholder="Chia sẻ mẹo kinh nghiệm then chốt: mẹo vệ sinh nhanh, ngưỡng tham số an toàn, cách tránh kẹt dây..."
+              className="w-full rounded-xl bg-slate-900/90 border border-amber-500/30 p-2.5 text-xs text-amber-100 placeholder-amber-400/40 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+
           {/* Parts Replaced & Duration */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                3. Linh kiện thay thế / Vật tư (phân tách bởi dấu phẩy):
+                4. Linh kiện thay thế / Vật tư (phân tách bởi dấu phẩy):
               </label>
               <input
                 type="text"
@@ -381,7 +448,7 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-semibold text-slate-300">
-                  4. Thời gian khắc phục thực tế (phút):
+                  5. Thời gian khắc phục thực tế (phút):
                 </label>
                 <span className="text-[11px] font-mono text-indigo-300">
                   AI ETTR: ~{aiEttrAnalysis.estimatedMinutes}p
@@ -402,7 +469,7 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
                   <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-400">
                     <TrendingDown className="h-3.5 w-3.5 text-emerald-400" />
                     <span>
-                      Nhanh hơn dự báo AI {Math.abs(timeDifference)} phút (+{Math.round((Math.abs(timeDifference) / aiEttrAnalysis.estimatedMinutes) * 100)}% tốc độ! Đóng góp tăng điểm KTV)
+                      Nhanh hơn dự báo AI {Math.abs(timeDifference)} phút (+{Math.round((Math.abs(timeDifference) / aiEttrAnalysis.estimatedMinutes) * 100)}% tốc độ!)
                     </span>
                   </span>
                 ) : timeDifference === 0 ? (
@@ -426,7 +493,7 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
           <div className="rounded-2xl border border-purple-500/30 bg-purple-950/20 p-3.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-purple-200">
-                Đánh giá chất lượng đề xuất của AI lần này:
+                Đánh giá chất lượng hỗ trợ của AI trong ca này:
               </span>
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -450,7 +517,7 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ghi chú thêm cho AI: VD: 'Đề xuất rất sát, nhưng lần sau lưu ý kiểm tra cả khớp nối Q-03'..."
+              placeholder="Góp ý hoàn thiện AI: 'Đề xuất rất sát, nhưng lần sau lưu ý kiểm tra cả khớp nối Q-03'..."
               className="mt-2.5 w-full rounded-xl bg-slate-900/90 border border-slate-700 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
@@ -478,7 +545,7 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  <span>Xác Nhận Sửa Xong & Nạp Tri Thức Vào AI</span>
+                  <span>Xác Nhận Nghiệm Thu & Nạp Tri Thức Vào AI</span>
                 </>
               )}
             </button>
@@ -488,4 +555,3 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
     </div>
   );
 };
-

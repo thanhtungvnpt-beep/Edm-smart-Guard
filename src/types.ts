@@ -93,6 +93,10 @@ export interface HumanResolution {
   aiHelpfulRating: number; // 1-5
   technicianNotes: string;
   submittedToBrain: boolean;
+  solutionOutcome?: 'RESOLVED_PERMANENTLY' | 'TEMPORARY_BYPASS' | 'TUNED_PARAMETERS' | 'REPLACED_PARTS';
+  aiRecommendationAccuracy?: 'VERY_ACCURATE' | 'PARTIALLY_ACCURATE' | 'INACCURATE' | 'NOT_APPLICABLE';
+  practicalTipsForAI?: string;
+  verifiedRootCause?: string;
 }
 
 export interface Incident {
@@ -146,13 +150,20 @@ export interface Device {
 export interface TechnicalDocument {
   id: string;
   title: string;
-  category: 'OPERATING_MANUAL' | 'OEM_ERROR_CODES' | 'SOP' | 'SCHEMATICS' | 'MAINTENANCE_GUIDE';
+  category: 'OPERATING_MANUAL' | 'OEM_ERROR_CODES' | 'SOP' | 'SCHEMATICS' | 'MAINTENANCE_GUIDE' | 'TECHNICAL_SPECS';
   targetModel: string;
   author: string;
   updatedAt: string;
   summary: string;
   content: string;
   tags: string[];
+  fileType?: 'PDF' | 'IMAGE_SCHEMATIC' | 'TEXT' | 'CSV_SPECS' | 'MANUAL';
+  fileName?: string;
+  fileSize?: string;
+  thumbnailUrl?: string;
+  extractedParameters?: Record<string, string | number>;
+  indexedNodes?: string[];
+  schematicComponents?: string[];
 }
 
 export interface AILearning {
@@ -167,6 +178,12 @@ export interface AILearning {
   aiSynthesizedRule: string;
   timesAppliedSuccessfully: number;
   verified: boolean;
+  practicalTips?: string;
+  effectivenessRating?: number; // 1-5
+  technicianFeedback?: string;
+  verifiedBy?: string[];
+  partsInvolved?: string[];
+  feedbackCount?: number;
 }
 
 export interface NotificationLog {
@@ -180,6 +197,37 @@ export interface NotificationLog {
   channel: 'PUSH_NOTIFICATION' | 'SMS' | 'URGENT_AUDIO' | 'EMAIL';
   status: 'SENT' | 'DELIVERED' | 'ACKNOWLEDGED';
   previewText: string;
+}
+
+export interface IncidentChatMessage {
+  id: string;
+  deviceId: string;
+  incidentErrorCode?: string;
+  senderId: string;
+  senderName: string;
+  senderRole: string;
+  senderAvatar?: string;
+  isAI?: boolean;
+  content: string;
+  timestamp: string;
+  type?: 'TEXT' | 'TELEMETRY_SHARE' | 'AI_ADVICE' | 'ACTION_TAKEN' | 'SOLUTION_PINNED' | 'VOICE_TRANSCRIPT';
+  telemetrySnapshot?: {
+    dischargeVoltage?: number;
+    peakCurrent?: number;
+    dielectricPressure?: number;
+    dielectricTemp?: number;
+    wireTension?: number;
+    vibration?: number;
+  };
+  pinned?: boolean;
+  reactions?: Record<string, number>;
+  imageUrl?: string;
+  actionTag?: {
+    type: string;
+    label: string;
+    color: string;
+    icon?: string;
+  };
 }
 
 export interface FactoryStats {
@@ -473,5 +521,53 @@ export interface PurchaseOrderRequest {
   supplier: string;
   notes?: string;
   targetDeviceCode?: string;
+}
+
+export interface ImageInspectionResult {
+  componentName: string;
+  componentCategory: string;
+  defectDetected: string;
+  wearLevelPercent: number; // 0 - 100%
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'NORMAL';
+  confidenceScore: number; // 0 - 100%
+  correlatedErrorCode?: string;
+  technicalFindings: string;
+  recommendedActions: string[];
+  suggestedPartSku?: string;
+  suggestedPartName?: string;
+  safetyNotice?: string;
+  analyzedAt: string;
+}
+
+export interface IncidentChatMessage {
+  id: string;
+  incidentId: string;
+  deviceId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: string;
+  senderAvatar?: string;
+  isAI?: boolean;
+  messageType: 'text' | 'image' | 'action_tag' | 'ai_recommendation' | 'system_alert';
+  content: string;
+  imageUrl?: string;
+  actionTag?: {
+    type: string;
+    label: string;
+    color: string;
+    icon?: string;
+  };
+  timestamp: string;
+  reactions?: { [emoji: string]: string[] };
+  isPinned?: boolean;
+}
+
+export interface ChatParticipant {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  isOnline: boolean;
+  lastSeen?: string;
 }
 

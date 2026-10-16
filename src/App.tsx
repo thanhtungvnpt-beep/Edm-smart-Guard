@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Brain,
   CheckCircle2,
+  CheckSquare,
   FileText,
   Filter,
   Layers,
@@ -33,6 +34,7 @@ import {
 import { Header } from './components/Header';
 import { DeviceCard } from './components/DeviceCard';
 import { EmergencyModal } from './components/EmergencyModal';
+import { EmergencyBroadcastPanel } from './components/EmergencyBroadcastPanel';
 import { PhoneSimulatorModal } from './components/PhoneSimulatorModal';
 import { AIDiagnosisModal } from './components/AIDiagnosisModal';
 import { RepairReportModal } from './components/RepairReportModal';
@@ -43,11 +45,14 @@ import { MobileDevicesManagementTab } from './components/MobileDevicesManagement
 import { MaintenanceHistoryTab } from './components/MaintenanceHistoryTab';
 import { AIRootCauseAnalysisModule } from './components/AIRootCauseAnalysisModule';
 import { SparePartsInventoryTab } from './components/SparePartsInventoryTab';
+import { FloatingBatchActionBar } from './components/FloatingBatchActionBar';
 import { EdmSimulatorModal } from './components/EdmSimulatorModal';
 import { PerformanceAnalytics } from './components/PerformanceAnalytics';
 import { FacilitySummaryCard } from './components/FacilitySummaryCard';
 import { WorkshopHeatmap } from './components/WorkshopHeatmap';
 import { PredictiveMaintenanceAlerts } from './components/PredictiveMaintenanceAlerts';
+import { AIPredictiveMaintenanceScheduleBanner } from './components/AIPredictiveMaintenanceScheduleBanner';
+import { AIVibrationCurrentPredictiveModal } from './components/AIVibrationCurrentPredictiveModal';
 import { MachineDetailsModal } from './components/MachineDetailsModal';
 import { TechnicianStatusSidebar } from './components/TechnicianStatusSidebar';
 import { QRCodeScannerModal } from './components/QRCodeScannerModal';
@@ -117,10 +122,17 @@ export default function App() {
   const [phoneDevice, setPhoneDevice] = useState<Device | null>(null);
   const [repairDevice, setRepairDevice] = useState<Device | null>(null);
   const [detailsDevice, setDetailsDevice] = useState<Device | null>(null);
+  const [predictiveDevice, setPredictiveDevice] = useState<Device | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
   const [showTechSidebar, setShowTechSidebar] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showEmergencyBroadcast, setShowEmergencyBroadcast] = useState<boolean>(true);
+
+  const criticalAlarmCount = useMemo(() => {
+    return devices.filter((d) => d.status === 'ALARM_STOPPED' || d.activeIncident?.severity === 'CRITICAL').length;
+  }, [devices]);
+
   // Industrial Keyboard Shortcuts Telemetry State (Local State tracking usage frequency)
   const [shortcutTelemetry, setShortcutTelemetry] = useState<ShortcutTelemetryState>(() =>
     getInitialShortcutTelemetry()
@@ -205,6 +217,15 @@ export default function App() {
 
   // Track previously alarmed devices to prevent redundant siren triggers
   const previousAlarmIdsRef = useRef<Set<string>>(new Set());
+
+  // Batch Machine Selection State for 'Devices' Tab (Simultaneous Operations Toolbar)
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
+
+  const handleToggleSelectDevice = (deviceId: string) => {
+    setSelectedDeviceIds((prev) =>
+      prev.includes(deviceId) ? prev.filter((id) => id !== deviceId) : [...prev, deviceId]
+    );
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -564,6 +585,21 @@ export default function App() {
           return;
         }
 
+        // Alt + B: Toggle Emergency Broadcast Command Center
+        if (e.key === 'b' || e.key === 'B') {
+          e.preventDefault();
+          recordShortcut('alt_b');
+          if (activeTab !== 'devices') {
+            setActiveTab('devices');
+            setShowEmergencyBroadcast(true);
+          } else {
+            setShowEmergencyBroadcast((prev) => !prev);
+          }
+          soundManager.playBeep();
+          showToast('⚡ [Alt+B] Bật/Tắt Bảng Phát Thanh Khẩn Cấp Toàn Xưởng');
+          return;
+        }
+
         // Alt + K or Alt + /: Toggle Industrial Keyboard Shortcuts Cheat Sheet
         if (e.key === 'k' || e.key === 'K' || e.key === '/' || e.key === '?') {
           e.preventDefault();
@@ -678,15 +714,16 @@ export default function App() {
         soundManager.playBeep();
       }
 
-      // Escape key tracking (telemetry for modal dismissals)
+      // Escape key tracking (telemetry for modal dismissals and clearing batch selection)
       if (e.key === 'Escape') {
         recordShortcut('escape');
+        setSelectedDeviceIds([]);
       }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isMuted, recordShortcut, devices, emergencyDevice, isHighContrast]);
+  }, [isMuted, recordShortcut, devices, emergencyDevice, isHighContrast, selectedDeviceIds]);
 
   // --- TRIGGER EDM ALARM ---
   const handleTriggerAlarm = async (deviceId: string, errorCode: string = 'E-102', errorTitle: string = 'Sự cố đứt dây & sụt áp phóng điện') => {
@@ -908,6 +945,34 @@ export default function App() {
     return getSavedQuickPresets().find((p) => areCriteriaEqual(p.criteria, advancedFilters));
   }, [advancedFilters]);
 
+  // Batch Machine Selection & Simultaneous Operations Handlers
+  const handleSelectAllFiltered = () => {
+    const filteredIds = filteredDevices.map((d) => d.id);
+    const allAlreadySelected =
+      filteredIds.length > 0 && filteredIds.every((id) => selectedDeviceIds.includes(id));
+    if (allAlreadySelected) {
+      setSelectedDeviceIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
+    } else {
+      setSelectedDeviceIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
+
+  const handleSelectByStatus = (status: Device['status']) => {
+    const targetIds = filteredDevices.filter((d) => d.status === status).map((d) => d.id);
+    setSelectedDeviceIds((prev) => Array.from(new Set([...prev, ...targetIds])));
+  };
+
+  const handleBatchActionSuccess = (updatedDevices: Device[], message: string) => {
+    setDevices((prev) =>
+      prev.map((d) => {
+        const match = updatedDevices.find((u) => u.id === d.id);
+        return match ? { ...d, ...match } : d;
+      })
+    );
+    showToast(message);
+    fetchAllData();
+  };
+
   return (
     <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans transition-colors duration-200 ${isHighContrast ? 'high-contrast' : ''}`}>
       {/* Top Navbar */}
@@ -935,6 +1000,17 @@ export default function App() {
         shortcutUsageCount={shortcutTelemetry.totalCount}
         isHighContrast={isHighContrast}
         onToggleHighContrast={toggleHighContrast}
+        onToggleEmergencyBroadcast={() => {
+          if (activeTab !== 'devices') {
+            setActiveTab('devices');
+            setShowEmergencyBroadcast(true);
+          } else {
+            setShowEmergencyBroadcast((prev) => !prev);
+          }
+          showToast('⚡ Bảng Phát Thanh Khẩn Cấp Toàn Xưởng');
+        }}
+        criticalCount={criticalAlarmCount}
+        isEmergencyBroadcastOpen={showEmergencyBroadcast}
       />
 
       {/* Offline Connectivity Banner */}
@@ -1195,12 +1271,115 @@ export default function App() {
               </div>
             )}
 
+            {/* 0. LIVE FACTORY FLOOR EMERGENCY BROADCAST PANEL */}
+            {showEmergencyBroadcast && (
+              <EmergencyBroadcastPanel
+                devices={devices}
+                technicians={technicians}
+                onAcknowledgeIncident={handleAcknowledge}
+                onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+                onOpenRepairReport={(d) => setRepairDevice(d)}
+                onOpenMachineDetails={(d) => setDetailsDevice(d)}
+                onToast={(msg) => showToast(msg)}
+                isMuted={isMuted}
+                onToggleMute={toggleMute}
+                isExpandedDefault={criticalAlarmCount > 0}
+              />
+            )}
+
+            {/* AI PREDICTIVE MAINTENANCE SCHEDULE (Vibration & Sensor Current) */}
+            <AIPredictiveMaintenanceScheduleBanner
+              devices={devices}
+              onOpenPredictiveDetails={(device) => setPredictiveDevice(device)}
+              onSetMaintenance={(id) => handleSetDeviceStatus(id, 'MAINTENANCE', 'Lên lịch bảo trì từ dự báo rung & dòng điện AI')}
+              onQuickSyncDirect={(id) => handleQuickSyncDirect(id)}
+              onToast={(msg) => showToast(msg)}
+            />
+
+            {/* Batch Selection Controls Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-slate-800 bg-slate-900/60 p-3 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleSelectAllFiltered}
+                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 font-semibold transition active:scale-95 ${
+                    filteredDevices.length > 0 &&
+                    filteredDevices.every((d) => selectedDeviceIds.includes(d.id))
+                      ? 'border-amber-400 bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40 font-bold'
+                      : selectedDeviceIds.length > 0
+                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                      : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600 hover:text-white'
+                  }`}
+                  title="Chọn tất cả các máy đang hiển thị trong bộ lọc"
+                >
+                  <CheckSquare className="h-3.5 w-3.5 text-amber-400" />
+                  <span>
+                    {filteredDevices.length > 0 &&
+                    filteredDevices.every((d) => selectedDeviceIds.includes(d.id))
+                      ? `Đã chọn tất cả (${filteredDevices.length})`
+                      : `Chọn tất cả (${filteredDevices.length})`}
+                  </span>
+                </button>
+
+                {selectedDeviceIds.length > 0 && (
+                  <button
+                    onClick={() => setSelectedDeviceIds([])}
+                    className="rounded-xl border border-slate-700 bg-slate-800/90 hover:bg-slate-700 px-3 py-1.5 text-slate-400 hover:text-white transition"
+                    title="Bỏ chọn toàn bộ máy"
+                  >
+                    Bỏ chọn ({selectedDeviceIds.length})
+                  </button>
+                )}
+
+                <span className="hidden sm:inline text-slate-700">|</span>
+                <span className="hidden sm:inline text-[11px] text-slate-400 font-medium">
+                  Chọn nhanh:
+                </span>
+                <button
+                  onClick={() => handleSelectByStatus('ALARM_STOPPED')}
+                  className="rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-2 py-1 text-[11px] font-semibold text-red-300 transition"
+                  title="Chọn tất cả máy đang có sự cố dừng"
+                >
+                  Sự cố ({filteredDevices.filter((d) => d.status === 'ALARM_STOPPED').length})
+                </button>
+                <button
+                  onClick={() => handleSelectByStatus('MAINTENANCE')}
+                  className="rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-2 py-1 text-[11px] font-semibold text-blue-300 transition"
+                  title="Chọn tất cả máy đang trong trạng thái bảo trì"
+                >
+                  Bảo trì ({filteredDevices.filter((d) => d.status === 'MAINTENANCE').length})
+                </button>
+                <button
+                  onClick={() => handleSelectByStatus('RUNNING')}
+                  className="rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-1 text-[11px] font-semibold text-emerald-300 transition"
+                  title="Chọn tất cả máy đang hoạt động bình thường"
+                >
+                  Đang chạy ({filteredDevices.filter((d) => d.status === 'RUNNING').length})
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+                {selectedDeviceIds.length > 0 ? (
+                  <span className="text-amber-300 font-bold flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    Thanh tác vụ hàng loạt đang nổi ở cuối màn hình
+                  </span>
+                ) : (
+                  <span>Tick vào ô chọn ở góc thẻ máy để kích hoạt thao tác hàng loạt</span>
+                )}
+              </div>
+            </div>
+
             {/* Industrial SCADA Machine Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredDevices.map((device, idx) => (
                 <div key={device.id} id={idx === 0 ? 'tour-first-device-card' : undefined}>
                   <DeviceCard
                     device={device}
+                    isSelected={selectedDeviceIds.includes(device.id)}
+                    onToggleSelect={handleToggleSelectDevice}
                     onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
                     onOpenRepairReport={(d) => setRepairDevice(d)}
                     onTriggerAlarm={(id) => handleTriggerAlarm(id)}
@@ -1209,15 +1388,34 @@ export default function App() {
                     onOpenMachineDetails={(d) => setDetailsDevice(d)}
                     onQuickActionSuccess={(updated, msg) => handleQuickActionSuccess(updated, msg)}
                     onQuickSyncDirect={(id) => handleQuickSyncDirect(id)}
+                    onOpenPredictiveDetails={(d) => setPredictiveDevice(d)}
                   />
                 </div>
               ))}
             </div>
+
+            {/* Floating Action Toolbar for Simultaneous Operations */}
+            <FloatingBatchActionBar
+              selectedDeviceIds={selectedDeviceIds}
+              devices={devices}
+              onClearSelection={() => setSelectedDeviceIds([])}
+              onSelectAll={() => setSelectedDeviceIds(filteredDevices.map((d) => d.id))}
+              onBatchActionSuccess={handleBatchActionSuccess}
+              onToast={(msg) => showToast(msg)}
+            />
           </div>
         )}
 
         {/* TAB 2: AI BRAIN & HUMAN-LEARNED KNOWLEDGE */}
-        {activeTab === 'learnings' && <AILearningsTab learnings={learnings} />}
+        {activeTab === 'learnings' && (
+          <AILearningsTab
+            learnings={learnings}
+            onLearningAdded={(newLearning) => {
+              setLearnings((prev) => [newLearning, ...prev]);
+              showToast(`Đã thêm bài học "${newLearning.title}" vào Bộ Não Tri Thức AI!`);
+            }}
+          />
+        )}
 
         {/* TAB 3: TECHNICAL MANUALS & SOPS HUB */}
         {activeTab === 'documents' && (
@@ -1325,6 +1523,7 @@ export default function App() {
       {diagnosisDevice && (
         <AIDiagnosisModal
           device={diagnosisDevice}
+          technicians={technicians}
           onClose={() => setDiagnosisDevice(null)}
           onOpenRepairReport={(d) => setRepairDevice(d)}
           onOpenRCA={(devId, errCode) => {
@@ -1419,6 +1618,20 @@ export default function App() {
         onResetTelemetry={() => setShortcutTelemetry(resetShortcutTelemetry())}
         onSetTelemetry={setShortcutTelemetry}
       />
+
+      {/* 11. AI Vibration & Sensor Current Predictive Maintenance Modal */}
+      {predictiveDevice && (
+        <AIVibrationCurrentPredictiveModal
+          device={predictiveDevice}
+          onClose={() => setPredictiveDevice(null)}
+          onSetMaintenance={(id) => {
+            handleSetDeviceStatus(id, 'MAINTENANCE', 'Chuyển sang bảo trì từ dự báo rung & dòng điện AI');
+            setPredictiveDevice(null);
+          }}
+          onCalibrateSensors={(id) => handleQuickSyncDirect(id)}
+          onToast={(msg) => showToast(msg)}
+        />
+      )}
     </div>
   );
 }

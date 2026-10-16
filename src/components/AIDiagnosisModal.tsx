@@ -73,12 +73,15 @@ import {
   issueSparePart,
 } from '../utils/sparePartsStorage';
 
+import { IncidentGroupChat } from './IncidentGroupChat';
+
 interface AIDiagnosisModalProps {
   device: Device | null;
   onClose: () => void;
   onOpenRepairReport: (device: Device) => void;
   onOpenRCA?: (deviceId?: string, errorCode?: string) => void;
   onOpenInventory?: (partIdOrSku?: string) => void;
+  technicians?: Technician[];
 }
 
 // Preset real-world symptoms commonly observed during EDM breakdown
@@ -96,6 +99,7 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
   onOpenRepairReport,
   onOpenRCA,
   onOpenInventory,
+  technicians,
 }) => {
   if (!device) return null;
 
@@ -105,7 +109,7 @@ export const AIDiagnosisModal: React.FC<AIDiagnosisModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [matchedDocs, setMatchedDocs] = useState<any[]>([]);
   const [matchedLearnings, setMatchedLearnings] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'diagnosis' | 'chat'>('diagnosis');
+  const [activeTab, setActiveTab] = useState<'diagnosis' | 'group_chat' | 'chat'>('diagnosis');
 
   // Smart History-Based Diagnosis States
   const [useHistoryDiagnostic, setUseHistoryDiagnostic] = useState<boolean>(true);
@@ -815,11 +819,11 @@ Ngày trích xuất: ${new Date().toLocaleDateString('vi-VN')}
           </div>
         </div>
 
-        {/* Tab switchers: Diagnosis SOP vs Field Copilot Chat */}
-        <div className="flex border-b border-slate-800 bg-slate-900/40 px-6 text-xs font-semibold">
+        {/* Tab switchers: Diagnosis SOP vs Real-time Group Chat vs Field Copilot Chat */}
+        <div className="flex border-b border-slate-800 bg-slate-900/40 px-6 text-xs font-semibold overflow-x-auto">
           <button
             onClick={() => setActiveTab('diagnosis')}
-            className={`flex items-center gap-2 border-b-2 py-3 px-4 transition ${
+            className={`flex items-center gap-2 border-b-2 py-3 px-4 transition shrink-0 ${
               activeTab === 'diagnosis'
                 ? 'border-purple-500 text-purple-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -828,9 +832,26 @@ Ngày trích xuất: ${new Date().toLocaleDateString('vi-VN')}
             <Sparkles className="h-4 w-4" />
             <span>Kết Quả Chẩn Đoán & Quy Trình Khắc Phục</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('group_chat')}
+            className={`flex items-center gap-2 border-b-2 py-3 px-4 transition shrink-0 ${
+              activeTab === 'group_chat'
+                ? 'border-purple-500 text-purple-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Users className="h-4 w-4 text-purple-400" />
+            <span>Thảo Luận Nhóm Sự Cố Thời Gian Thực</span>
+            <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300 font-mono border border-emerald-500/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live Chat
+            </span>
+          </button>
+
           <button
             onClick={() => setActiveTab('chat')}
-            className={`flex items-center gap-2 border-b-2 py-3 px-4 transition ${
+            className={`flex items-center gap-2 border-b-2 py-3 px-4 transition shrink-0 ${
               activeTab === 'chat'
                 ? 'border-purple-500 text-purple-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -846,7 +867,14 @@ Ngày trích xuất: ${new Date().toLocaleDateString('vi-VN')}
 
         {/* Main Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {activeTab === 'diagnosis' ? (
+          {activeTab === 'group_chat' ? (
+            <IncidentGroupChat
+              device={device}
+              technicians={technicians}
+              onOpenRepairReport={onOpenRepairReport}
+              onOpenInventory={onOpenInventory}
+            />
+          ) : activeTab === 'diagnosis' ? (
             <>
               {/* HANDS-FREE VOICE-TO-TEXT SYMPTOMS INPUT CARD */}
               <div

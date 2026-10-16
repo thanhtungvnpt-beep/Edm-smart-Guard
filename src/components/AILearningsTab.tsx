@@ -9,16 +9,55 @@ import {
   User,
   Wrench,
   Zap,
+  Plus,
+  ThumbsUp,
+  MessageSquare,
+  Star,
+  Tag,
+  Check,
+  X,
+  ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { AILearning } from '../types';
 
 interface AILearningsTabProps {
   learnings: AILearning[];
+  onLearningAdded?: (newLearning: AILearning) => void;
 }
 
-export const AILearningsTab: React.FC<AILearningsTabProps> = ({ learnings }) => {
+export const AILearningsTab: React.FC<AILearningsTabProps> = ({
+  learnings: initialLearnings,
+  onLearningAdded,
+}) => {
+  const [learnings, setLearnings] = useState<AILearning[]>(initialLearnings);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedModel, setSelectedModel] = useState<string>('ALL');
+  const [onlyVerified, setOnlyVerified] = useState(false);
+
+  // Modal contribute states
+  const [showContributeModal, setShowContributeModal] = useState(false);
+  const [contributeTitle, setContributeTitle] = useState('');
+  const [contributeErrorCode, setContributeErrorCode] = useState('E-102');
+  const [contributeModel, setContributeModel] = useState('Makino U6 H.E.A.T');
+  const [contributeDiscoveredBy, setContributeDiscoveredBy] = useState('Nguyễn Văn Hùng (Kỹ sư Trưởng)');
+  const [contributeProblem, setContributeProblem] = useState('');
+  const [contributeSolution, setContributeSolution] = useState('');
+  const [contributeTips, setContributeTips] = useState('');
+  const [contributeParts, setContributeParts] = useState('');
+  const [contributeRating, setContributeRating] = useState(5);
+  const [submittingContribute, setSubmittingContribute] = useState(false);
+
+  // Feedback modal states
+  const [feedbackLearningId, setFeedbackLearningId] = useState<string | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackTechName, setFeedbackTechName] = useState('Lê Hoàng Nam (KTV Cắt Dây)');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+
+  // Sync if initialLearnings changes
+  React.useEffect(() => {
+    setLearnings(initialLearnings);
+  }, [initialLearnings]);
 
   const models = ['ALL', ...Array.from(new Set(learnings.map((l) => l.machineModel)))];
 
@@ -27,11 +66,107 @@ export const AILearningsTab: React.FC<AILearningsTabProps> = ({ learnings }) => 
       l.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       l.errorCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
       l.humanSolution.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.aiSynthesizedRule.toLowerCase().includes(searchTerm.toLowerCase());
+      l.aiSynthesizedRule.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (l.practicalTips && l.practicalTips.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesModel = selectedModel === 'ALL' || l.machineModel === selectedModel;
-    return matchesSearch && matchesModel;
+    const matchesVerified = !onlyVerified || l.verified;
+    return matchesSearch && matchesModel && matchesVerified;
   });
+
+  // Handle direct learning contribution
+  const handleContributeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contributeTitle.trim() || !contributeSolution.trim()) return;
+
+    setSubmittingContribute(true);
+    try {
+      const res = await fetch('/api/ai/learnings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: contributeTitle.trim(),
+          errorCode: contributeErrorCode.trim(),
+          machineModel: contributeModel.trim(),
+          discoveredBy: contributeDiscoveredBy.trim(),
+          problemStatement: contributeProblem.trim() || contributeTitle.trim(),
+          humanSolution: contributeSolution.trim(),
+          practicalTips: contributeTips.trim(),
+          partsInvolved: contributeParts.split(',').map((p) => p.trim()).filter(Boolean),
+          effectivenessRating: contributeRating,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.data) {
+        setLearnings((prev) => [data.data, ...prev]);
+        if (onLearningAdded) onLearningAdded(data.data);
+        setShowContributeModal(false);
+        setContributeTitle('');
+        setContributeProblem('');
+        setContributeSolution('');
+        setContributeTips('');
+        setContributeParts('');
+      }
+    } catch (err) {
+      console.error('Contribute learning error:', err);
+    } finally {
+      setSubmittingContribute(false);
+    }
+  };
+
+  // Handle upvote / successful application
+  const handleApplySuccess = async (learningId: string) => {
+    try {
+      const res = await fetch(`/api/ai/learnings/${learningId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedbackType: 'SUCCESSFUL_APPLICATION',
+          technicianName: 'Kỹ thuật viên hiện trường',
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setLearnings((prev) =>
+          prev.map((l) => (l.id === learningId ? data.data : l))
+        );
+      }
+    } catch (err) {
+      console.error('Feedback error:', err);
+    }
+  };
+
+  // Handle comment feedback
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackLearningId || !feedbackComment.trim()) return;
+
+    setSubmittingFeedback(true);
+    try {
+      const res = await fetch(`/api/ai/learnings/${feedbackLearningId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedbackType: 'COMMENT',
+          technicianName: feedbackTechName,
+          comment: feedbackComment.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setLearnings((prev) =>
+          prev.map((l) => (l.id === feedbackLearningId ? data.data : l))
+        );
+        setFeedbackLearningId(null);
+        setFeedbackComment('');
+      }
+    } catch (err) {
+      console.error('Feedback comment error:', err);
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -46,28 +181,42 @@ export const AILearningsTab: React.FC<AILearningsTabProps> = ({ learnings }) => 
               <span className="rounded bg-purple-500/20 border border-purple-500/30 px-2.5 py-0.5 text-xs font-mono font-bold text-purple-300">
                 ACTIVE LEARNING GRAPH
               </span>
+              <span className="rounded bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 text-xs font-mono font-bold text-emerald-400 flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3" />
+                Human-Verified
+              </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-extrabold text-white">
               Bộ Não Tri Thức AI: Học Tập Từ Kinh Nghiệm Kỹ Thuật Viên
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Mỗi khi kỹ thuật viên khắc phục xong một ca máy, kinh nghiệm thực chiến tại hiện trường sẽ được AI ghi nhớ và đúc kết thành quy tắc xử lý ưu tiên. Lần sau nếu gặp lỗi tương tự, AI sẽ đề xuất ngay phương pháp thực tế đã được con người kiểm chứng!
+              Mỗi khi kỹ thuật viên hoàn thành sửa máy và cung cấp phản hồi giải pháp thực tế, AI lập tức đúc kết thành quy tắc xử lý ưu tiên. Kỹ thuật viên cũng có thể trực tiếp đóng góp kinh nghiệm, mẹo thực chiến và đánh giá độ chuẩn xác của AI!
             </p>
           </div>
 
-          <div className="flex items-center gap-4 shrink-0 font-mono">
-            <div className="rounded-2xl border border-purple-500/30 bg-purple-900/30 p-4 text-center">
-              <span className="text-2xl sm:text-3xl font-bold text-purple-300 block">
-                {learnings.length}
-              </span>
-              <span className="text-[11px] text-slate-400">Bài học đã nạp</span>
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <div className="flex items-center gap-3 font-mono">
+              <div className="rounded-2xl border border-purple-500/30 bg-purple-900/30 p-3.5 text-center min-w-[90px]">
+                <span className="text-2xl sm:text-3xl font-bold text-purple-300 block">
+                  {learnings.length}
+                </span>
+                <span className="text-[10px] text-slate-400">Bài học đã nạp</span>
+              </div>
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-900/30 p-3.5 text-center min-w-[90px]">
+                <span className="text-2xl sm:text-3xl font-bold text-emerald-300 block">
+                  {learnings.reduce((acc, l) => acc + (l.timesAppliedSuccessfully || 1), 0)}
+                </span>
+                <span className="text-[10px] text-slate-400">Lần áp dụng OK</span>
+              </div>
             </div>
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-900/30 p-4 text-center">
-              <span className="text-2xl sm:text-3xl font-bold text-emerald-300 block">
-                {learnings.reduce((acc, l) => acc + l.timesAppliedSuccessfully, 0)}
-              </span>
-              <span className="text-[11px] text-slate-400">Lần áp dụng thành công</span>
-            </div>
+
+            <button
+              onClick={() => setShowContributeModal(true)}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-purple-600 hover:bg-purple-500 active:scale-95 px-5 py-3 font-bold text-white shadow-xl shadow-purple-600/40 transition shrink-0"
+            >
+              <Plus className="h-5 w-5" />
+              <span>Đóng Góp Kinh Nghiệm</span>
+            </button>
           </div>
         </div>
       </div>
@@ -98,6 +247,18 @@ export const AILearningsTab: React.FC<AILearningsTabProps> = ({ learnings }) => 
               </option>
             ))}
           </select>
+
+          <button
+            onClick={() => setOnlyVerified(!onlyVerified)}
+            className={`rounded-xl border px-3 py-2.5 text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap ${
+              onlyVerified
+                ? 'border-emerald-500 bg-emerald-950/40 text-emerald-300'
+                : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+            }`}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            <span>Đã xác thực</span>
+          </button>
         </div>
       </div>
 
@@ -106,9 +267,9 @@ export const AILearningsTab: React.FC<AILearningsTabProps> = ({ learnings }) => 
         {filtered.map((item) => (
           <div
             key={item.id}
-            className="flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-5 hover:border-purple-500/40 hover:bg-slate-900/90 transition shadow-lg"
+            className="flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-5 hover:border-purple-500/40 hover:bg-slate-900/90 transition shadow-lg space-y-4"
           >
-            <div>
+            <div className="space-y-3">
               {/* Badge & Model */}
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
@@ -119,24 +280,24 @@ export const AILearningsTab: React.FC<AILearningsTabProps> = ({ learnings }) => 
                     {item.machineModel}
                   </span>
                 </div>
-                <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-mono">
+                <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-mono bg-emerald-950/40 border border-emerald-500/30 rounded-lg px-2 py-0.5">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>Áp dụng: {item.timesAppliedSuccessfully} lần</span>
+                  <span>Đã áp dụng: {item.timesAppliedSuccessfully || 1} lần</span>
                 </div>
               </div>
 
               {/* Title */}
-              <h3 className="mt-3 text-base font-bold text-white leading-snug">
+              <h3 className="text-base font-bold text-white leading-snug">
                 {item.title}
               </h3>
 
               {/* Problem Observed */}
-              <p className="mt-2 text-xs text-slate-400 italic">
+              <p className="text-xs text-slate-400 italic bg-black/30 p-2.5 rounded-xl border border-slate-800/60">
                 "{item.problemStatement}"
               </p>
 
               {/* Human Solution */}
-              <div className="mt-3 rounded-xl bg-slate-950/70 border border-slate-800 p-3 text-xs">
+              <div className="rounded-xl bg-slate-950/70 border border-slate-800 p-3 text-xs">
                 <div className="flex items-center gap-1.5 text-slate-300 font-semibold mb-1">
                   <User className="h-3.5 w-3.5 text-amber-400" />
                   <span>Kinh nghiệm con người ({item.discoveredBy}):</span>
@@ -146,8 +307,21 @@ export const AILearningsTab: React.FC<AILearningsTabProps> = ({ learnings }) => 
                 </p>
               </div>
 
+              {/* Practical Tips if any */}
+              {item.practicalTips && (
+                <div className="rounded-xl bg-amber-950/30 border border-amber-500/30 p-3 text-xs">
+                  <div className="flex items-center gap-1.5 text-amber-300 font-semibold mb-1">
+                    <Lightbulb className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Mẹo thực chiến KTV truyền đạt lại:</span>
+                  </div>
+                  <p className="text-amber-100 font-medium leading-relaxed">
+                    {item.practicalTips}
+                  </p>
+                </div>
+              )}
+
               {/* AI Synthesized Rule */}
-              <div className="mt-3 rounded-xl bg-purple-950/30 border border-purple-500/30 p-3 text-xs">
+              <div className="rounded-xl bg-purple-950/30 border border-purple-500/30 p-3 text-xs">
                 <div className="flex items-center gap-1.5 text-purple-300 font-semibold mb-1">
                   <Sparkles className="h-3.5 w-3.5 text-amber-300" />
                   <span>Quy tắc AI đúc kết được:</span>
@@ -156,16 +330,287 @@ export const AILearningsTab: React.FC<AILearningsTabProps> = ({ learnings }) => 
                   {item.aiSynthesizedRule}
                 </p>
               </div>
+
+              {/* Technician Feedback if any */}
+              {item.technicianFeedback && (
+                <div className="rounded-xl bg-blue-950/30 border border-blue-500/30 p-2.5 text-[11px] text-blue-200">
+                  <div className="flex items-center gap-1 text-blue-300 font-semibold mb-0.5">
+                    <MessageSquare className="h-3 w-3" />
+                    <span>Phản hồi kiểm chứng từ xưởng:</span>
+                  </div>
+                  <p className="italic text-slate-300">{item.technicianFeedback}</p>
+                </div>
+              )}
             </div>
 
-            {/* Footer */}
-            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400">
-              <span>Đóng góp: {item.discoveredBy.split('(')[0]}</span>
-              <span>Ghi nhận: {item.learnedAt}</span>
+            {/* Interactive Feedback Bar */}
+            <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-400 gap-2">
+              <span className="text-[11px] truncate max-w-[140px]">
+                {item.discoveredBy.split('(')[0]} • {item.learnedAt}
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handleApplySuccess(item.id)}
+                  title="Tôi đã áp dụng thành công mẹo này!"
+                  className="flex items-center gap-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-bold transition active:scale-95"
+                >
+                  <ThumbsUp className="h-3 w-3" />
+                  <span>Áp dụng OK (+1)</span>
+                </button>
+
+                <button
+                  onClick={() => setFeedbackLearningId(item.id)}
+                  title="Gửi phản hồi / Bổ sung kinh nghiệm vào bài học"
+                  className="flex items-center gap-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 text-[11px] transition"
+                >
+                  <MessageSquare className="h-3 w-3 text-cyan-400" />
+                  <span>Phản hồi</span>
+                </button>
+              </div>
             </div>
           </div>
         ))}
       </div>
+
+      {/* MODAL: CONTRIBUTE NEW LESSON */}
+      {showContributeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl border border-purple-500/50 bg-slate-950 p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-600 text-white">
+                  <Brain className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">
+                    Đóng Góp Kinh Nghiệm Sửa Chữa Mới Cho AI
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    AI sẽ phân tích giải pháp thực tế của bạn và tự động đúc kết thành quy tắc xử lý ưu tiên.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowContributeModal(false)}
+                className="rounded-full bg-slate-900 p-2 text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleContributeSubmit} className="mt-4 space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Tiêu đề bài học kinh nghiệm:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={contributeTitle}
+                  onChange={(e) => setContributeTitle(e.target.value)}
+                  placeholder="VD: Mẹo chống kẹt cụm dao cắt nhiệt xỏ dây Sodick ALC600G..."
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2 text-xs sm:text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Mã lỗi / Hiện tượng:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={contributeErrorCode}
+                    onChange={(e) => setContributeErrorCode(e.target.value)}
+                    placeholder="VD: E-102, SPW-303, ALARM-204..."
+                    className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Dòng máy áp dụng:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={contributeModel}
+                    onChange={(e) => setContributeModel(e.target.value)}
+                    placeholder="VD: Makino U6, Sodick ALC600G..."
+                    className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Vấn đề hoặc triệu chứng thực tế tại hiện trường:
+                </label>
+                <input
+                  type="text"
+                  value={contributeProblem}
+                  onChange={(e) => setContributeProblem(e.target.value)}
+                  placeholder="Mô tả hiện tượng: máy dừng đột ngột, dây đứt ở đâu, khói hay tia lửa lạ..."
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Giải pháp bạn đã thực hiện để khắc phục thành công:
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={contributeSolution}
+                  onChange={(e) => setContributeSolution(e.target.value)}
+                  placeholder="Nêu cụ thể: kiểm tra van nào, làm sạch thế nào, chỉnh tham số gì..."
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-xs sm:text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-300 mb-1">
+                  <Lightbulb className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Mẹo thực chiến then chốt (Key Tip for AI):</span>
+                </label>
+                <input
+                  type="text"
+                  value={contributeTips}
+                  onChange={(e) => setContributeTips(e.target.value)}
+                  placeholder="VD: Luôn xịt khí khô vào lỗ dẫn dây trước khi siết ốc cố định..."
+                  className="w-full rounded-xl bg-slate-900 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Linh kiện liên quan (phân tách bởi dấu phẩy):
+                  </label>
+                  <input
+                    type="text"
+                    value={contributeParts}
+                    onChange={(e) => setContributeParts(e.target.value)}
+                    placeholder="Dao cắt nhiệt, màng lọc, dây đồng 0.25..."
+                    className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Kỹ thuật viên đóng góp:
+                  </label>
+                  <input
+                    type="text"
+                    value={contributeDiscoveredBy}
+                    onChange={(e) => setContributeDiscoveredBy(e.target.value)}
+                    className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowContributeModal(false)}
+                  className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition"
+                >
+                  Hủy
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={submittingContribute}
+                  className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 px-5 py-2 text-xs sm:text-sm font-bold text-white shadow-lg shadow-purple-600/30 transition disabled:opacity-50"
+                >
+                  {submittingContribute ? (
+                    <>
+                      <Sparkles className="h-4 w-4 animate-spin text-amber-300" />
+                      <span>AI đang đúc kết quy tắc...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>Lưu & Nạp Vào Bộ Não AI</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SUBMIT FEEDBACK / COMMENT ON A LESSON */}
+      {feedbackLearningId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-3xl border border-blue-500/50 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5 text-cyan-400" />
+                <h3 className="font-bold text-white text-sm sm:text-base">
+                  Phản Hồi Về Giải Pháp Thực Tế Này
+                </h3>
+              </div>
+              <button
+                onClick={() => setFeedbackLearningId(null)}
+                className="rounded-full bg-slate-900 p-1.5 text-slate-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleFeedbackSubmit} className="mt-3.5 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Kỹ thuật viên phản hồi:
+                </label>
+                <input
+                  type="text"
+                  value={feedbackTechName}
+                  onChange={(e) => setFeedbackTechName(e.target.value)}
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-1.5 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Nhận xét / Mẹo bổ sung sau khi bạn thử nghiệm giải pháp:
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={feedbackComment}
+                  onChange={(e) => setFeedbackComment(e.target.value)}
+                  placeholder="VD: 'Đã thử trên máy Sodick ca chiều rất hiệu quả, nhưng lưu ý giảm thêm áp lực nước phụ 0.2 Bar để không làm rung dây'..."
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setFeedbackLearningId(null)}
+                  className="rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-1.5 text-xs text-slate-300"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingFeedback}
+                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-1.5 text-xs font-bold text-white shadow-md shadow-blue-600/30"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  <span>Gửi Phản Hồi Cho AI</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

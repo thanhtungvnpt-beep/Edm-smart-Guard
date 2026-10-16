@@ -85,6 +85,12 @@ export const SHORTCUT_DEFINITIONS: Record<string, { combo: string; action: strin
     category: 'operation',
     description: 'Tự động mở Trợ Lý AI Chẩn Đoán cho thiết bị đang bị lỗi hoặc cảnh báo gần nhất để xử lý cấp bách',
   },
+  alt_b: {
+    combo: 'Alt + B',
+    action: 'Bảng Phát Thanh Khẩn Cấp Toàn Xưởng (Emergency Broadcast)',
+    category: 'operation',
+    description: 'Mở bảng tổng hợp số lượng sự cố thời gian thực toàn xưởng phân loại theo mức độ nghiêm trọng',
+  },
   alt_c: {
     combo: 'Alt + C',
     action: 'Bật / Tắt Giao Diện Tương Phản Cao (High Contrast)',

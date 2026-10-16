@@ -20,6 +20,7 @@ import {
   Contrast,
   Sparkles,
   Package,
+  Megaphone,
 } from 'lucide-react';
 import { FactoryStats } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -46,6 +47,9 @@ interface HeaderProps {
   shortcutUsageCount?: number;
   isHighContrast?: boolean;
   onToggleHighContrast?: () => void;
+  onToggleEmergencyBroadcast?: () => void;
+  criticalCount?: number;
+  isEmergencyBroadcastOpen?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -69,6 +73,9 @@ export const Header: React.FC<HeaderProps> = ({
   shortcutUsageCount,
   isHighContrast = false,
   onToggleHighContrast,
+  onToggleEmergencyBroadcast,
+  criticalCount = 0,
+  isEmergencyBroadcastOpen = false,
 }) => {
   const [showDocModal, setShowDocModal] = useState(false);
 
@@ -173,6 +180,31 @@ export const Header: React.FC<HeaderProps> = ({
               {pushPermission === 'granted' ? 'Push Web: Sẵn sàng' : 'Kích hoạt Push Web'}
             </span>
           </button>
+
+          {/* Floor-Wide Emergency Broadcast Panel Toggle Button */}
+          {onToggleEmergencyBroadcast && (
+            <button
+              onClick={onToggleEmergencyBroadcast}
+              title="Mở Bảng Phát Thanh Khẩn Cấp Toàn Xưởng (Emergency Broadcast Panel)"
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition shadow-sm active:scale-95 ${
+                criticalCount > 0
+                  ? 'border-red-500 bg-red-600/30 text-red-300 ring-2 ring-red-500/40 animate-pulse'
+                  : isEmergencyBroadcastOpen
+                  ? 'border-indigo-500 bg-indigo-600/30 text-indigo-300 font-extrabold'
+                  : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-red-500/50 hover:text-red-300'
+              }`}
+            >
+              <Megaphone className={`h-4 w-4 ${criticalCount > 0 ? 'text-red-400' : 'text-amber-400'}`} />
+              <span className="hidden sm:inline">Phát Thanh Khẩn</span>
+              {criticalCount > 0 ? (
+                <span className="flex items-center rounded-full bg-red-600 px-1.5 py-0.2 text-[10px] font-mono font-black text-white shadow-sm">
+                  {criticalCount}
+                </span>
+              ) : (
+                <span className="hidden md:inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+              )}
+            </button>
+          )}
 
           {/* Phone Push Simulator Button */}
           <button

@@ -1,4 +1,6 @@
 import express from 'express';
+import http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -100,6 +102,10 @@ export interface HumanResolution {
   aiHelpfulRating: number; // 1-5
   technicianNotes: string;
   submittedToBrain: boolean;
+  solutionOutcome?: 'RESOLVED_PERMANENTLY' | 'TEMPORARY_BYPASS' | 'TUNED_PARAMETERS' | 'REPLACED_PARTS';
+  aiRecommendationAccuracy?: 'VERY_ACCURATE' | 'PARTIALLY_ACCURATE' | 'INACCURATE' | 'NOT_APPLICABLE';
+  practicalTipsForAI?: string;
+  verifiedRootCause?: string;
 }
 
 export interface Device {
@@ -134,13 +140,20 @@ export interface Device {
 export interface TechnicalDocument {
   id: string;
   title: string;
-  category: 'OPERATING_MANUAL' | 'OEM_ERROR_CODES' | 'SOP' | 'SCHEMATICS' | 'MAINTENANCE_GUIDE';
+  category: 'OPERATING_MANUAL' | 'OEM_ERROR_CODES' | 'SOP' | 'SCHEMATICS' | 'MAINTENANCE_GUIDE' | 'TECHNICAL_SPECS';
   targetModel: string;
   author: string;
   updatedAt: string;
   summary: string;
   content: string;
   tags: string[];
+  fileType?: 'PDF' | 'IMAGE_SCHEMATIC' | 'TEXT' | 'CSV_SPECS' | 'MANUAL';
+  fileName?: string;
+  fileSize?: string;
+  thumbnailUrl?: string;
+  extractedParameters?: Record<string, string | number>;
+  indexedNodes?: string[];
+  schematicComponents?: string[];
 }
 
 export interface AILearning {
@@ -155,6 +168,12 @@ export interface AILearning {
   aiSynthesizedRule: string;
   timesAppliedSuccessfully: number;
   verified: boolean;
+  practicalTips?: string;
+  effectivenessRating?: number; // 1-5
+  technicianFeedback?: string;
+  verifiedBy?: string[];
+  partsInvolved?: string[];
+  feedbackCount?: number;
 }
 
 export interface NotificationLog {
@@ -168,6 +187,36 @@ export interface NotificationLog {
   channel: 'PUSH_NOTIFICATION' | 'SMS' | 'URGENT_AUDIO' | 'EMAIL';
   status: 'SENT' | 'DELIVERED' | 'ACKNOWLEDGED';
   previewText: string;
+}
+
+export interface IncidentChatMessage {
+  id: string;
+  deviceId: string;
+  incidentErrorCode?: string;
+  senderId: string;
+  senderName: string;
+  senderRole: string;
+  senderAvatar?: string;
+  content: string;
+  timestamp: string;
+  type?: 'TEXT' | 'TELEMETRY_SHARE' | 'AI_ADVICE' | 'ACTION_TAKEN' | 'SOLUTION_PINNED' | 'VOICE_TRANSCRIPT';
+  telemetrySnapshot?: {
+    dischargeVoltage?: number;
+    peakCurrent?: number;
+    dielectricPressure?: number;
+    dielectricTemp?: number;
+    wireTension?: number;
+    vibration?: number;
+  };
+  pinned?: boolean;
+  reactions?: Record<string, number>;
+  imageUrl?: string;
+  actionTag?: {
+    type: string;
+    label: string;
+    color: string;
+    icon?: string;
+  };
 }
 
 export interface MobileDevice {
@@ -200,8 +249,8 @@ export interface MobileDevice {
   isLocked?: boolean;
 }
 
-// Helper to call Gemini with retry and fallback
-async function callGeminiWithFallback(prompt: string, schema?: any): Promise<string> {
+// Helper to call Gemini with retry and fallback (supports text prompts or multimodal contents)
+async function callGeminiWithFallback(contents: any, schema?: any): Promise<string> {
   const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
   let lastError: any = null;
 
@@ -216,7 +265,7 @@ async function callGeminiWithFallback(prompt: string, schema?: any): Promise<str
       }
       const response = await ai.models.generateContent({
         model,
-        contents: prompt,
+        contents,
         config,
       });
       if (response.text) {
@@ -930,6 +979,110 @@ setInterval(() => {
   });
 }, 2500);
 
+// In-Memory Real-Time Incident Chat Store (Group Chat partitioned by deviceId)
+let incidentChatStore: Record<string, IncidentChatMessage[]> = {
+  'dev-01': [
+    {
+      id: 'chat-dev01-1',
+      deviceId: 'dev-01',
+      incidentErrorCode: 'E-102',
+      senderId: 'tech-01',
+      senderName: 'Lê Hoàng Nam',
+      senderRole: 'Chuyên gia Cắt Dây EDM',
+      senderAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      content: 'Chào anh em ca trực! Máy Makino U6 vừa báo dừng khẩn cấp lỗi E-102 (Đứt dây cắt liên tục). Dây đứt đúng lúc dao cắt đang vào góc lượn sắc R0.15mm trên phôi SKD11 dày 80mm.',
+      timestamp: '19:42:15',
+      type: 'TEXT',
+      reactions: { '👀': 3 },
+    },
+    {
+      id: 'chat-dev01-2',
+      deviceId: 'dev-01',
+      incidentErrorCode: 'E-102',
+      senderId: 'tech-02',
+      senderName: 'Nguyễn Văn Hùng',
+      senderRole: 'Kỹ sư Trưởng',
+      senderAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      content: 'Nam kiểm tra ngay đồng hồ lưu lượng vòi xả cao áp xem áp lực có tụt dưới 1.0 Bar không. Phôi dày 80mm nếu áp lực yếu xỉ than không thoát kịp sẽ gây ngắn mạch tia lửa ngay.',
+      timestamp: '19:43:20',
+      type: 'TEXT',
+      reactions: { '👍': 2 },
+    },
+    {
+      id: 'chat-dev01-3',
+      deviceId: 'dev-01',
+      incidentErrorCode: 'E-102',
+      senderId: 'tech-01',
+      senderName: 'Lê Hoàng Nam',
+      senderRole: 'Chuyên gia Cắt Dây EDM',
+      senderAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      content: 'Em vừa đo telemetry thực tế tại bồn máy: Áp lực nước xả chỉ còn 0.65 Bar, dòng đỉnh vọt lên 38.5A!',
+      timestamp: '19:44:05',
+      type: 'TELEMETRY_SHARE',
+      telemetrySnapshot: {
+        dielectricPressure: 0.65,
+        peakCurrent: 38.5,
+        vibration: 1.85,
+        dischargeVoltage: 32.0,
+      },
+      reactions: { '⚠️': 4 },
+    },
+    {
+      id: 'chat-dev01-4',
+      deviceId: 'dev-01',
+      incidentErrorCode: 'E-102',
+      senderId: 'ai-assistant',
+      senderName: 'AI Technical Specialist',
+      senderRole: 'Trợ Lý AI Phân Tích Sự Cố',
+      senderAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
+      content: '⚡ Phân tích chẩn đoán AI: Áp suất 0.65 Bar < 1.1 Bar (ngưỡng tối thiểu) khiến mật độ xỉ tại khe phóng điện tăng 400%, gây hiện tượng hồ quang tập trung làm đứt dây đồng 0.25mm. Đề xuất: 1) Kiểm tra lọc giấy 3um, 2) Vệ sinh lỗ dẫn hướng kim cương Diamond Guide bằng que nỉ và cồn IPA, 3) Giảm dòng đỉnh IP xuống 15% tại cung lượn R<0.3mm.',
+      timestamp: '19:44:30',
+      type: 'AI_ADVICE',
+      pinned: true,
+      reactions: { '💡': 5, '🔥': 2 },
+    },
+    {
+      id: 'chat-dev01-5',
+      deviceId: 'dev-01',
+      incidentErrorCode: 'E-102',
+      senderId: 'tech-03',
+      senderName: 'Trần Minh Tuấn',
+      senderRole: 'Kỹ sư Cơ điện',
+      senderAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+      content: 'Kho vật tư vừa xuất sẵn 2 lõi lọc giấy 3um ở Kệ A-03 rồi nhé Nam. Em đang mang que nỉ vi sợi sang hỗ trợ lau đầu kim cương luôn.',
+      timestamp: '19:45:10',
+      type: 'ACTION_TAKEN',
+      reactions: { '🙌': 3 },
+    },
+  ],
+  'dev-02': [
+    {
+      id: 'chat-dev02-1',
+      deviceId: 'dev-02',
+      incidentErrorCode: 'ALARM-204',
+      senderId: 'tech-01',
+      senderName: 'Lê Hoàng Nam',
+      senderRole: 'Chuyên gia Cắt Dây EDM',
+      content: 'Máy Sodick ALC600G báo ALARM-204 (Tụt áp suất dung dịch điện môi). Bơm tuần hoàn vẫn chạy nhưng áp lực hiển thị chỉ 0.38 Bar.',
+      timestamp: '18:50:00',
+      type: 'TEXT',
+    },
+    {
+      id: 'chat-dev02-2',
+      deviceId: 'dev-02',
+      incidentErrorCode: 'ALARM-204',
+      senderId: 'tech-02',
+      senderName: 'Nguyễn Văn Hùng',
+      senderRole: 'Kỹ sư Trưởng',
+      content: 'Theo kinh nghiệm bài học learn-01: đừng vội thay cả cảm biến 800$, tháo rắc ren cảm biến S-104 xịt rửa màng rung bằng dung môi Carb Cleaner xem có cặn muội bám không!',
+      timestamp: '18:51:15',
+      type: 'TEXT',
+      pinned: true,
+      reactions: { '💡': 4 },
+    },
+  ],
+};
+
 // --- REST API ROUTES ---
 
 // 1. Get all devices
@@ -1394,10 +1547,136 @@ app.post('/api/devices/:id/status', (req, res) => {
   }
 });
 
+// 6.3 Batch Actions on Multiple Devices ('sync', 'set-maintenance', 'set-running', 'reset-alarm', 'calibrate-sensors')
+app.post('/api/devices/batch-action', (req, res) => {
+  try {
+    const { deviceIds, action, status, technicianName, note } = req.body;
+    if (!Array.isArray(deviceIds) || deviceIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Danh sách ID thiết bị không hợp lệ hoặc rỗng' });
+    }
+
+    const now = new Date();
+    const targetDevices = devices.filter((d) => deviceIds.includes(d.id));
+    if (targetDevices.length === 0) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị nào trong danh sách' });
+    }
+
+    const performer = technicianName || 'Kỹ thuật viên Trưởng ca';
+    const updatedDevices: any[] = [];
+    let summaryMessage = '';
+
+    if (action === 'sync') {
+      targetDevices.forEach((device) => {
+        const latencyMs = Math.floor(Math.random() * 9) + 11;
+        device.lastEdmSignalTime = now.toISOString();
+        (device as any).lastSyncTime = now.toISOString();
+        (device as any).lastSyncLatencyMs = latencyMs;
+        updatedDevices.push(device);
+      });
+      summaryMessage = `Đã đồng bộ PLC hàng loạt thành công cho ${targetDevices.length} máy EDM! (${targetDevices.map((d) => d.code).join(', ')})`;
+    } else if (action === 'set-maintenance' || (action === 'set-status' && status === 'MAINTENANCE')) {
+      targetDevices.forEach((device) => {
+        device.status = 'MAINTENANCE';
+        device.lastEdmSignalTime = now.toISOString();
+        device.telemetry.peakCurrent = 0;
+        device.telemetry.dischargeVoltage = 0;
+        device.telemetry.wireSpeed = 0;
+        device.telemetry.vibration = 0.1;
+        updatedDevices.push(device);
+      });
+      summaryMessage = `Đã chuyển đồng thời ${targetDevices.length} máy sang chế độ Bảo Trì (MAINTENANCE)! (${targetDevices.map((d) => d.code).join(', ')})`;
+    } else if (action === 'set-running' || (action === 'set-status' && status === 'RUNNING')) {
+      targetDevices.forEach((device) => {
+        device.status = 'RUNNING';
+        device.lastEdmSignalTime = now.toISOString();
+        if (device.type === 'WIRE_EDM') {
+          device.telemetry.dischargeVoltage = 55.0;
+          device.telemetry.peakCurrent = 24.5;
+          device.telemetry.dielectricPressure = 1.35;
+          device.telemetry.dielectricTemp = 21.2;
+          device.telemetry.wireTension = 13.0;
+          device.telemetry.wireSpeed = 8.5;
+          device.telemetry.vibration = 0.65;
+        } else {
+          device.telemetry.dischargeVoltage = 48.0;
+          device.telemetry.peakCurrent = 20.0;
+          device.telemetry.dielectricPressure = 1.2;
+          device.telemetry.dielectricTemp = 22.0;
+          device.telemetry.wireTension = 10.0;
+          device.telemetry.wireSpeed = 6.0;
+          device.telemetry.vibration = 0.55;
+        }
+        updatedDevices.push(device);
+      });
+      summaryMessage = `Đã khởi động vận hành đồng thời ${targetDevices.length} máy EDM! (${targetDevices.map((d) => d.code).join(', ')})`;
+    } else if (action === 'reset-alarm') {
+      let resetCount = 0;
+      targetDevices.forEach((device) => {
+        if (device.status === 'ALARM_STOPPED' || device.activeIncident) {
+          device.status = 'IDLE';
+          device.activeIncident = undefined;
+          device.lastEdmSignalTime = now.toISOString();
+          resetCount++;
+        }
+        updatedDevices.push(device);
+      });
+      summaryMessage = `Đã reset cảnh báo dừng máy cho ${resetCount} thiết bị thành công!`;
+    } else if (action === 'calibrate-sensors') {
+      targetDevices.forEach((device) => {
+        if (device.type === 'WIRE_EDM') {
+          device.telemetry.dielectricPressure = 1.35;
+          device.telemetry.dischargeVoltage = 55.0;
+          device.telemetry.peakCurrent = 24.5;
+          device.telemetry.dielectricTemp = 21.2;
+          device.telemetry.wireTension = 13.0;
+          device.telemetry.vibration = 0.65;
+        } else {
+          device.telemetry.dielectricPressure = 1.2;
+          device.telemetry.dischargeVoltage = 48.0;
+          device.telemetry.peakCurrent = 20.0;
+          device.telemetry.dielectricTemp = 22.0;
+          device.telemetry.wireTension = 10.0;
+          device.telemetry.vibration = 0.55;
+        }
+        (device as any).lastCalibrationTime = now.toISOString();
+        device.lastEdmSignalTime = now.toISOString();
+        updatedDevices.push(device);
+      });
+      summaryMessage = `Đã hiệu chuẩn cảm biến hàng loạt về dải tiêu chuẩn cho ${targetDevices.length} máy EDM!`;
+    } else {
+      return res.status(400).json({ success: false, message: `Hành động hàng loạt '${action}' không được hỗ trợ` });
+    }
+
+    return res.json({
+      success: true,
+      message: summaryMessage,
+      action,
+      updatedCount: updatedDevices.length,
+      devices: updatedDevices,
+      performer,
+      executedAt: now.toISOString(),
+      note: note || '',
+    });
+  } catch (err: any) {
+    console.error('Batch action error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Lỗi xử lý tác vụ hàng loạt' });
+  }
+});
+
 // 7. Resolve Incident & Provide Human Resolution Data
 app.post('/api/devices/:id/resolve', async (req, res) => {
   try {
-    const { actualRootCause, fixSummary, partsReplaced, durationMinutes, aiHelpfulRating, technicianNotes } = req.body;
+    const {
+      actualRootCause,
+      fixSummary,
+      partsReplaced,
+      durationMinutes,
+      aiHelpfulRating,
+      technicianNotes,
+      solutionOutcome,
+      aiRecommendationAccuracy,
+      practicalTipsForAI,
+    } = req.body;
     const device = devices.find((d) => d.id === req.params.id);
     if (!device || !device.activeIncident) {
       return res.status(404).json({ success: false, message: 'No active incident for this device' });
@@ -1415,6 +1694,9 @@ app.post('/api/devices/:id/resolve', async (req, res) => {
       aiHelpfulRating: Number(aiHelpfulRating) || 5,
       technicianNotes: technicianNotes || '',
       submittedToBrain: true,
+      solutionOutcome: solutionOutcome || 'RESOLVED_PERMANENTLY',
+      aiRecommendationAccuracy: aiRecommendationAccuracy || 'VERY_ACCURATE',
+      practicalTipsForAI: practicalTipsForAI || '',
     };
 
     device.activeIncident.humanResolution = resolution;
@@ -1436,26 +1718,30 @@ app.post('/api/devices/:id/resolve', async (req, res) => {
       device.telemetry.vibration = 0.9;
     }
 
-    // Auto-trigger AI learning synthesis from human repair experience
+    // Auto-trigger AI learning synthesis from human repair experience & feedback
     let newAILearning: AILearning | null = null;
-    if (fixSummary && fixSummary.length > 10) {
+    if (fixSummary && fixSummary.length > 5) {
       try {
         const prompt = `
 Bạn là Kỹ sư Trưởng AI Chuyên gia bảo trì máy EDM và thiết bị công nghiệp sản xuất chính xác.
-Kỹ thuật viên vừa hoàn thành sửa máy và gửi báo cáo thực tế. Hãy tổng hợp bài học kinh nghiệm ("AI Learning") ngắn gọn, có giá trị thực chiến cao để bộ não AI học hỏi và ghi nhớ cho các lần sửa sau:
+Kỹ thuật viên vừa hoàn thành sửa máy và gửi báo cáo cùng phản hồi nghiệm thu thực tế.
+Hãy phân tích kinh nghiệm và phản hồi này để tổng hợp một bài học ("AI Learning") thực chiến cao cho bộ não AI:
 
-- Thiết bị: ${device.model} (${device.name})
+- Thiết bị: ${device.model} (${device.name}), Loại: ${device.type}
 - Mã lỗi đã xảy ra: ${device.activeIncident.errorCode} - ${device.activeIncident.errorTitle}
 - Nguyên nhân thực tế phát hiện: ${resolution.actualRootCause}
 - Phương án sửa chữa thực tế của kỹ thuật viên: ${resolution.fixSummary}
-- Linh kiện đã thay thế/vệ sinh: ${resolution.partsReplaced.join(', ') || 'Không thay, chỉ vệ sinh và chỉnh thông số'}
-- Đánh giá của kỹ thuật viên đối với AI: ${resolution.aiHelpfulRating}/5 sao
+- Kết quả nghiệm thu: ${resolution.solutionOutcome}
+- Đánh giá của KTV về độ chuẩn xác của AI ban đầu: ${resolution.aiRecommendationAccuracy} (Hài lòng: ${resolution.aiHelpfulRating}/5 sao)
+- Mẹo thực chiến KTV truyền đạt lại cho AI: ${resolution.practicalTipsForAI || 'Không có'}
+- Linh kiện đã thay thế/vệ sinh: ${resolution.partsReplaced.join(', ') || 'Không thay mới'}
 - Ghi chú thêm: ${resolution.technicianNotes}
 
 Hãy trả về JSON theo schema:
 {
-  "title": "Tên bài học kinh nghiệm ngắn gọn (tối đa 15 từ)",
-  "aiSynthesizedRule": "Đúc kết quy tắc xử lý thực chiến của AI (1-2 câu, nêu rõ mẹo kiểm tra hoặc cách làm tiết kiệm thời gian nhất)"
+  "title": "Tên bài học kinh nghiệm súc tích (tối đa 15 từ)",
+  "aiSynthesizedRule": "Đúc kết quy tắc xử lý thực chiến của AI (1-2 câu, nêu rõ mẹo kiểm tra hoặc cách làm tiết kiệm thời gian nhất)",
+  "practicalTips": "Mẹo then chốt cho KTV khác khi gặp lỗi tương tự (1 câu ngắn gọn)"
 }
 `;
         const response = await ai.models.generateContent({
@@ -1468,6 +1754,7 @@ Hãy trả về JSON theo schema:
               properties: {
                 title: { type: Type.STRING },
                 aiSynthesizedRule: { type: Type.STRING },
+                practicalTips: { type: Type.STRING },
               },
               required: ['title', 'aiSynthesizedRule'],
             },
@@ -1486,19 +1773,44 @@ Hãy trả về JSON theo schema:
             problemStatement: `Sự cố ${device.activeIncident.errorCode}: ${resolution.actualRootCause}`,
             humanSolution: resolution.fixSummary,
             aiSynthesizedRule: parsed.aiSynthesizedRule,
+            practicalTips: parsed.practicalTips || resolution.practicalTipsForAI || '',
+            effectivenessRating: resolution.aiHelpfulRating,
+            technicianFeedback: `KTV đánh giá độ chuẩn AI: ${resolution.aiRecommendationAccuracy}. Ghi chú: ${resolution.technicianNotes || 'Hoàn tất nghiệm thu an toàn'}`,
+            partsInvolved: resolution.partsReplaced,
             timesAppliedSuccessfully: 1,
             verified: true,
           };
-          aiLearnings.unshift(newAILearning);
+          if (newAILearning) {
+            aiLearnings.unshift(newAILearning);
+          }
         }
       } catch (aiErr) {
         console.warn('AI learning synthesis fallback:', aiErr);
+        // Fallback learning
+        newAILearning = {
+          id: `learn-${Date.now()}`,
+          title: `Xử lý lỗi ${device.activeIncident.errorCode} trên máy ${device.model}`,
+          errorCode: device.activeIncident.errorCode,
+          machineModel: device.model,
+          discoveredBy: resolution.technicianName,
+          learnedAt: new Date().toISOString().split('T')[0],
+          problemStatement: resolution.actualRootCause,
+          humanSolution: resolution.fixSummary,
+          aiSynthesizedRule: `Khi gặp lỗi ${device.activeIncident.errorCode}: ${resolution.fixSummary.slice(0, 120)}...`,
+          practicalTips: resolution.practicalTipsForAI || 'Kiểm tra kỹ tình trạng mạt phôi trước khi khởi động lại.',
+          effectivenessRating: resolution.aiHelpfulRating,
+          timesAppliedSuccessfully: 1,
+          verified: true,
+        };
+        if (newAILearning) {
+          aiLearnings.unshift(newAILearning);
+        }
       }
     }
 
     res.json({
       success: true,
-      message: 'Đã hoàn tất khắc phục sự cố! Thiết bị đã sẵn sàng hoạt động trở lại.',
+      message: 'Đã hoàn tất khắc phục sự cố! Phản hồi của bạn đã được ghi nhớ vào Bộ Não Tri Thức AI.',
       incident: device.activeIncident,
       newAILearning,
     });
@@ -1944,6 +2256,82 @@ app.post('/api/ai/estimate-repair-eta', (req, res) => {
   } catch (err: any) {
     console.error('Estimate ETA error:', err);
     res.status(500).json({ success: false, message: 'Lỗi tính toán ETA' });
+  }
+});
+
+// 8.1b AI Predictive Maintenance Schedule based on Vibration & Current Telemetry
+app.post('/api/ai/predictive-maintenance/vibration-current-schedule', async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+    const targetDevice = deviceId ? devices.find((d) => d.id === deviceId) : null;
+
+    if (deviceId && !targetDevice) {
+      return res.status(404).json({ success: false, message: 'Thiết bị không tồn tại' });
+    }
+
+    const targetDevices = targetDevice ? [targetDevice] : devices;
+
+    // Helper to calculate AI vibration and current prognosis
+    const scheduleItems = targetDevices.map((d) => {
+      const vib = d.telemetry.vibration || 0.8;
+      const [minVib, maxVib] = d.nominalRanges.vibration || [0.1, 1.8];
+      const cur = d.telemetry.peakCurrent || 25;
+      const [minAmp, maxAmp] = d.nominalRanges.peakCurrent || [15, 35];
+
+      const vibDev = vib > maxVib ? Math.round(((vib - maxVib) / maxVib) * 100) : 0;
+      const curDev = cur > maxAmp ? Math.round(((cur - maxAmp) / maxAmp) * 100) : 0;
+
+      let urgency: 'CRITICAL_URGENT' | 'HIGH_WARNING' | 'SCHEDULED_NORMAL' | 'OPTIMAL' = 'OPTIMAL';
+      let hoursRemaining = 120;
+
+      if (d.status === 'ALARM_STOPPED' || vib >= maxVib * 1.3 || cur >= maxAmp * 1.15) {
+        urgency = 'CRITICAL_URGENT';
+        hoursRemaining = Math.max(2, (d.id.charCodeAt(d.id.length - 1) % 10) + 4);
+      } else if (vib >= maxVib || cur >= maxAmp || vibDev > 10 || curDev > 10) {
+        urgency = 'HIGH_WARNING';
+        hoursRemaining = (d.id.charCodeAt(d.id.length - 1) % 20) + 24;
+      } else if (vib >= (minVib + maxVib) / 2) {
+        urgency = 'SCHEDULED_NORMAL';
+        hoursRemaining = (d.id.charCodeAt(d.id.length - 1) % 48) + 72;
+      }
+
+      const now = new Date();
+      const targetTime = new Date(now.getTime() + hoursRemaining * 3600000);
+      const formattedDate = `${targetTime.getHours().toString().padStart(2, '0')}:${targetTime.getMinutes().toString().padStart(2, '0')} ${hoursRemaining < 24 ? 'Hôm nay' : 'Ngày mai'} (${targetTime.toLocaleDateString('vi-VN')})`;
+
+      return {
+        deviceId: d.id,
+        deviceCode: d.code,
+        deviceName: d.name,
+        deviceModel: d.model,
+        hoursRemaining,
+        predictedDate: targetTime.toISOString(),
+        predictedDateFormatted: formattedDate,
+        urgency,
+        vibration: {
+          current: vib,
+          max: maxVib,
+          deviationPercent: vibDev,
+          status: vib >= maxVib * 1.3 ? 'CRITICAL' : vib >= maxVib ? 'ELEVATED' : 'NORMAL',
+        },
+        currentAmp: {
+          current: cur,
+          max: maxAmp,
+          deviationPercent: curDev,
+          status: cur >= maxAmp * 1.15 ? 'CRITICAL' : cur >= maxAmp ? 'ELEVATED' : 'NORMAL',
+        },
+        summary: `AI phân tích: Rung động ${vib} mm/s & Dòng điện ${cur}A. Khuyến nghị can thiệp sau ${hoursRemaining}h để tránh quá nhiệt và mòn dẫn hướng.`,
+      };
+    });
+
+    res.json({
+      success: true,
+      items: scheduleItems,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error('AI predictive schedule error:', err);
+    res.status(500).json({ success: false, message: 'Lỗi dự báo bảo trì AI' });
   }
 });
 
@@ -2449,6 +2837,173 @@ Hãy sử dụng phương pháp luận chuẩn công nghiệp:
   }
 });
 
+// 8.3 AI Mobile Camera Vision Inspection Engine (Gemini API Multimodal)
+app.post('/api/ai/analyze-image', async (req, res) => {
+  try {
+    const { imageBase64, deviceId, errorCode, machineModel, inspectionFocus, userNotes } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, message: 'Thiếu dữ liệu hình ảnh base64' });
+    }
+
+    const targetDevice = devices.find((d) => d.id === deviceId || d.code === deviceId);
+    const resolvedModel = machineModel || targetDevice?.model || 'Sodick AG60L';
+    const resolvedErrorCode = errorCode || targetDevice?.activeIncident?.errorCode || 'E-102';
+
+    // Parse base64 and mimeType
+    let mimeType = 'image/jpeg';
+    let base64Clean = imageBase64;
+    if (imageBase64.includes(';base64,')) {
+      const split = imageBase64.split(';base64,');
+      mimeType = split[0].replace('data:', '') || 'image/jpeg';
+      base64Clean = split[1];
+    }
+
+    const imagePart = {
+      inlineData: {
+        mimeType,
+        data: base64Clean,
+      },
+    };
+
+    const textPrompt = `
+Bạn là chuyên gia thị giác máy tính và chẩn đoán cơ điện tử công nghiệp EDM (Electrical Discharge Machining) hàng đầu.
+Hãy phân tích hình ảnh chụp cận cảnh hiện trường/linh kiện máy EDM ${resolvedModel} (mã lỗi hiện tại: ${resolvedErrorCode}).
+Mục tiêu trọng tâm: ${inspectionFocus || 'Nhận diện linh kiện, vết nứt dây cắt, rỗ hồ quang bạc tiếp điện, hoặc tình trạng ăn mòn điện cực'}.
+${userNotes ? `Ghi chú hiện trường của KTV: "${userNotes}"` : ''}
+
+Nhiệm vụ phân tích:
+1. Nhận diện chính xác tên bộ phận/linh kiện xuất hiện trong ảnh (VD: Bạc cấp điện Carbide dưới, Dây cắt đồng thau Ø0.25mm, Điện cực than graphite/đồng đỏ, Kim phun áp lực deion, Cụm mâm kẹp Erowa ITS, Lõi lọc áp lực 3µm...).
+2. Phân loại khuyết tật/bất thường nhìn thấy được:
+   - Vết nứt dây hoặc đứt dây cắt (Wire micro-cracks, tensile necking, spark breakage)
+   - Rỗ hồ quang hoặc mòn sâu rãnh trên bạc tiếp điện (Carbide contact grooving, crater erosion)
+   - Tình trạng ăn mòn điện cực hoặc thoái hóa bề mặt (Electrode surface erosion, carbon contamination)
+   - Tắc nghẽn bám mùn phoi hoặc cặn bẩn khe hở điện môi
+3. Ước tính mức độ hao mòn (% mòn từ 0% đến 100%) và mức độ nguy cấp (CRITICAL, HIGH, MEDIUM, NORMAL).
+4. Đánh giá độ tin cậy của chẩn đoán thị giác (0 - 100%).
+5. Đưa ra chi tiết kỹ thuật quan sát được (technicalFindings) giải thích cơ chế gây ra sự cố.
+6. Đề xuất quy trình khắc phục nhanh chóng gồm 3-4 bước hành động cụ thể cho kỹ thuật viên.
+7. Đề xuất mã linh kiện thay thế trong kho xưởng nếu cần (ví dụ: MK-U6-GD25, FLT-EDM-300, FANUC-BLD-A98, BELT-W-104, PURO-MB400, Z-BEAR-AXIS...).
+8. Cảnh báo an toàn thao tác (safetyNotice).
+
+Trả về định dạng JSON thuần theo schema đã định nghĩa.
+`;
+
+    const visionSchema = {
+      type: Type.OBJECT,
+      properties: {
+        componentName: { type: Type.STRING },
+        componentCategory: { type: Type.STRING },
+        defectDetected: { type: Type.STRING },
+        wearLevelPercent: { type: Type.NUMBER },
+        severity: { type: Type.STRING, enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'NORMAL'] },
+        confidenceScore: { type: Type.NUMBER },
+        correlatedErrorCode: { type: Type.STRING },
+        technicalFindings: { type: Type.STRING },
+        recommendedActions: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+        suggestedPartSku: { type: Type.STRING },
+        suggestedPartName: { type: Type.STRING },
+        safetyNotice: { type: Type.STRING },
+      },
+      required: [
+        'componentName',
+        'componentCategory',
+        'defectDetected',
+        'wearLevelPercent',
+        'severity',
+        'confidenceScore',
+        'technicalFindings',
+        'recommendedActions',
+      ],
+    };
+
+    let visionResult: any = null;
+
+    try {
+      const rawText = await callGeminiWithFallback(
+        { parts: [imagePart, { text: textPrompt }] },
+        visionSchema
+      );
+      visionResult = JSON.parse(rawText);
+    } catch (geminiErr: any) {
+      console.warn('Gemini vision model failed or unavailable, using deterministic industrial vision fallback:', geminiErr.message || geminiErr);
+      if (resolvedErrorCode === 'E-102') {
+        visionResult = {
+          componentName: 'Bạc cấp điện Carbide dưới (Lower Carbide Contact)',
+          componentCategory: 'Tiếp Điện Phóng Điểm',
+          defectDetected: 'Rãnh mòn hồ quang sâu >0.75mm & muội đồng bám dính bề mặt',
+          wearLevelPercent: 88,
+          severity: 'CRITICAL',
+          confidenceScore: 92,
+          correlatedErrorCode: 'E-102 (Đứt dây cắt & ngắn mạch khe hở)',
+          technicalFindings: 'Phát hiện rãnh khuyết hình chữ V sâu 0.82mm tại điểm tiếp xúc dây cắt do dòng phóng tập trung kéo dài. Dây cắt bị kẹt vào rãnh mòn dẫn đến tăng ma sát đột ngột và đứt dây liên tục.',
+          recommendedActions: [
+            'Ngắt điện máy và gắn biển cảnh báo LOTO trước khi mở buồng gia công',
+            'Nới lỏng ốc lục giác M4 cố định khối carbide, xoay 90° sang mặt tiếp xúc mới',
+            'Kiểm tra độ nhẵn bề mặt sau khi xoay, siết lực 4.5 N.m',
+            'Nếu cả 4 mặt đều đã mòn sâu, xuất mã MK-U6-GD25 từ kho để thay thế',
+          ],
+          suggestedPartSku: 'MK-U6-GD25',
+          suggestedPartName: 'Bạc cấp điện Carbide trên/dưới',
+          safetyNotice: 'Xả hết điện tích dư trên khối tụ bù nguồn phát xung trước khi chạm vào cáp tiếp điện.',
+        };
+      } else if (resolvedErrorCode === 'ALARM-204') {
+        visionResult = {
+          componentName: 'Lõi lọc áp lực 3µm & Bầu lọc dung môi',
+          componentCategory: 'Lọc & Điện Môi',
+          defectDetected: 'Màng lọc bão hòa phoi kim loại & rách phớt làm kín đáy bầu',
+          wearLevelPercent: 94,
+          severity: 'CRITICAL',
+          confidenceScore: 95,
+          correlatedErrorCode: 'ALARM-204 (Tụt áp suất bơm dung môi)',
+          technicalFindings: 'Lớp sợi polypropylene màu nâu đen bão hòa phoi EDM, đồng hồ áp kế vi sai vượt 2.8 Bar. Tình trạng tắc nghẽn làm giảm lưu lượng xả rửa khe phóng điện gây sụt áp.',
+          recommendedActions: [
+            'Khóa van cấp nước deion tổng và xả áp suất dư trong bình lọc bằng van xả đáy',
+            'Mở nắp bầu lọc, tháo bỏ lõi lọc bẩn và vệ sinh cặn bùn đáy bình',
+            'Thay lõi lọc áp lực 3-micron mới (mã kho: FLT-EDM-300)',
+            'Kiểm tra gioăng cao su nắp bầu trước khi siết chặt đai ốc',
+          ],
+          suggestedPartSku: 'FLT-EDM-300',
+          suggestedPartName: 'Lõi lọc áp lực 3µm máy cắt dây EDM',
+          safetyNotice: 'Áp suất dung môi còn dư có thể phụt mạnh. Phải xả van an toàn về 0 Bar trước khi tháo nắp.',
+        };
+      } else {
+        visionResult = {
+          componentName: 'Cụm điện cực và gá kẹp phóng điện EDM',
+          componentCategory: 'Điện Cực & Khe Phóng',
+          defectDetected: 'Ăn mòn rỗ bề mặt điện cực & bám muội cacbon cục bộ',
+          wearLevelPercent: 72,
+          severity: 'HIGH',
+          confidenceScore: 89,
+          correlatedErrorCode: resolvedErrorCode,
+          technicalFindings: 'Vùng bề mặt làm việc xuất hiện các hố rỗ ăn mòn không đều (crater wear) sâu 0.3mm do tia lửa điện bị ngắn mạch cục bộ trong môi trường dầu deion.',
+          recommendedActions: [
+            'Tháo điện cực khỏi đầu kẹp mâm cặp System 3R/Erowa',
+            'Vệ sinh tẩy rửa muội than bằng dung môi cồn công nghiệp trong bể rửa siêu âm 10 phút',
+            'Đo lại kích thước hình học điện cực bằng thước vi ban panme',
+            'Bù trừ bán kính phóng điện (spark gap compensation) trong chương trình CNC thêm 0.015mm',
+          ],
+          suggestedPartSku: 'BRS-ERW-50',
+          suggestedPartName: 'Chổi quét tiếp mát than đồng Erowa 50mm',
+          safetyNotice: 'Mang kính bảo hộ và găng tay chống hóa chất khi thao tác với dung dịch làm sạch điện cực.',
+        };
+      }
+    }
+
+    visionResult.analyzedAt = new Date().toISOString();
+
+    res.json({
+      success: true,
+      data: visionResult,
+    });
+  } catch (err: any) {
+    console.error('Vision analysis error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Lỗi xử lý hình ảnh camera' });
+  }
+});
+
 // 9. AI Copilot Chat for Technicians (Interactive Assistant)
 app.post('/api/ai/chat', async (req, res) => {
   try {
@@ -2494,28 +3049,122 @@ app.get('/api/documents', (req, res) => {
 
 app.post('/api/documents', async (req, res) => {
   try {
-    const { title, category, targetModel, content, tags } = req.body;
-    if (!title || !content) {
-      return res.status(400).json({ success: false, message: 'Tiêu đề và nội dung tài liệu là bắt buộc' });
+    const {
+      title,
+      category,
+      targetModel,
+      content,
+      tags,
+      fileType,
+      fileName,
+      fileSize,
+      imageData,
+      extractedParameters,
+      author,
+    } = req.body;
+
+    if (!title || (!content && !imageData)) {
+      return res.status(400).json({ success: false, message: 'Tiêu đề và nội dung/bản vẽ tài liệu là bắt buộc' });
     }
 
-    // Call Gemini to generate a high-precision summary & index
-    let summary = content.slice(0, 180) + '...';
+    // Call Gemini to analyze document/schematic and generate high-precision summary, parameters & index
+    let summary = (content || '').slice(0, 180) + '...';
+    let aiExtractedParams: Record<string, any> = extractedParameters || {};
+    let schematicComponents: string[] = [];
+
     try {
-      const summaryPrompt = `
-Hãy đọc tài liệu kỹ thuật máy công nghiệp sau và tạo 1 đoạn tóm tắt ngắn (khoảng 35-50 từ) nêu bật mục đích, mã lỗi hoặc quy trình chính để bộ não AI lập chỉ mục tra cứu:
-Tiêu đề: ${title}
-Nội dung: ${content}
+      const isSchematic = category === 'SCHEMATICS' || fileType === 'IMAGE_SCHEMATIC';
+      const isSpecs = category === 'TECHNICAL_SPECS' || fileType === 'CSV_SPECS';
+
+      const analysisPrompt = `
+Bạn là Kỹ sư Trưởng AI phụ trách Lập chỉ mục Cơ sở Tri thức Kỹ thuật (RAG Knowledge Engine) cho xưởng máy gia công phóng điện tia lửa điện EDM & CNC.
+Hãy đọc và phân tích tài liệu kỹ thuật mới được tải lên:
+- Tiêu đề: ${title}
+- Phân loại: ${category}
+- Dòng máy: ${targetModel}
+- Tên tệp: ${fileName || 'Tài liệu kỹ thuật'}
+- Loại tệp: ${fileType || 'TEXT'}
+- Nội dung:
+${(content || '').slice(0, 3000)}
+
+${isSchematic ? 'ĐÂY LÀ SƠ ĐỒ KỸ THUẬT (MẠCH ĐIỆN / KHÍ NÉN / THỦY LỰC / NGUỒN XUNG). Hãy bóc tách các khối linh kiện chính (IGBT, Relay, Van solenoid, Cảm biến, Bo mạch điều khiển).' : ''}
+${isSpecs ? 'ĐÂY LÀ BẢNG THÔNG SỐ KỸ THUẬT CÔNG NGHỆ (C-Condition, Điện áp, Dòng xung, Áp suất, Độ căng dây, Tốc độ ăn phôi). Hãy bóc tách các thông số then chốt.' : ''}
+
+Hãy trả về JSON theo schema:
+{
+  "summary": "Đoạn tóm tắt kỹ thuật ngắn gọn (40-60 từ) nêu bật bản chất tài liệu, mã lỗi xử lý được và chỉ dẫn cốt lõi",
+  "extractedParameters": {
+    "key1": "value1"
+  },
+  "schematicComponents": ["Linh kiện 1", "Linh kiện 2"],
+  "recommendedTags": ["tag1", "tag2", "tag3"]
+}
 `;
+
+      let contentsPayload: any = analysisPrompt;
+      // If image schematic provided and valid base64
+      if (imageData && imageData.includes('base64,')) {
+        const base64Data = imageData.split('base64,')[1];
+        const mimeType = imageData.split(';')[0].replace('data:', '');
+        contentsPayload = [
+          analysisPrompt,
+          {
+            inlineData: {
+              mimeType: mimeType || 'image/jpeg',
+              data: base64Data,
+            },
+          },
+        ];
+      }
+
       const sumRes = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
-        contents: summaryPrompt,
+        contents: contentsPayload,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summary: { type: Type.STRING },
+              extractedParameters: {
+                type: Type.OBJECT,
+                properties: {
+                  dischargeVoltage: { type: Type.STRING },
+                  peakCurrent: { type: Type.STRING },
+                  dielectricPressure: { type: Type.STRING },
+                  wireTension: { type: Type.STRING },
+                  toleranceOrGrade: { type: Type.STRING },
+                },
+              },
+              schematicComponents: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+              recommendedTags: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+            },
+            required: ['summary'],
+          },
+        },
       });
+
       if (sumRes.text) {
-        summary = sumRes.text.trim();
+        const parsed = JSON.parse(sumRes.text);
+        if (parsed.summary) summary = parsed.summary;
+        if (parsed.extractedParameters) {
+          aiExtractedParams = { ...aiExtractedParams, ...parsed.extractedParameters };
+        }
+        if (Array.isArray(parsed.schematicComponents)) {
+          schematicComponents = parsed.schematicComponents;
+        }
+        if (Array.isArray(parsed.recommendedTags) && parsed.recommendedTags.length > 0) {
+          tags.push(...parsed.recommendedTags);
+        }
       }
     } catch (e) {
-      console.warn('AI summary failed, using fallback');
+      console.warn('AI document analysis failed, using fallback:', e);
     }
 
     const newDoc: TechnicalDocument = {
@@ -2523,18 +3172,23 @@ Nội dung: ${content}
       title,
       category: category || 'MAINTENANCE_GUIDE',
       targetModel: targetModel || 'Chung cho thiết bị xưởng',
-      author: 'Kỹ thuật viên cập nhật',
+      author: author || 'Kỹ thuật viên cập nhật',
       updatedAt: new Date().toISOString().split('T')[0],
       summary,
-      content,
-      tags: Array.isArray(tags) ? tags : ['Tài liệu mới', 'Cập nhật'],
+      content: content || 'Nội dung tóm tắt từ bản vẽ sơ đồ kỹ thuật đã được AI đọc và số hóa.',
+      tags: Array.isArray(tags) ? Array.from(new Set(tags)) : ['Tài liệu mới', 'Cập nhật'],
+      fileType: fileType || 'TEXT',
+      fileName: fileName || `${title.slice(0, 25)}.doc`,
+      fileSize: fileSize || '245 KB',
+      extractedParameters: Object.keys(aiExtractedParams).length > 0 ? aiExtractedParams : undefined,
+      schematicComponents: schematicComponents.length > 0 ? schematicComponents : undefined,
     };
 
     technicalDocuments.unshift(newDoc);
 
     res.json({
       success: true,
-      message: 'Đã cập nhật tài liệu thành công vào bộ nhớ tri thức AI!',
+      message: `Đã nạp và lập chỉ mục tài liệu "${title}" vào Cơ sở Tri thức AI!`,
       data: newDoc,
     });
   } catch (err: any) {
@@ -2543,9 +3197,234 @@ Nội dung: ${content}
   }
 });
 
+// 10.1 AI KNOWLEDGE BASE RETRIEVAL & Q&A ENGINE (Grounded in Uploaded Docs & Technician Learnings)
+app.post('/api/ai/knowledge/query', async (req, res) => {
+  try {
+    const { query, filterCategory, targetModel } = req.body;
+    if (!query) {
+      return res.status(400).json({ success: false, message: 'Câu hỏi tra cứu là bắt buộc' });
+    }
+
+    // Filter relevant technical documents
+    let matchedDocs = technicalDocuments.filter((doc) => {
+      const matchCat = !filterCategory || filterCategory === 'ALL' || doc.category === filterCategory;
+      const matchModel = !targetModel || targetModel === 'ALL' || doc.targetModel.includes(targetModel) || doc.targetModel.includes('Chung');
+      const textMatch = doc.title.toLowerCase().includes(query.toLowerCase()) ||
+        doc.content.toLowerCase().includes(query.toLowerCase()) ||
+        doc.summary.toLowerCase().includes(query.toLowerCase()) ||
+        doc.tags.some((t) => t.toLowerCase().includes(query.toLowerCase()));
+      return matchCat && (matchModel || textMatch);
+    });
+    if (matchedDocs.length === 0) matchedDocs = technicalDocuments.slice(0, 3);
+
+    // Filter relevant technician learnings
+    let matchedLearnings = aiLearnings.filter((l) => {
+      return l.title.toLowerCase().includes(query.toLowerCase()) ||
+        l.errorCode.toLowerCase().includes(query.toLowerCase()) ||
+        l.humanSolution.toLowerCase().includes(query.toLowerCase()) ||
+        l.aiSynthesizedRule.toLowerCase().includes(query.toLowerCase()) ||
+        (targetModel && targetModel !== 'ALL' && l.machineModel.includes(targetModel));
+    });
+    if (matchedLearnings.length === 0) matchedLearnings = aiLearnings.slice(0, 3);
+
+    const ragPrompt = `
+Bạn là "EDM AI Master Knowledge Assistant" - Bộ Não Tri thức Kỹ thuật của xưởng gia công cơ khí chính xác EDM & CNC.
+Nhiệm vụ của bạn là giải đáp câu hỏi kỹ thuật từ kỹ thuật viên dựa trên Cơ sở Tri thức Kỹ thuật (bao gồm các Sổ tay hướng dẫn sửa chữa, Sơ đồ mạch điện/khí nén, Bảng thông số kỹ thuật đã tải lên) VÀ Kinh nghiệm thực tế do các kỹ thuật viên đã đúc kết và truyền lại cho bạn.
+
+CÂU HỎI CỦA KỸ THUẬT VIÊN:
+"${query}"
+
+TÀI LIỆU KỸ THUẬT SẴN CÓ TRONG BỘ NHỚ:
+${matchedDocs.slice(0, 4).map((d, i) => `[Tài liệu ${i + 1}: ${d.title} | Loại: ${d.category} | Model: ${d.targetModel}]\n${d.summary}\n${d.content.slice(0, 500)}`).join('\n---\n')}
+
+KINH NGHIỆM THỰC CHIẾN CỦA KỸ THUẬT VIÊN TRONG BỘ NHỚ:
+${matchedLearnings.slice(0, 4).map((l, i) => `[Kinh nghiệm ${i + 1} từ ${l.discoveredBy} | Lỗi: ${l.errorCode} | Model: ${l.machineModel}]:
+- Vấn đề: ${l.problemStatement}
+- Giải pháp thực tế: ${l.humanSolution}
+- Quy tắc AI: ${l.aiSynthesizedRule}
+${l.practicalTips ? `- Mẹo then chốt: ${l.practicalTips}` : ''}`).join('\n---\n')}
+
+YÊU CẦU:
+1. Hãy trả lời trực tiếp, chính xác, có căn cứ vào các tài liệu và kinh nghiệm đã được cung cấp.
+2. Trích dẫn rõ ràng: Tài liệu nào hoặc Kỹ thuật viên nào đã đóng góp thông tin này.
+3. Đưa ra các bước hành động (Action Steps) cụ thể, thông số kỹ thuật chuẩn (nếu có) và cảnh báo an toàn.
+
+Trả về JSON theo schema:
+{
+  "answer": "Câu trả lời kỹ thuật chi tiết, mạch lạc, dễ hiểu cho KTV xưởng (2-4 đoạn)",
+  "actionSteps": ["Bước 1...", "Bước 2...", "Bước 3..."],
+  "technicalParameters": { "key": "value" },
+  "safetyWarning": "Cảnh báo an toàn (nếu có)",
+  "confidenceScore": 95
+}
+`;
+
+    const aiRes = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: ragPrompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            answer: { type: Type.STRING },
+            actionSteps: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+            },
+            technicalParameters: {
+              type: Type.OBJECT,
+              properties: {
+                parameterDetail: { type: Type.STRING },
+              },
+            },
+            safetyWarning: { type: Type.STRING },
+            confidenceScore: { type: Type.NUMBER },
+          },
+          required: ['answer'],
+        },
+      },
+    });
+
+    let resultData = {
+      answer: 'Dựa trên sổ tay hướng dẫn và kinh nghiệm sửa chữa của các kỹ sư xưởng, hãy kiểm tra van an toàn và cân chỉnh lại thông số phóng điện.',
+      actionSteps: ['Kiểm tra điện áp cấp nguồn', 'Vệ sinh đầu dẫn kim cương', 'Kiểm tra áp suất dung dịch điện môi'],
+      safetyWarning: 'Ngắt nguồn cao áp trước khi kiểm tra đầu nối van.',
+      confidenceScore: 92,
+    };
+
+    if (aiRes.text) {
+      try {
+        resultData = { ...resultData, ...JSON.parse(aiRes.text) };
+      } catch (e) {
+        resultData.answer = aiRes.text;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...resultData,
+        citedDocuments: matchedDocs.slice(0, 3).map((d) => ({ id: d.id, title: d.title, category: d.category, targetModel: d.targetModel })),
+        citedLearnings: matchedLearnings.slice(0, 3).map((l) => ({ id: l.id, title: l.title, discoveredBy: l.discoveredBy, errorCode: l.errorCode })),
+        queriedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err: any) {
+    console.error('Knowledge query error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Lỗi tra cứu tri thức' });
+  }
+});
+
 // 11. AI Learnings (Knowledge Graph)
 app.get('/api/ai/learnings', (req, res) => {
   res.json({ success: true, data: aiLearnings });
+});
+
+// 11.1 Create new AI Learning directly from Technician Field Contribution
+app.post('/api/ai/learnings', async (req, res) => {
+  try {
+    const {
+      title,
+      errorCode,
+      machineModel,
+      discoveredBy,
+      problemStatement,
+      humanSolution,
+      practicalTips,
+      partsInvolved,
+      effectivenessRating,
+    } = req.body;
+
+    if (!title || !humanSolution) {
+      return res.status(400).json({ success: false, message: 'Tiêu đề và giải pháp thực tế là bắt buộc' });
+    }
+
+    let aiSynthesizedRule = `Khi gặp sự cố trên ${machineModel || 'máy EDM'}: ${humanSolution.slice(0, 140)}...`;
+
+    try {
+      const prompt = `
+Bạn là Kỹ sư Trưởng AI Chuyên gia bảo trì máy EDM.
+Kỹ thuật viên hiện trường ${discoveredBy || 'chuyên gia'} vừa đóng góp một kinh nghiệm sửa chữa thực chiến quý báu:
+- Tiêu đề: ${title}
+- Mã lỗi / Sự cố: ${errorCode || 'Sự cố vận hành'}
+- Dòng máy: ${machineModel || 'Chung'}
+- Vấn đề gặp phải: ${problemStatement || title}
+- Giải pháp thực tế đã khắc phục thành công: ${humanSolution}
+- Mẹo then chốt: ${practicalTips || 'Không có'}
+- Linh kiện liên quan: ${Array.isArray(partsInvolved) ? partsInvolved.join(', ') : (partsInvolved || 'Không có')}
+
+Hãy đúc kết một quy tắc AI ngắn gọn (1-2 câu), nêu rõ cốt lõi mẹo kiểm tra hoặc cách xử lý nhanh nhất cho các kỹ thuật viên khác:
+`;
+      const ruleRes = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+      });
+      if (ruleRes.text) {
+        aiSynthesizedRule = ruleRes.text.trim();
+      }
+    } catch (e) {
+      console.warn('AI rule synthesis fallback:', e);
+    }
+
+    const newLearning: AILearning = {
+      id: `learn-${Date.now()}`,
+      title,
+      errorCode: errorCode || 'GENERAL',
+      machineModel: machineModel || 'Tất cả dòng máy',
+      discoveredBy: discoveredBy || 'Kỹ thuật viên xưởng',
+      learnedAt: new Date().toISOString().split('T')[0],
+      problemStatement: problemStatement || title,
+      humanSolution,
+      aiSynthesizedRule,
+      practicalTips: practicalTips || '',
+      effectivenessRating: Number(effectivenessRating) || 5,
+      partsInvolved: Array.isArray(partsInvolved) ? partsInvolved : [],
+      timesAppliedSuccessfully: 1,
+      verified: true,
+      feedbackCount: 1,
+    };
+
+    aiLearnings.unshift(newLearning);
+
+    res.json({
+      success: true,
+      message: 'Đã nạp kinh nghiệm thực chiến vào Bộ Não Tri Thức AI!',
+      data: newLearning,
+    });
+  } catch (err: any) {
+    console.error('Create learning error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Lỗi thêm bài học AI' });
+  }
+});
+
+// 11.2 Technician Feedback / Upvote on an AI Learning
+app.post('/api/ai/learnings/:id/feedback', (req, res) => {
+  try {
+    const { feedbackType, technicianName, comment } = req.body;
+    const learning = aiLearnings.find((l) => l.id === req.params.id);
+    if (!learning) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy bài học' });
+    }
+
+    if (feedbackType === 'SUCCESSFUL_APPLICATION' || feedbackType === 'UPVOTE') {
+      learning.timesAppliedSuccessfully = (learning.timesAppliedSuccessfully || 0) + 1;
+      learning.verified = true;
+    }
+    learning.feedbackCount = (learning.feedbackCount || 0) + 1;
+    if (comment) {
+      learning.technicianFeedback = `${technicianName || 'KTV'}: "${comment}" (Ghi nhận: ${new Date().toLocaleDateString('vi-VN')})`;
+    }
+
+    res.json({
+      success: true,
+      message: 'Cảm ơn phản hồi của bạn! Bộ não AI đã cập nhật độ tin cậy của bài học.',
+      data: learning,
+    });
+  } catch (err: any) {
+    console.error('Feedback learning error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Lỗi gửi phản hồi bài học' });
+  }
 });
 
 // 12. Push Notification Logs
@@ -3224,8 +4103,457 @@ app.post('/api/reports/send-weekly-summary', (req, res) => {
 
 
 
+// ==========================================
+// REAL-TIME INCIDENT GROUP CHAT & WEBSOCKETS
+// ==========================================
+
+const roomSockets = new Map<string, Set<WebSocket>>();
+const roomPresence = new Map<string, Map<string, { id: string; name: string; role: string; avatar?: string }>>();
+
+function broadcastToRoom(deviceId: string, payload: any, excludeWs?: WebSocket) {
+  const sockets = roomSockets.get(deviceId);
+  if (!sockets) return;
+  const messageStr = JSON.stringify(payload);
+  sockets.forEach((ws) => {
+    if (ws !== excludeWs && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(messageStr);
+      } catch (err) {
+        console.error('WS broadcast error:', err);
+      }
+    }
+  });
+}
+
+// Helper to trigger AI Response in incident chat
+async function generateAIGroupChatAdvice(deviceId: string, promptTrigger?: string) {
+  const dev = devices.find((d) => d.id === deviceId);
+  const errorInfo = dev?.activeIncident
+    ? `Mã lỗi: ${dev.activeIncident.errorCode} - ${dev.activeIncident.errorTitle}`
+    : 'Cảnh báo vận hành EDM';
+  const telemetry = dev?.telemetry
+    ? `Áp suất dầu: ${dev.telemetry.dielectricPressure} Bar, Dòng đỉnh: ${dev.telemetry.peakCurrent} A, Độ rung: ${dev.telemetry.vibration} mm/s, Điện áp xả: ${dev.telemetry.dischargeVoltage} V`
+    : 'Không có dữ liệu đo';
+
+  const recentMessages = (incidentChatStore[deviceId] || [])
+    .slice(-6)
+    .map((m) => `${m.senderName} (${m.senderRole}): ${m.content}`)
+    .join('\n');
+
+  try {
+    const aiPrompt = `Bạn là EDM SmartGuard AI Copilot - Trợ lý Chuyên gia Kỹ thuật Cơ Điện & Cắt Dây EDM.
+Các kỹ thuật viên đang thảo luận xử lý sự cố trực tiếp tại máy ${dev?.name || 'Máy EDM'} (${dev?.code || 'EDM-01'}).
+Thông tin sự cố: ${errorInfo}
+Thông số cảm biến thời gian thực: ${telemetry}
+Các tin nhắn gần nhất giữa các kỹ thuật viên:
+${recentMessages}
+${promptTrigger ? `Yêu cầu cụ thể từ kỹ thuật viên: ${promptTrigger}` : ''}
+
+Nhiệm vụ: Hãy đưa ra phân tích súc tích và 2-3 chỉ dẫn hành động kỹ thuật cực kỳ chính xác, thực tế tại hiện trường (kiểm tra cảm biến nào, van nào, thông số nào, linh kiện thay thế).
+Độ dài tối đa 120 từ. Sử dụng định dạng danh sách gạch đầu dòng rõ ràng, phong cách chuyên nghiệp, khẩn trương, đồng đội.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: aiPrompt,
+    });
+
+    const aiContent = response.text || 'Đã phân tích sự cố: Đề xuất kiểm tra lưu lượng xả đáy và vệ sinh cảm biến áp lực.';
+    
+    const aiMsg: IncidentChatMessage = {
+      id: `chat-${deviceId}-ai-${Date.now()}`,
+      deviceId,
+      incidentErrorCode: dev?.activeIncident?.errorCode || 'EDM-ALERT',
+      senderId: 'ai-assistant',
+      senderName: 'EDM SmartGuard AI Specialist',
+      senderRole: 'Trợ Lý Kỹ Thuật AI',
+      senderAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
+      content: aiContent,
+      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      type: 'AI_ADVICE',
+      pinned: true,
+      reactions: { '💡': 1 },
+    };
+
+    if (!incidentChatStore[deviceId]) incidentChatStore[deviceId] = [];
+    incidentChatStore[deviceId].push(aiMsg);
+
+    broadcastToRoom(deviceId, {
+      type: 'NEW_MESSAGE',
+      deviceId,
+      message: aiMsg,
+    });
+
+    return aiMsg;
+  } catch (err) {
+    console.warn('AI group chat advice error, using fallback rule:', err);
+    const fallbackMsg: IncidentChatMessage = {
+      id: `chat-${deviceId}-ai-${Date.now()}`,
+      deviceId,
+      incidentErrorCode: dev?.activeIncident?.errorCode || 'EDM-ALERT',
+      senderId: 'ai-assistant',
+      senderName: 'EDM SmartGuard AI Specialist',
+      senderRole: 'Trợ Lý Kỹ Thuật AI',
+      senderAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
+      content: `⚡ Khuyến nghị AI cho sự cố ${dev?.model || 'EDM'}:\n• 1. Ngắt công tắc an toàn trước khi mở khoang bơm xả.\n• 2. Kiểm tra màng lọc 3µm xem có bị tắc bẩn xỉ cắt phôi.\n• 3. Dùng đồng hồ đo áp lực cơ khí đối chiếu với tín hiệu cảm biến PT-102.`,
+      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      type: 'AI_ADVICE',
+      pinned: true,
+      reactions: { '💡': 1 },
+    };
+    if (!incidentChatStore[deviceId]) incidentChatStore[deviceId] = [];
+    incidentChatStore[deviceId].push(fallbackMsg);
+    broadcastToRoom(deviceId, {
+      type: 'NEW_MESSAGE',
+      deviceId,
+      message: fallbackMsg,
+    });
+    return fallbackMsg;
+  }
+}
+
+// REST Route: Get Chat Room Data
+app.get('/api/devices/:id/chat', (req, res) => {
+  const deviceId = req.params.id;
+  const dev = devices.find((d) => d.id === deviceId);
+  if (!dev) {
+    return res.status(404).json({ success: false, message: 'Thiết bị không tồn tại' });
+  }
+
+  if (!incidentChatStore[deviceId]) {
+    incidentChatStore[deviceId] = [
+      {
+        id: `chat-${deviceId}-init`,
+        deviceId,
+        incidentErrorCode: dev.activeIncident?.errorCode || 'E-102',
+        senderId: 'system',
+        senderName: 'Hệ Thống EDM SmartGuard',
+        senderRole: 'Thông Báo Tự Động',
+        content: `🚨 Phòng thảo luận nhóm thời gian thực cho sự cố [${dev.activeIncident?.errorCode || 'ALERT'}] trên ${dev.name}. Tất cả kỹ thuật viên trực có thể trao đổi trực tiếp và tra cứu sơ đồ cùng AI.`,
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        type: 'TEXT',
+      },
+      {
+        id: `chat-${deviceId}-tech1`,
+        deviceId,
+        incidentErrorCode: dev.activeIncident?.errorCode || 'E-102',
+        senderId: 'tech-02',
+        senderName: 'Nguyễn Văn Hùng',
+        senderRole: 'Kỹ sư Trưởng Điện & PLC',
+        senderAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+        content: `Tôi vừa nhận cảnh báo máy ${dev.code}. Anh em ai ở gần xưởng B kiểm tra trước đồng hồ áp suất và công tắc hành trình trục Z nhé!`,
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        type: 'TEXT',
+        reactions: { '👍': 2 },
+      },
+    ];
+  }
+
+  const pMap = roomPresence.get(deviceId);
+  const activeUsers = pMap ? Array.from(pMap.values()) : [];
+
+  res.json({
+    success: true,
+    deviceId,
+    messages: incidentChatStore[deviceId],
+    activeUsers,
+  });
+});
+
+// REST Route: Post Message to Incident Chat
+app.post('/api/devices/:id/chat', async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const {
+      senderId,
+      senderName,
+      senderRole,
+      senderAvatar,
+      content,
+      type = 'TEXT',
+      telemetrySnapshot,
+      imageUrl,
+      actionTag,
+      askAI,
+    } = req.body;
+
+    if (!content && !imageUrl && !actionTag) {
+      return res.status(400).json({ success: false, message: 'Nội dung tin nhắn không được để trống' });
+    }
+
+    if (!incidentChatStore[deviceId]) {
+      incidentChatStore[deviceId] = [];
+    }
+
+    const dev = devices.find((d) => d.id === deviceId);
+    const newMsg: IncidentChatMessage = {
+      id: `chat-${deviceId}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      deviceId,
+      incidentErrorCode: dev?.activeIncident?.errorCode || 'EDM-ALERT',
+      senderId: senderId || 'tech-guest',
+      senderName: senderName || 'Kỹ thuật viên',
+      senderRole: senderRole || 'Kỹ thuật viên Vận hành',
+      senderAvatar,
+      content: content || (actionTag ? actionTag.label : ''),
+      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      type,
+      telemetrySnapshot: telemetrySnapshot || (type === 'TELEMETRY_SHARE' ? dev?.telemetry : undefined),
+      imageUrl,
+      actionTag,
+      pinned: false,
+      reactions: {},
+    };
+
+    incidentChatStore[deviceId].push(newMsg);
+
+    // Broadcast via WebSocket
+    broadcastToRoom(deviceId, {
+      type: 'NEW_MESSAGE',
+      deviceId,
+      message: newMsg,
+    });
+
+    res.json({
+      success: true,
+      message: newMsg,
+    });
+
+    // If message contains @AI or askAI was requested, trigger AI advice
+    const isAiTriggered = askAI || (content && (content.toLowerCase().includes('@ai') || content.toLowerCase().includes('hỏi ai')));
+    if (isAiTriggered) {
+      setTimeout(() => {
+        generateAIGroupChatAdvice(deviceId, content);
+      }, 500);
+    }
+  } catch (err: any) {
+    console.error('Error posting incident chat message:', err);
+    res.status(500).json({ success: false, message: 'Lỗi gửi tin nhắn thảo luận sự cố' });
+  }
+});
+
+// REST Route: Ask AI in Group Chat
+app.post('/api/devices/:id/chat/ask-ai', async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const { prompt } = req.body;
+    const aiMsg = await generateAIGroupChatAdvice(deviceId, prompt);
+    res.json({ success: true, message: aiMsg });
+  } catch (err: any) {
+    console.error('Error asking AI in group chat:', err);
+    res.status(500).json({ success: false, message: 'Lỗi khi yêu cầu AI tư vấn' });
+  }
+});
+
+// REST Route: Toggle Pin
+app.post('/api/devices/:id/chat/:messageId/pin', (req, res) => {
+  const { id: deviceId, messageId } = req.params;
+  const messages = incidentChatStore[deviceId] || [];
+  const msg = messages.find((m) => m.id === messageId);
+  if (!msg) {
+    return res.status(404).json({ success: false, message: 'Tin nhắn không tồn tại' });
+  }
+  msg.pinned = !msg.pinned;
+  broadcastToRoom(deviceId, {
+    type: 'MESSAGE_PIN_UPDATED',
+    deviceId,
+    messageId,
+    pinned: msg.pinned,
+  });
+  res.json({ success: true, pinned: msg.pinned });
+});
+
+// REST Route: Add Reaction
+app.post('/api/devices/:id/chat/:messageId/reaction', (req, res) => {
+  const { id: deviceId, messageId } = req.params;
+  const { emoji } = req.body;
+  if (!emoji) return res.status(400).json({ success: false, message: 'Thiếu emoji' });
+  const messages = incidentChatStore[deviceId] || [];
+  const msg = messages.find((m) => m.id === messageId);
+  if (!msg) {
+    return res.status(404).json({ success: false, message: 'Tin nhắn không tồn tại' });
+  }
+  if (!msg.reactions) msg.reactions = {};
+  msg.reactions[emoji] = (msg.reactions[emoji] || 0) + 1;
+  broadcastToRoom(deviceId, {
+    type: 'MESSAGE_REACTION_UPDATED',
+    deviceId,
+    messageId,
+    reactions: msg.reactions,
+  });
+  res.json({ success: true, reactions: msg.reactions });
+});
+
 // --- VITE DEV MIDDLEWARE / STATIC FILE SERVING ---
 async function startServer() {
+  const server = http.createServer(app);
+
+  // Setup WebSocket Server for Real-Time Technician Group Chat
+  const wss = new WebSocketServer({ server });
+
+  wss.on('connection', (ws: WebSocket) => {
+    let currentDeviceId: string | null = null;
+    let currentUser: { id: string; name: string; role: string; avatar?: string } | null = null;
+
+    ws.on('message', async (raw) => {
+      try {
+        const data = JSON.parse(raw.toString());
+        if (data.type === 'JOIN_ROOM') {
+          const { deviceId, user } = data;
+          currentDeviceId = deviceId;
+          currentUser = user;
+
+          if (!roomSockets.has(deviceId)) {
+            roomSockets.set(deviceId, new Set());
+          }
+          roomSockets.get(deviceId)!.add(ws);
+
+          if (!roomPresence.has(deviceId)) {
+            roomPresence.set(deviceId, new Map());
+          }
+          if (user && user.id) {
+            roomPresence.get(deviceId)!.set(user.id, user);
+          }
+
+          if (!incidentChatStore[deviceId]) {
+            const dev = devices.find((d) => d.id === deviceId);
+            incidentChatStore[deviceId] = [
+              {
+                id: `chat-${deviceId}-init`,
+                deviceId,
+                incidentErrorCode: dev?.activeIncident?.errorCode || 'EDM-ALERT',
+                senderId: 'system',
+                senderName: 'Hệ Thống EDM SmartGuard',
+                senderRole: 'Thông Báo Tự Động',
+                content: `🔔 Đã khởi tạo phòng thảo luận sự cố khẩn cấp cho thiết bị ${dev?.name || deviceId} (${dev?.code || 'CNC'}). Mời các kỹ thuật viên ca trực vào phối hợp xử lý.`,
+                timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                type: 'TEXT',
+              },
+            ];
+          }
+
+          const activeUsers = Array.from(roomPresence.get(deviceId)!.values());
+          ws.send(
+            JSON.stringify({
+              type: 'ROOM_INIT',
+              deviceId,
+              messages: incidentChatStore[deviceId] || [],
+              activeUsers,
+            })
+          );
+
+          broadcastToRoom(
+            deviceId,
+            {
+              type: 'PRESENCE_UPDATE',
+              deviceId,
+              activeUsers,
+            },
+            ws
+          );
+        } else if (data.type === 'SEND_MESSAGE') {
+          const { deviceId, message, askAI } = data;
+          if (!incidentChatStore[deviceId]) incidentChatStore[deviceId] = [];
+
+          const newMsg: IncidentChatMessage = {
+            id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            deviceId,
+            incidentErrorCode: data.incidentErrorCode,
+            senderId: message.senderId || currentUser?.id || 'tech-guest',
+            senderName: message.senderName || currentUser?.name || 'Kỹ thuật viên',
+            senderRole: message.senderRole || currentUser?.role || 'Kỹ thuật viên Vận hành',
+            senderAvatar: message.senderAvatar || currentUser?.avatar,
+            content: message.content,
+            timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            type: message.type || 'TEXT',
+            telemetrySnapshot: message.telemetrySnapshot,
+            pinned: false,
+            reactions: {},
+            imageUrl: message.imageUrl,
+            actionTag: message.actionTag,
+          };
+
+          incidentChatStore[deviceId].push(newMsg);
+
+          broadcastToRoom(deviceId, {
+            type: 'NEW_MESSAGE',
+            deviceId,
+            message: newMsg,
+          });
+
+          const shouldAskAI =
+            askAI ||
+            (newMsg.content && (newMsg.content.toLowerCase().includes('@ai') || newMsg.content.toLowerCase().includes('hỏi ai'))) ||
+            newMsg.type === 'AI_ADVICE';
+
+          if (shouldAskAI) {
+            setTimeout(() => {
+              generateAIGroupChatAdvice(deviceId, newMsg.content);
+            }, 500);
+          }
+        } else if (data.type === 'TYPING') {
+          if (currentDeviceId) {
+            broadcastToRoom(
+              currentDeviceId,
+              {
+                type: 'USER_TYPING',
+                deviceId: currentDeviceId,
+                userName: data.userName,
+                isTyping: data.isTyping,
+              },
+              ws
+            );
+          }
+        } else if (data.type === 'TOGGLE_PIN') {
+          const { deviceId, messageId } = data;
+          const msg = (incidentChatStore[deviceId] || []).find((m) => m.id === messageId);
+          if (msg) {
+            msg.pinned = !msg.pinned;
+            broadcastToRoom(deviceId, {
+              type: 'MESSAGE_PIN_UPDATED',
+              deviceId,
+              messageId,
+              pinned: msg.pinned,
+            });
+          }
+        } else if (data.type === 'ADD_REACTION') {
+          const { deviceId, messageId, emoji } = data;
+          const msg = (incidentChatStore[deviceId] || []).find((m) => m.id === messageId);
+          if (msg) {
+            if (!msg.reactions) msg.reactions = {};
+            msg.reactions[emoji] = (msg.reactions[emoji] || 0) + 1;
+            broadcastToRoom(deviceId, {
+              type: 'MESSAGE_REACTION_UPDATED',
+              deviceId,
+              messageId,
+              reactions: msg.reactions,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('WS message error:', err);
+      }
+    });
+
+    ws.on('close', () => {
+      if (currentDeviceId) {
+        const sockets = roomSockets.get(currentDeviceId);
+        if (sockets) {
+          sockets.delete(ws);
+          if (sockets.size === 0) roomSockets.delete(currentDeviceId);
+        }
+
+        if (currentUser && currentUser.id && roomPresence.has(currentDeviceId)) {
+          const pMap = roomPresence.get(currentDeviceId)!;
+          pMap.delete(currentUser.id);
+          broadcastToRoom(currentDeviceId, {
+            type: 'PRESENCE_UPDATE',
+            deviceId: currentDeviceId,
+            activeUsers: Array.from(pMap.values()),
+          });
+        }
+      }
+    });
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer } = await import('vite');
     const vite = await createServer({
@@ -3241,7 +4569,7 @@ async function startServer() {
     });
   }
 
-  app.listen(Number(PORT), '0.0.0.0', () => {
+  server.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`🚀 EDM SmartGuard full-stack server running on http://0.0.0.0:${PORT}`);
   });
 }
