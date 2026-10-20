@@ -150,6 +150,33 @@ class SoundManager {
     }
   }
 
+  // Play emergency broadcast attention chime
+  public playEmergencyBroadcastChime() {
+    if (this.isMuted) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const freqs = [659.25, 880, 1174.66]; // E5, A5, D6
+      freqs.forEach((f, i) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, now + i * 0.12);
+        gain.gain.setValueAtTime(0.001, now + i * 0.12);
+        gain.gain.linearRampToValueAtTime(0.2, now + i * 0.12 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.35);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + i * 0.12);
+        osc.stop(now + i * 0.12 + 0.38);
+      });
+    } catch (e) {
+      console.warn('Audio emergency chime error:', e);
+    }
+  }
+
   public stopAlarm() {
     this.activeOscillators.forEach((osc) => {
       try {

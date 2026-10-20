@@ -23,6 +23,7 @@ import {
 import { AILearning, Device, Technician } from '../types';
 import { soundManager } from '../utils/audio';
 import { getStoredMaintenanceRecords } from '../utils/maintenanceHistoryData';
+import { ModelMaintenanceChecklist, ChecklistItem } from './ModelMaintenanceChecklist';
 
 interface RepairReportModalProps {
   device: Device | null;
@@ -173,6 +174,11 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
   const [notes, setNotes] = useState('AI gợi ý kiểm tra áp lực nước rất chính xác, tiết kiệm hơn 20 phút chẩn đoán mò!');
   const [submitting, setSubmitting] = useState(false);
   const [appliedEttrToast, setAppliedEttrToast] = useState(false);
+  const [checklistProgress, setChecklistProgress] = useState<{
+    completed: number;
+    total: number;
+    items: ChecklistItem[];
+  }>({ completed: 0, total: 0, items: [] });
 
   // Quick apply AI suggestion
   const handleApplyAiEttr = () => {
@@ -200,6 +206,8 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
           solutionOutcome,
           aiRecommendationAccuracy,
           practicalTipsForAI,
+          checklistCompleted: checklistProgress.completed,
+          checklistTotal: checklistProgress.total,
         }),
       });
 
@@ -320,6 +328,17 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          {/* Section: Dynamic Model-Specific Maintenance Checklist (SOP) */}
+          <ModelMaintenanceChecklist
+            device={device}
+            onChecklistChange={(completed, total, items) => {
+              setChecklistProgress({ completed, total, items });
+            }}
+            onApplyToReportSummary={(summaryText) => {
+              setFixSummary((prev) => (prev ? `${prev}\n\n${summaryText}` : summaryText));
+            }}
+          />
+
           {/* Section: AI Feedback & Solution Evaluation */}
           <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-4 space-y-3">
             <div className="flex items-center gap-2 text-cyan-300 font-semibold text-xs border-b border-slate-800 pb-2">
@@ -522,33 +541,51 @@ export const RepairReportModal: React.FC<RepairReportModalProps> = ({
             />
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition"
-            >
-              Hủy
-            </button>
+          {/* Action Buttons & Checklist Compliance Info */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-400">Tiến độ quy trình SOP:</span>
+              <span
+                className={`inline-flex items-center gap-1 font-mono font-bold px-2.5 py-0.5 rounded-full text-[11px] ${
+                  checklistProgress.total > 0 && checklistProgress.completed === checklistProgress.total
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                }`}
+              >
+                <CheckSquare className="h-3 w-3" />
+                <span>
+                  {checklistProgress.completed}/{checklistProgress.total} Hoàn Tất
+                </span>
+              </span>
+            </div>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-xl shadow-emerald-600/30 transition active:scale-95 disabled:opacity-50"
-            >
-              {submitting ? (
-                <>
-                  <Sparkles className="h-4 w-4 animate-spin text-amber-300" />
-                  <span>AI đang học & tích lũy kinh nghiệm...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Xác Nhận Nghiệm Thu & Nạp Tri Thức Vào AI</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition"
+              >
+                Hủy
+              </button>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-xl shadow-emerald-600/30 transition active:scale-95 disabled:opacity-50"
+              >
+                {submitting ? (
+                  <>
+                    <Sparkles className="h-4 w-4 animate-spin text-amber-300" />
+                    <span>AI đang học & tích lũy kinh nghiệm...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Xác Nhận Nghiệm Thu & Nạp Tri Thức Vào AI</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

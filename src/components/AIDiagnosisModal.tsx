@@ -58,7 +58,7 @@ import {
   Truck,
   ArrowRight,
 } from 'lucide-react';
-import { AIDiagnosis, Device, RepairEtaAnalysis, SparePart } from '../types';
+import { AIDiagnosis, Device, RepairEtaAnalysis, SparePart, Technician } from '../types';
 import { getDeviceMaintenanceHistory } from '../utils/maintenanceHistoryData';
 import {
   get30DayErrorCodeFrequency,

@@ -106,6 +106,8 @@ export interface HumanResolution {
   aiRecommendationAccuracy?: 'VERY_ACCURATE' | 'PARTIALLY_ACCURATE' | 'INACCURATE' | 'NOT_APPLICABLE';
   practicalTipsForAI?: string;
   verifiedRootCause?: string;
+  checklistCompleted?: number;
+  checklistTotal?: number;
 }
 
 export interface Device {
@@ -1676,6 +1678,8 @@ app.post('/api/devices/:id/resolve', async (req, res) => {
       solutionOutcome,
       aiRecommendationAccuracy,
       practicalTipsForAI,
+      checklistCompleted,
+      checklistTotal,
     } = req.body;
     const device = devices.find((d) => d.id === req.params.id);
     if (!device || !device.activeIncident) {
@@ -1697,6 +1701,8 @@ app.post('/api/devices/:id/resolve', async (req, res) => {
       solutionOutcome: solutionOutcome || 'RESOLVED_PERMANENTLY',
       aiRecommendationAccuracy: aiRecommendationAccuracy || 'VERY_ACCURATE',
       practicalTipsForAI: practicalTipsForAI || '',
+      checklistCompleted: Number(checklistCompleted) || 0,
+      checklistTotal: Number(checklistTotal) || 0,
     };
 
     device.activeIncident.humanResolution = resolution;

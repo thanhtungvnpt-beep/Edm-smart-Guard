@@ -21,6 +21,7 @@ import {
   Sparkles,
   Package,
   Megaphone,
+  Shield,
 } from 'lucide-react';
 import { FactoryStats } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -50,6 +51,8 @@ interface HeaderProps {
   onToggleEmergencyBroadcast?: () => void;
   criticalCount?: number;
   isEmergencyBroadcastOpen?: boolean;
+  mainViewMode?: 'ROLE_VIEW' | 'FLEET_GRID';
+  onSelectMainViewMode?: (mode: 'ROLE_VIEW' | 'FLEET_GRID') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -76,8 +79,17 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleEmergencyBroadcast,
   criticalCount = 0,
   isEmergencyBroadcastOpen = false,
+  mainViewMode = 'ROLE_VIEW',
+  onSelectMainViewMode,
 }) => {
   const [showDocModal, setShowDocModal] = useState(false);
+
+  const handleSelectTab = (
+    tab: 'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history' | 'root-cause-analysis' | 'spare-parts'
+  ) => {
+    onSelectMainViewMode?.('FLEET_GRID');
+    setActiveTab(tab);
+  };
 
   return (
     <header className={`sticky top-0 z-40 border-b transition-colors duration-200 ${
@@ -286,21 +298,43 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Navigation Tabs & KPI Counters */}
       <div className="mx-auto flex max-w-7xl items-center justify-between border-t border-slate-800/80 px-4 py-1.5 sm:px-6">
-        <nav className="flex space-x-1 sm:space-x-2">
+        <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto scrollbar-none py-0.5">
+          {/* Dedicated Tab for Role-Based View (Giám Đốc / Leader EQM / Kỹ Thuật Viên) */}
           <button
-            onClick={() => setActiveTab('devices')}
-            title="Giám Sát EDM Trực Tuyến (Phím tắt: Alt+1)"
-            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
-              activeTab === 'devices'
+            onClick={() => {
+              onSelectMainViewMode?.('ROLE_VIEW');
+            }}
+            title="Giao Diện Phân Quyền Theo Vai Trò (Giám Đốc Nhà Máy, Leader EQM, Kỹ Thuật Viên)"
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-bold transition shrink-0 ${
+              mainViewMode === 'ROLE_VIEW'
+                ? 'bg-gradient-to-r from-amber-500/25 via-blue-500/25 to-emerald-500/25 text-white border border-amber-400/50 shadow-md shadow-amber-950/40 ring-1 ring-amber-400/30'
+                : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+            }`}
+          >
+            <Shield className="h-4 w-4 text-amber-400" />
+            <span>Phân Quyền Vai Trò</span>
+            <span className="rounded bg-gradient-to-r from-amber-500/30 to-emerald-500/30 px-1.5 py-0.2 text-[10px] font-bold text-amber-300 border border-amber-500/40">
+              3 Vị Trí
+            </span>
+          </button>
+
+          <button
+            onClick={() => {
+              onSelectMainViewMode?.('FLEET_GRID');
+              setActiveTab('devices');
+            }}
+            title="Lưới Giám Sát Toàn Bộ Đội Máy EDM (Phím tắt: Alt+1)"
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition shrink-0 ${
+              mainViewMode === 'FLEET_GRID' && activeTab === 'devices'
                 ? 'bg-slate-800 text-amber-400 shadow-sm'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
             }`}
           >
             <Activity className="h-4 w-4" />
-            <span>Giám Sát EDM Trực Tuyến</span>
+            <span>Lưới Giám Sát EDM</span>
             <kbd
               className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
-                activeTab === 'devices'
+                mainViewMode === 'FLEET_GRID' && activeTab === 'devices'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
                   : 'bg-slate-900 text-slate-500 border border-slate-800'
               }`}
@@ -316,10 +350,10 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             id="tour-ai-brain-tab"
-            onClick={() => setActiveTab('learnings')}
+            onClick={() => handleSelectTab('learnings')}
             title="Bộ Não Tri Thức AI (Phím tắt: Alt+2)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
-              activeTab === 'learnings'
+              mainViewMode === 'FLEET_GRID' && activeTab === 'learnings'
                 ? 'bg-slate-800 text-amber-400 shadow-sm'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
             }`}
@@ -328,7 +362,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Bộ Não Tri Thức AI</span>
             <kbd
               className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
-                activeTab === 'learnings'
+                mainViewMode === 'FLEET_GRID' && activeTab === 'learnings'
                   ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold'
                   : 'bg-slate-900 text-slate-500 border border-slate-800'
               }`}
@@ -343,10 +377,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('documents')}
+            onClick={() => handleSelectTab('documents')}
             title="Kho Tài Liệu Kỹ Thuật SOP/OEM (Phím tắt: Alt+3)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
-              activeTab === 'documents'
+              mainViewMode === 'FLEET_GRID' && activeTab === 'documents'
                 ? 'bg-slate-800 text-amber-400 shadow-sm'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
             }`}
@@ -355,7 +389,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Kho Tài Liệu Kỹ Thuật (SOP/OEM)</span>
             <kbd
               className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
-                activeTab === 'documents'
+                mainViewMode === 'FLEET_GRID' && activeTab === 'documents'
                   ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold'
                   : 'bg-slate-900 text-slate-500 border border-slate-800'
               }`}
@@ -370,10 +404,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('notifications')}
+            onClick={() => handleSelectTab('notifications')}
             title="Nhật Ký Bắn Push (Phím tắt: Alt+4)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
-              activeTab === 'notifications'
+              mainViewMode === 'FLEET_GRID' && activeTab === 'notifications'
                 ? 'bg-slate-800 text-amber-400 shadow-sm'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
             }`}
@@ -382,7 +416,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Nhật Ký Bắn Push</span>
             <kbd
               className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
-                activeTab === 'notifications'
+                mainViewMode === 'FLEET_GRID' && activeTab === 'notifications'
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold'
                   : 'bg-slate-900 text-slate-500 border border-slate-800'
               }`}
@@ -392,10 +426,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('mobile-devices')}
+            onClick={() => handleSelectTab('mobile-devices')}
             title="Thiết Bị Di Động (Phím tắt: Alt+5)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
-              activeTab === 'mobile-devices'
+              mainViewMode === 'FLEET_GRID' && activeTab === 'mobile-devices'
                 ? 'bg-slate-800 text-indigo-400 shadow-sm font-bold'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
             }`}
@@ -404,7 +438,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Thiết Bị Di Động</span>
             <kbd
               className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
-                activeTab === 'mobile-devices'
+                mainViewMode === 'FLEET_GRID' && activeTab === 'mobile-devices'
                   ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold'
                   : 'bg-slate-900 text-slate-500 border border-slate-800'
               }`}
@@ -419,10 +453,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => handleSelectTab('history')}
             title="Lịch Sử Bảo Trì & Sửa Chữa (Phím tắt: Alt+6)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
-              activeTab === 'history'
+              mainViewMode === 'FLEET_GRID' && activeTab === 'history'
                 ? 'bg-slate-800 text-amber-400 shadow-sm font-bold'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
             }`}
@@ -431,7 +465,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Lịch Sử Sửa Chữa</span>
             <kbd
               className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
-                activeTab === 'history'
+                mainViewMode === 'FLEET_GRID' && activeTab === 'history'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
                   : 'bg-slate-900 text-slate-500 border border-slate-800'
               }`}
@@ -441,10 +475,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('root-cause-analysis')}
+            onClick={() => handleSelectTab('root-cause-analysis')}
             title="Module AI Phân Tích Nguyên Nhân Gốc Rễ (Phím tắt: Alt+7)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
-              activeTab === 'root-cause-analysis'
+              mainViewMode === 'FLEET_GRID' && activeTab === 'root-cause-analysis'
                 ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 shadow-sm font-bold'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
             }`}
@@ -453,7 +487,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Phân Tích Gốc Rễ (RCA AI)</span>
             <kbd
               className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
-                activeTab === 'root-cause-analysis'
+                mainViewMode === 'FLEET_GRID' && activeTab === 'root-cause-analysis'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold'
                   : 'bg-slate-900 text-slate-500 border border-slate-800'
               }`}
@@ -466,10 +500,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('spare-parts')}
+            onClick={() => handleSelectTab('spare-parts')}
             title="Quản Lý Kho Phụ Tùng & Cảnh Báo Thiếu Hụt (Phím tắt: Alt+8)"
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
-              activeTab === 'spare-parts'
+              mainViewMode === 'FLEET_GRID' && activeTab === 'spare-parts'
                 ? 'bg-blue-950/80 text-cyan-300 border border-cyan-500/40 shadow-sm font-bold'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
             }`}
@@ -478,7 +512,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Kho Phụ Tùng</span>
             <kbd
               className={`hidden md:inline-block rounded px-1.5 py-0.2 text-[10px] font-mono transition ${
-                activeTab === 'spare-parts'
+                mainViewMode === 'FLEET_GRID' && activeTab === 'spare-parts'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold'
                   : 'bg-slate-900 text-slate-500 border border-slate-800'
               }`}

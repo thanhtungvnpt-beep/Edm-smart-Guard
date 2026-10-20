@@ -97,6 +97,8 @@ export interface HumanResolution {
   aiRecommendationAccuracy?: 'VERY_ACCURATE' | 'PARTIALLY_ACCURATE' | 'INACCURATE' | 'NOT_APPLICABLE';
   practicalTipsForAI?: string;
   verifiedRootCause?: string;
+  checklistCompleted?: number;
+  checklistTotal?: number;
 }
 
 export interface Incident {
@@ -537,29 +539,6 @@ export interface ImageInspectionResult {
   suggestedPartName?: string;
   safetyNotice?: string;
   analyzedAt: string;
-}
-
-export interface IncidentChatMessage {
-  id: string;
-  incidentId: string;
-  deviceId: string;
-  senderId: string;
-  senderName: string;
-  senderRole: string;
-  senderAvatar?: string;
-  isAI?: boolean;
-  messageType: 'text' | 'image' | 'action_tag' | 'ai_recommendation' | 'system_alert';
-  content: string;
-  imageUrl?: string;
-  actionTag?: {
-    type: string;
-    label: string;
-    color: string;
-    icon?: string;
-  };
-  timestamp: string;
-  reactions?: { [emoji: string]: string[] };
-  isPinned?: boolean;
 }
 
 export interface ChatParticipant {

@@ -21,6 +21,10 @@ import {
   Zap,
   SlidersHorizontal,
   Bookmark,
+  Smartphone,
+  Building2,
+  Users2,
+  Wrench,
 } from 'lucide-react';
 import {
   Device,
@@ -83,11 +87,13 @@ import {
 import { useOfflineStatus } from './hooks/useOfflineStatus';
 import { cacheOfflineSnapshot, getOfflineSnapshot } from './utils/offlineManager';
 import { soundManager } from './utils/audio';
-import {
-  getPushPermissionStatus,
-  requestPushPermission,
-  triggerEmergencyPushNotification,
-} from './utils/notifications';
+import { getPushPermissionStatus, requestPushPermission, triggerEmergencyPushNotification } from './utils/notifications';
+import { RoleNavigationHeader, UserRole, ViewportMode, PLANTS } from './components/roles/RoleNavigationHeader';
+import { PlantDirectorView } from './components/roles/PlantDirectorView';
+import { EqmLeaderView } from './components/roles/EqmLeaderView';
+import { FieldTechnicianView } from './components/roles/FieldTechnicianView';
+import { WeeklyIncidentReportModal } from './components/WeeklyIncidentReportModal';
+import { getStoredMaintenanceRecords } from './utils/maintenanceHistoryData';
 
 export default function App() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -97,6 +103,14 @@ export default function App() {
   const [documents, setDocuments] = useState<TechnicalDocument[]>([]);
   const [learnings, setLearnings] = useState<AILearning[]>([]);
   const [notifications, setNotifications] = useState<NotificationLog[]>([]);
+
+  // Role-Based Views: Director, EQM Leader, Field Technician & PC/Mobile Viewport Modes
+  const [currentRole, setCurrentRole] = useState<UserRole>('DIRECTOR');
+  const [viewportMode, setViewportMode] = useState<ViewportMode>('PC');
+  const [currentPlant, setCurrentPlant] = useState<string>('plant-01');
+  const [mainViewMode, setMainViewMode] = useState<'ROLE_VIEW' | 'FLEET_GRID'>('ROLE_VIEW');
+  const [phoneFramePreview, setPhoneFramePreview] = useState<boolean>(true);
+  const [showWeeklyReportModal, setShowWeeklyReportModal] = useState<boolean>(false);
 
   // Navigation
   const [activeTab, setActiveTab] = useState<
@@ -1011,6 +1025,8 @@ export default function App() {
         }}
         criticalCount={criticalAlarmCount}
         isEmergencyBroadcastOpen={showEmergencyBroadcast}
+        mainViewMode={mainViewMode}
+        onSelectMainViewMode={(mode) => setMainViewMode(mode)}
       />
 
       {/* Offline Connectivity Banner */}
@@ -1020,6 +1036,36 @@ export default function App() {
         cacheInfo={cacheInfo}
         onToggleSimulate={toggleSimulateOffline}
         onRefresh={fetchAllData}
+      />
+
+      {/* Role Navigation Header & Viewport Switcher */}
+      <RoleNavigationHeader
+        currentRole={currentRole}
+        onSelectRole={(role) => {
+          setCurrentRole(role);
+          setMainViewMode('ROLE_VIEW');
+          soundManager.playBeep();
+        }}
+        viewportMode={viewportMode}
+        onSelectViewportMode={(mode) => {
+          setViewportMode(mode);
+          soundManager.playBeep();
+        }}
+        currentPlant={currentPlant}
+        onSelectPlant={(plant) => {
+          setCurrentPlant(plant);
+          soundManager.playBeep();
+          const pObj = PLANTS.find((p) => p.id === plant);
+          if (pObj) showToast(`Chuyển sang ${pObj.name}`);
+        }}
+        activeAlarmCount={criticalAlarmCount}
+        mainViewMode={mainViewMode}
+        onSelectMainViewMode={(mode) => {
+          setMainViewMode(mode);
+          soundManager.playBeep();
+        }}
+        phoneFramePreview={phoneFramePreview}
+        onTogglePhoneFramePreview={() => setPhoneFramePreview((prev) => !prev)}
       />
 
       {/* Main Content Area */}
@@ -1032,8 +1078,148 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 1: REAL-TIME DEVICES & TELEMETRY */}
-        {activeTab === 'devices' && (
+        {/* ============================================================== */}
+        {/* VIEW MODE 1: ROLE-BASED WORKSPACE (Director / EQM / Technician) */}
+        {/* ============================================================== */}
+        {mainViewMode === 'ROLE_VIEW' ? (
+          <div className="space-y-6">
+            {viewportMode === 'MOBILE' && phoneFramePreview ? (
+              /* Beautiful Centered Smartphone Bezel Simulator on Desktop */
+              <div className="flex flex-col items-center justify-center py-2 sm:py-4">
+                <div className="text-center mb-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 px-3 py-1 text-xs font-semibold text-purple-300">
+                    <Smartphone className="h-3.5 w-3.5" />
+                    <span>Mô Phỏng Giao Diện Điện Thoại Di Động Thực Tế (Mobile Shell)</span>
+                  </span>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Giao diện được thiết kế tối ưu cho màn hình cảm ứng, nút bấm to, thao tác 1 chạm tại xưởng
+                  </p>
+                </div>
+
+                {/* Smartphone Shell with Bezel & Dynamic Notch */}
+                <div className="relative w-full max-w-[420px] rounded-[52px] border-[10px] border-slate-800 bg-slate-950 p-3 shadow-2xl shadow-purple-950/40 ring-2 ring-slate-700/60 overflow-hidden">
+                  {/* Speaker & Dynamic Island Notch */}
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center justify-between gap-3 rounded-full bg-black px-4 py-1.5 shadow-md">
+                    <div className="h-2 w-2 rounded-full bg-slate-700"></div>
+                    <div className="h-2.5 w-12 rounded-full bg-slate-800"></div>
+                    <div className="h-2.5 w-2.5 rounded-full bg-blue-500/40 border border-blue-400"></div>
+                  </div>
+
+                  {/* Status Bar */}
+                  <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 px-4 pt-1 pb-2">
+                    <span>08:45</span>
+                    <span className="text-[10px] uppercase font-bold text-emerald-400">5G • 100%</span>
+                  </div>
+
+                  {/* Mobile Screen Content */}
+                  <div className="max-h-[750px] overflow-y-auto pr-0.5 scrollbar-thin scrollbar-thumb-slate-700">
+                    {currentRole === 'DIRECTOR' && (
+                      <PlantDirectorView
+                        devices={devices}
+                        technicians={technicians}
+                        stats={stats}
+                        currentPlant={currentPlant}
+                        viewportMode="MOBILE"
+                        onOpenDeviceDetails={(d) => setDetailsDevice(d)}
+                        onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+                        onOpenWeeklyReport={() => setShowWeeklyReportModal(true)}
+                      />
+                    )}
+                    {currentRole === 'EQM_LEADER' && (
+                      <EqmLeaderView
+                        devices={devices}
+                        technicians={technicians}
+                        viewportMode="MOBILE"
+                        onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+                        onOpenRepairReport={(d) => setRepairDevice(d)}
+                        onOpenDeviceDetails={(d) => setDetailsDevice(d)}
+                        onOpenInventory={(partSku) => {
+                          setInventoryTargetPartId(partSku);
+                          setActiveTab('spare-parts');
+                          setMainViewMode('FLEET_GRID');
+                        }}
+                      />
+                    )}
+                    {currentRole === 'TECHNICIAN' && (
+                      <FieldTechnicianView
+                        devices={devices}
+                        technicians={technicians}
+                        viewportMode="MOBILE"
+                        onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+                        onOpenRepairReport={(d) => setRepairDevice(d)}
+                        onOpenQRScanner={() => setShowQRScanner(true)}
+                        onOpenDeviceDetails={(d) => setDetailsDevice(d)}
+                        onOpenInventory={(partSku) => {
+                          setInventoryTargetPartId(partSku);
+                          setActiveTab('spare-parts');
+                          setMainViewMode('FLEET_GRID');
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Home Indicator bar */}
+                  <div className="flex justify-center pt-2 pb-1">
+                    <div className="h-1 w-28 rounded-full bg-slate-700"></div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Full Width (PC or Fluid Mobile) */
+              <>
+                {currentRole === 'DIRECTOR' && (
+                  <PlantDirectorView
+                    devices={devices}
+                    technicians={technicians}
+                    stats={stats}
+                    currentPlant={currentPlant}
+                    viewportMode={viewportMode}
+                    onOpenDeviceDetails={(d) => setDetailsDevice(d)}
+                    onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+                    onOpenWeeklyReport={() => setShowWeeklyReportModal(true)}
+                  />
+                )}
+                {currentRole === 'EQM_LEADER' && (
+                  <EqmLeaderView
+                    devices={devices}
+                    technicians={technicians}
+                    viewportMode={viewportMode}
+                    onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+                    onOpenRepairReport={(d) => setRepairDevice(d)}
+                    onOpenDeviceDetails={(d) => setDetailsDevice(d)}
+                    onOpenInventory={(partSku) => {
+                      setInventoryTargetPartId(partSku);
+                      setActiveTab('spare-parts');
+                      setMainViewMode('FLEET_GRID');
+                    }}
+                  />
+                )}
+                {currentRole === 'TECHNICIAN' && (
+                  <FieldTechnicianView
+                    devices={devices}
+                    technicians={technicians}
+                    viewportMode={viewportMode}
+                    onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+                    onOpenRepairReport={(d) => setRepairDevice(d)}
+                    onOpenQRScanner={() => setShowQRScanner(true)}
+                    onOpenDeviceDetails={(d) => setDetailsDevice(d)}
+                    onOpenInventory={(partSku) => {
+                      setInventoryTargetPartId(partSku);
+                      setActiveTab('spare-parts');
+                      setMainViewMode('FLEET_GRID');
+                    }}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        ) : (
+          /* ============================================================== */
+          /* VIEW MODE 2: FLEET GRID & STANDARD TABS                        */
+          /* ============================================================== */
+          <>
+            {/* TAB 1: REAL-TIME DEVICES & TELEMETRY */}
+            {activeTab === 'devices' && (
           <div className="space-y-6">
             {/* Custom Drag-and-Drop Reorderable Top-Level Cards Container */}
             <DashboardCardsContainer
@@ -1494,6 +1680,8 @@ export default function App() {
             onToast={(msg) => showToast(msg)}
           />
         )}
+          </>
+        )}
       </main>
 
       {/* --- POPUP MODALS --- */}
@@ -1632,6 +1820,16 @@ export default function App() {
           onToast={(msg) => showToast(msg)}
         />
       )}
+
+      {/* 12. Weekly Incident & Executive Report Modal for Plant Directors */}
+      <WeeklyIncidentReportModal
+        isOpen={showWeeklyReportModal}
+        onClose={() => setShowWeeklyReportModal(false)}
+        records={getStoredMaintenanceRecords()}
+        devices={devices}
+        technicians={technicians}
+        onToast={(msg) => showToast(msg)}
+      />
     </div>
   );
 }
