@@ -25,10 +25,29 @@ import {
   SlidersHorizontal,
   Bot,
   Trophy,
+  Brain,
+  Crown,
+  ArrowUpDown,
+  Phone,
+  Filter,
+  Star,
 } from 'lucide-react';
 import { Device, Technician } from '../../types';
 import { soundManager } from '../../utils/audio';
-import { TechnicianRepairLeaderboard } from './TechnicianRepairLeaderboard';
+import { TechnicianRepairLeaderboard, TechnicianPerformanceData } from './TechnicianRepairLeaderboard';
+import { TechnicianDetailModal } from './TechnicianDetailModal';
+import { AIKnowledgeSynthesisEngine } from './AIKnowledgeSynthesisEngine';
+
+export type TechSortOption =
+  | 'SCORE_DESC'
+  | 'SCORE_ASC'
+  | 'NAME_ASC'
+  | 'NAME_DESC'
+  | 'TASKS_ASC'
+  | 'TASKS_DESC'
+  | 'AVAILABILITY';
+
+export type TechStatusFilter = 'ALL' | 'READY' | 'BUSY' | 'TOP_SKILL';
 
 interface EqmLeaderViewProps {
   devices: Device[];
@@ -139,6 +158,21 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
   const [broadcastText, setBroadcastText] = useState('');
   const [broadcastToast, setBroadcastToast] = useState<string | null>(null);
   const [selectedTechForDispatch, setSelectedTechForDispatch] = useState<string>('tech-01');
+  const [mobileTab, setMobileTab] = useState<'DISPATCH' | 'ROSTER' | 'LEADERBOARD' | 'AI_KNOWLEDGE'>('DISPATCH');
+  const [techSearchQuery, setTechSearchQuery] = useState('');
+  const [techSortOption, setTechSortOption] = useState<TechSortOption>('SCORE_DESC');
+  const [techStatusFilter, setTechStatusFilter] = useState<TechStatusFilter>('ALL');
+
+  const [inspectingTechnician, setInspectingTechnician] = useState<{
+    tech: Technician;
+    perf: TechnicianPerformanceData;
+    rank: number;
+  } | null>(null);
+
+  const handleShowToast = (msg: string) => {
+    setBroadcastToast(msg);
+    setTimeout(() => setBroadcastToast(null), 4000);
+  };
 
   // Handle Dispatch Assignment
   const handleAssignTicket = (ticketId: string, techId: string) => {
@@ -180,20 +214,178 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
     setTimeout(() => setBroadcastToast(null), 3500);
   };
 
-  // Technician Workload Summary
-  const techWorkload = useMemo(() => {
-    return technicians.map((t) => {
+  // Baseline mapping for comprehensive technician performance & ranking metrics
+  const baselineStatsMap: Record<
+    string,
+    {
+      score: number;
+      resolved: number;
+      avgMttr: number;
+      fastestFix: number;
+      specialty: string;
+      recentBadge: string;
+      rank: number;
+    }
+  > = useMemo(
+    () => ({
+      'tech-03': {
+        score: 98,
+        resolved: 26,
+        avgMttr: 21.4,
+        fastestFix: 14,
+        specialty: 'Bàn Tay Vàng Cắt Dây EDM (Makino/Sodick)',
+        recentBadge: 'Kỷ Lục Khắc Phục E-102 (14 phút)',
+        rank: 1,
+      },
+      'tech-01': {
+        score: 94,
+        resolved: 29,
+        avgMttr: 25.8,
+        fastestFix: 16,
+        specialty: 'Bậc Thầy Chẩn Đoán Bo Mạch & PLC CNC',
+        recentBadge: 'Giải Cứu Trục Z Makino EDAF3',
+        rank: 2,
+      },
+      'tech-02': {
+        score: 87,
+        resolved: 21,
+        avgMttr: 30.6,
+        fastestFix: 19,
+        specialty: 'Chuyên Gia Thủy Lực & Áp Lực Nước Xả',
+        recentBadge: 'Xử Lý Màng Áp Lực Sodick ALC',
+        rank: 3,
+      },
+      'tech-04': {
+        score: 82,
+        resolved: 17,
+        avgMttr: 34.2,
+        fastestFix: 22,
+        specialty: 'Kỹ Thuật Viên Vận Hành & Khắc Phục Ca Đêm',
+        recentBadge: 'Hoàn Thành 100% Checklist PM 500h',
+        rank: 4,
+      },
+    }),
+    []
+  );
+
+  // Enriched Technician Workload & Performance Summary
+  const enrichedTechWorkload = useMemo(() => {
+    return technicians.map((t, idx) => {
       const activeTaskCount = tickets.filter(
         (tick) => tick.assignedTechId === t.id && tick.status === 'IN_PROGRESS'
       ).length;
+      const base = baselineStatsMap[t.id] || {
+        score: t.role.includes('Trưởng') ? 98 : t.role.includes('Chuyên gia') ? 95 : 85,
+        resolved: 18,
+        avgMttr: 28.5,
+        fastestFix: 18,
+        specialty: t.role,
+        recentBadge: 'Kỹ Thuật Viên Cơ Điện Đạt Chuẩn',
+        rank: idx + 1,
+      };
+
+      const perf: TechnicianPerformanceData = {
+        id: t.id,
+        name: t.name,
+        role: t.role,
+        avatar: t.avatar,
+        shift: t.shift,
+        phone: t.phone,
+        resolvedIncidents: base.resolved,
+        emergencyFixedCount: Math.round(base.resolved * 0.4),
+        avgMttrMinutes: base.avgMttr,
+        fastestFixMinutes: base.fastestFix,
+        slaComplianceRate: 96.5,
+        firstTimePassRate: 97.0,
+        commendationsCount: t.id === 'tech-03' ? 12 : t.id === 'tech-01' ? 10 : 6,
+        specialtyTag: base.specialty,
+        score: base.score,
+        recentSuccessBadge: base.recentBadge,
+      };
+
       return {
         ...t,
         activeTasks: activeTaskCount,
-        proficiency: t.role.includes('Trưởng') ? 98 : t.role.includes('Chuyên gia') ? 95 : 88,
+        proficiency: base.score,
+        performanceScore: base.score,
+        rank: base.rank,
+        specialty: base.specialty,
+        recentBadge: base.recentBadge,
         statusLabel: activeTaskCount > 0 ? 'Đang Xử Lý' : 'Sẵn Sàng Tiếp Nhận',
+        perf,
       };
     });
-  }, [technicians, tickets]);
+  }, [technicians, tickets, baselineStatsMap]);
+
+  // Alias for backward compatibility
+  const techWorkload = enrichedTechWorkload;
+
+  // Filtered and Sorted Technician Roster
+  const filteredAndSortedTechs = useMemo(() => {
+    const query = techSearchQuery.toLowerCase().trim();
+
+    const filtered = enrichedTechWorkload.filter((t) => {
+      // Status filter
+      if (techStatusFilter === 'READY' && t.activeTasks > 0) return false;
+      if (techStatusFilter === 'BUSY' && t.activeTasks === 0) return false;
+      if (techStatusFilter === 'TOP_SKILL' && t.performanceScore < 90) return false;
+
+      // Search query filter (matches name, role, shift, phone, specialty, or status)
+      if (!query) return true;
+      const matchName = t.name.toLowerCase().includes(query);
+      const matchRole = t.role.toLowerCase().includes(query);
+      const matchShift = t.shift.toLowerCase().includes(query);
+      const matchPhone = t.phone.toLowerCase().includes(query);
+      const matchSpecialty = t.specialty.toLowerCase().includes(query);
+      const matchStatus = t.statusLabel.toLowerCase().includes(query);
+      return matchName || matchRole || matchShift || matchPhone || matchSpecialty || matchStatus;
+    });
+
+    return [...filtered].sort((a, b) => {
+      switch (techSortOption) {
+        case 'SCORE_DESC':
+          return b.performanceScore - a.performanceScore;
+        case 'SCORE_ASC':
+          return a.performanceScore - b.performanceScore;
+        case 'NAME_ASC':
+          return a.name.localeCompare(b.name, 'vi');
+        case 'NAME_DESC':
+          return b.name.localeCompare(a.name, 'vi');
+        case 'TASKS_ASC':
+          return a.activeTasks - b.activeTasks || b.performanceScore - a.performanceScore;
+        case 'TASKS_DESC':
+          return b.activeTasks - a.activeTasks || b.performanceScore - a.performanceScore;
+        case 'AVAILABILITY':
+          return (a.activeTasks === 0 ? -1 : 1) - (b.activeTasks === 0 ? -1 : 1);
+        default:
+          return b.performanceScore - a.performanceScore;
+      }
+    });
+  }, [enrichedTechWorkload, techSearchQuery, techSortOption, techStatusFilter]);
+
+  const readyCount = useMemo(
+    () => enrichedTechWorkload.filter((t) => t.activeTasks === 0).length,
+    [enrichedTechWorkload]
+  );
+  const busyCount = useMemo(
+    () => enrichedTechWorkload.filter((t) => t.activeTasks > 0).length,
+    [enrichedTechWorkload]
+  );
+  const topSkillCount = useMemo(
+    () => enrichedTechWorkload.filter((t) => t.performanceScore >= 90).length,
+    [enrichedTechWorkload]
+  );
+
+  const handleOpenTechnicianModal = (techId: string) => {
+    const item = enrichedTechWorkload.find((t) => t.id === techId);
+    if (!item) return;
+    const tech = technicians.find((t) => t.id === techId) || item;
+    setInspectingTechnician({
+      tech,
+      perf: item.perf,
+      rank: item.rank,
+    });
+  };
 
   /* ------------------------------------------------------------- */
   /* RENDER 1: MOBILE VIEW (LEADER DISPATCH POCKET COMPANION)     */
@@ -225,8 +417,55 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
           </div>
         </div>
 
-        {/* Live Incident Dispatch Cards */}
-        <div className="space-y-3">
+        {/* Mobile Sub-Navigation Tabs */}
+        <div className="grid grid-cols-4 gap-1 rounded-2xl bg-slate-950 p-1 border border-slate-800 text-xs font-bold shadow-inner">
+          <button
+            type="button"
+            onClick={() => setMobileTab('DISPATCH')}
+            className={`rounded-xl py-2 transition flex items-center justify-center gap-1 ${
+              mobileTab === 'DISPATCH' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[10.5px]">Điều Phối</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab('ROSTER')}
+            className={`rounded-xl py-2 transition flex items-center justify-center gap-1 ${
+              mobileTab === 'ROSTER' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <UserCheck className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[10.5px]">Kíp KTV</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab('LEADERBOARD')}
+            className={`rounded-xl py-2 transition flex items-center justify-center gap-1 ${
+              mobileTab === 'LEADERBOARD' ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Trophy className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[10.5px]">Xếp Hạng</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab('AI_KNOWLEDGE')}
+            className={`rounded-xl py-2 transition flex items-center justify-center gap-1 ${
+              mobileTab === 'AI_KNOWLEDGE' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Brain className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[10.5px]">Bộ Não AI</span>
+          </button>
+        </div>
+
+        {/* SUBTAB 1: LIVE DISPATCH & APPROVALS */}
+        {mobileTab === 'DISPATCH' && (
+          <div className="space-y-4">
+            {/* Live Incident Dispatch Cards */}
+            <div className="space-y-3">
           <div className="flex items-center justify-between text-xs font-bold text-white px-1">
             <span className="flex items-center gap-1.5">
               <AlertTriangle className="h-4 w-4 text-amber-400" />
@@ -402,6 +641,247 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
             </button>
           </div>
         </form>
+          </div>
+        )}
+
+        {/* SUBTAB 2: LIVE TECHNICIAN ROSTER & WORKLOAD MAP (MOBILE) */}
+        {mobileTab === 'ROSTER' && (
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-xl space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-emerald-400" />
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Kíp Trực Kỹ Thuật Hiện Trường
+                  </h3>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[10px] font-mono font-bold text-emerald-400">
+                    {filteredAndSortedTechs.length}/{technicians.length} KTV
+                  </span>
+                </div>
+              </div>
+
+              {/* Mobile Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={techSearchQuery}
+                  onChange={(e) => setTechSearchQuery(e.target.value)}
+                  placeholder="Tìm KTV theo tên, ca, SĐT, chuyên môn..."
+                  className="w-full rounded-xl bg-slate-950 border border-slate-800 pl-8 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                {techSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setTechSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded transition"
+                    title="Xóa tìm kiếm"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Mobile Sort Selector & Filter Chips */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                    <ArrowUpDown className="h-3 w-3 text-blue-400" />
+                    <span>Sắp xếp:</span>
+                  </div>
+                  <select
+                    value={techSortOption}
+                    onChange={(e) => setTechSortOption(e.target.value as TechSortOption)}
+                    className="rounded-lg bg-slate-950 border border-slate-800 text-white text-[11px] px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer"
+                  >
+                    <option value="SCORE_DESC">Điểm kỹ năng (Cao → Thấp)</option>
+                    <option value="SCORE_ASC">Điểm kỹ năng (Thấp → Cao)</option>
+                    <option value="NAME_ASC">Tên KTV (A → Z)</option>
+                    <option value="NAME_DESC">Tên KTV (Z → A)</option>
+                    <option value="TASKS_ASC">Tải việc (Rảnh rỗi trước)</option>
+                    <option value="TASKS_DESC">Tải việc (Bận nhiều nhất)</option>
+                    <option value="AVAILABILITY">Sẵn sàng tiếp nhận trước</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => setTechStatusFilter('ALL')}
+                    className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                      techStatusFilter === 'ALL'
+                        ? 'bg-blue-600 text-white font-bold'
+                        : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    }`}
+                  >
+                    Tất cả ({technicians.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTechStatusFilter('READY')}
+                    className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                      techStatusFilter === 'READY'
+                        ? 'bg-emerald-600 text-white font-bold'
+                        : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    }`}
+                  >
+                    🟢 Sẵn sàng ({readyCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTechStatusFilter('BUSY')}
+                    className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                      techStatusFilter === 'BUSY'
+                        ? 'bg-amber-600 text-white font-bold'
+                        : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    }`}
+                  >
+                    🟠 Đang xử lý ({busyCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTechStatusFilter('TOP_SKILL')}
+                    className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                      techStatusFilter === 'TOP_SKILL'
+                        ? 'bg-indigo-600 text-white font-bold'
+                        : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    }`}
+                  >
+                    👑 Top Kỹ Năng ({topSkillCount})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile Technician List */}
+            {filteredAndSortedTechs.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/60 p-6 text-center space-y-2">
+                <Search className="h-6 w-6 text-slate-500 mx-auto" />
+                <p className="text-xs text-slate-300 font-medium">Không tìm thấy kỹ thuật viên phù hợp</p>
+                {techSearchQuery && (
+                  <p className="text-[11px] text-slate-500">Khớp từ khóa: "{techSearchQuery}"</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTechSearchQuery('');
+                    setTechStatusFilter('ALL');
+                  }}
+                  className="text-xs text-blue-400 hover:underline font-bold"
+                >
+                  Đặt lại bộ lọc
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {filteredAndSortedTechs.map((t) => (
+                  <div
+                    key={t.id}
+                    onClick={() => handleOpenTechnicianModal(t.id)}
+                    className="rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-blue-500/50 p-3.5 space-y-2.5 transition active:scale-[0.99] cursor-pointer shadow-lg relative overflow-hidden"
+                  >
+                    {t.rank === 1 && (
+                      <div className="absolute top-0 right-0 h-10 w-10 overflow-hidden pointer-events-none">
+                        <div className="absolute transform rotate-45 bg-gradient-to-r from-amber-500 to-yellow-400 text-[8px] font-black text-slate-950 py-0.5 right-[-24px] top-[8px] w-[80px] text-center shadow-sm">
+                          TOP 1
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          <img
+                            src={t.avatar}
+                            alt={t.name}
+                            className={`h-10 w-10 rounded-full object-cover ring-2 ${
+                              t.activeTasks > 0 ? 'ring-amber-500/60' : 'ring-emerald-500/60'
+                            }`}
+                          />
+                          {t.rank === 1 && (
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow">
+                              <Crown className="h-2.5 w-2.5" />
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-bold text-white text-xs flex items-center gap-1.5">
+                            <span>{t.name}</span>
+                            {t.rank === 1 && (
+                              <span className="text-[10px] text-amber-400 font-mono font-bold">#1</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400">{t.role}</div>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                          t.activeTasks > 0
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        }`}
+                      >
+                        {t.statusLabel}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 pt-1.5 border-t border-slate-800/80">
+                      <div>
+                        Ca: <strong className="text-slate-300">{t.shift}</strong>
+                      </div>
+                      <div className="text-right">
+                        Hiệu suất: <strong className="text-amber-300 font-mono">{t.performanceScore}đ</strong>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-900">
+                      <span className="text-slate-400 truncate max-w-[200px]">{t.specialty}</span>
+                      <span className="text-blue-400 font-bold flex items-center gap-0.5">
+                        Xem Radar <ChevronRight className="h-3 w-3" />
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SUBTAB 3: TECHNICIAN REPAIR LEADERBOARD (MOBILE) */}
+        {mobileTab === 'LEADERBOARD' && (
+          <TechnicianRepairLeaderboard
+            technicians={technicians}
+            viewportMode="MOBILE"
+            onToast={handleShowToast}
+            onSelectTechnician={(tech, perf) => {
+              const r = tech.id === 'tech-03' ? 1 : tech.id === 'tech-01' ? 2 : tech.id === 'tech-02' ? 3 : 4;
+              setInspectingTechnician({ tech, perf, rank: r });
+            }}
+          />
+        )}
+
+        {/* SUBTAB 3: AI KNOWLEDGE SYNTHESIS ENGINE (MOBILE) */}
+        {mobileTab === 'AI_KNOWLEDGE' && (
+          <AIKnowledgeSynthesisEngine
+            devices={devices}
+            onToast={handleShowToast}
+          />
+        )}
+
+        {/* Technician Detail Modal */}
+        {inspectingTechnician && (
+          <TechnicianDetailModal
+            technician={inspectingTechnician.tech}
+            performance={inspectingTechnician.perf}
+            rank={inspectingTechnician.rank}
+            onClose={() => setInspectingTechnician(null)}
+            onToast={handleShowToast}
+          />
+        )}
 
         {broadcastToast && (
           <div className="rounded-xl bg-blue-950/80 border border-blue-500/40 p-2.5 text-xs text-blue-200">
@@ -660,54 +1140,215 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
 
         {/* Right: 1 Column - Live Technician Roster & Workload Map */}
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-xl">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-emerald-400" />
-                <span>Kíp Trực Kỹ Thuật & Tải Công Việc</span>
-              </h3>
-              <span className="text-xs font-mono text-emerald-400 font-bold">Live</span>
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400">
+                  <UserCheck className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <span>Kíp Trực Kỹ Thuật & Tải Công Việc</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400">Điều phối ca trực & năng lực EDM</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-mono text-emerald-400 font-bold">
+                  {filteredAndSortedTechs.length}/{technicians.length} KTV
+                </span>
+              </div>
             </div>
 
-            <div className="mt-3 space-y-3">
-              {techWorkload.map((t) => (
-                <div
-                  key={t.id}
-                  className="rounded-xl bg-slate-950 border border-slate-800/80 p-3 text-xs space-y-2"
+            {/* Quick Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={techSearchQuery}
+                onChange={(e) => setTechSearchQuery(e.target.value)}
+                placeholder="Tìm KTV theo tên, ca, chuyên môn, SĐT..."
+                className="w-full rounded-xl bg-slate-950 border border-slate-800 pl-8 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition shadow-inner"
+              />
+              {techSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setTechSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded transition"
+                  title="Xóa tìm kiếm"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <img
-                        src={t.avatar}
-                        alt={t.name}
-                        className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-700"
-                      />
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Sorting Options & Filter Chips */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                  <ArrowUpDown className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Sắp xếp:</span>
+                </div>
+                <select
+                  value={techSortOption}
+                  onChange={(e) => setTechSortOption(e.target.value as TechSortOption)}
+                  className="rounded-lg bg-slate-950 border border-slate-800 text-white text-[11px] px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer"
+                >
+                  <option value="SCORE_DESC">Điểm kỹ năng (Cao → Thấp)</option>
+                  <option value="SCORE_ASC">Điểm kỹ năng (Thấp → Cao)</option>
+                  <option value="NAME_ASC">Tên KTV (A → Z)</option>
+                  <option value="NAME_DESC">Tên KTV (Z → A)</option>
+                  <option value="TASKS_ASC">Tải việc (Rảnh rỗi trước)</option>
+                  <option value="TASKS_DESC">Tải việc (Bận nhiều nhất)</option>
+                  <option value="AVAILABILITY">Sẵn sàng tiếp nhận trước</option>
+                </select>
+              </div>
+
+              {/* Status Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setTechStatusFilter('ALL')}
+                  className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                    techStatusFilter === 'ALL'
+                      ? 'bg-blue-600 text-white font-bold shadow'
+                      : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white'
+                  }`}
+                >
+                  Tất cả ({technicians.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTechStatusFilter('READY')}
+                  className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                    techStatusFilter === 'READY'
+                      ? 'bg-emerald-600 text-white font-bold shadow'
+                      : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white'
+                  }`}
+                >
+                  🟢 Sẵn sàng ({readyCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTechStatusFilter('BUSY')}
+                  className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                    techStatusFilter === 'BUSY'
+                      ? 'bg-amber-600 text-white font-bold shadow'
+                      : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white'
+                  }`}
+                >
+                  🟠 Đang xử lý ({busyCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTechStatusFilter('TOP_SKILL')}
+                  className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                    techStatusFilter === 'TOP_SKILL'
+                      ? 'bg-indigo-600 text-white font-bold shadow'
+                      : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white'
+                  }`}
+                >
+                  👑 Top Kỹ Năng ({topSkillCount})
+                </button>
+              </div>
+            </div>
+
+            {/* Technician Cards List */}
+            {filteredAndSortedTechs.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/60 p-6 text-center space-y-2">
+                <Search className="h-6 w-6 text-slate-500 mx-auto" />
+                <p className="text-xs text-slate-300 font-medium">Không tìm thấy kỹ thuật viên phù hợp</p>
+                {techSearchQuery && (
+                  <p className="text-[11px] text-slate-500">Khớp từ khóa: "{techSearchQuery}"</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTechSearchQuery('');
+                    setTechStatusFilter('ALL');
+                  }}
+                  className="text-xs text-blue-400 hover:underline font-bold"
+                >
+                  Đặt lại bộ lọc
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredAndSortedTechs.map((t) => (
+                  <div
+                    key={t.id}
+                    onClick={() => handleOpenTechnicianModal(t.id)}
+                    className="rounded-xl bg-slate-950 border border-slate-800/80 hover:border-blue-500/60 hover:bg-slate-900/90 p-3.5 text-xs space-y-2.5 transition-all cursor-pointer group shadow-sm hover:shadow-md relative overflow-hidden"
+                  >
+                    {t.rank === 1 && (
+                      <div className="absolute top-0 right-0 h-10 w-10 overflow-hidden pointer-events-none">
+                        <div className="absolute transform rotate-45 bg-gradient-to-r from-amber-500 to-yellow-400 text-[8px] font-black text-slate-950 py-0.5 right-[-24px] top-[8px] w-[80px] text-center shadow-sm">
+                          TOP 1
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative">
+                          <img
+                            src={t.avatar}
+                            alt={t.name}
+                            className={`h-9 w-9 rounded-full object-cover ring-2 ${
+                              t.activeTasks > 0 ? 'ring-amber-500/60' : 'ring-emerald-500/60'
+                            }`}
+                          />
+                          {t.rank === 1 && (
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow">
+                              <Crown className="h-2.5 w-2.5" />
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-bold text-white group-hover:text-blue-300 transition flex items-center gap-1.5">
+                            <span>{t.name}</span>
+                            {t.rank === 1 && (
+                              <span className="text-[10px] text-amber-400 font-mono font-bold">#1</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400">{t.role}</div>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                          t.activeTasks > 0
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        }`}
+                      >
+                        {t.statusLabel}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 pt-1.5 border-t border-slate-900">
                       <div>
-                        <div className="font-bold text-white">{t.name}</div>
-                        <div className="text-[10px] text-slate-400">{t.role}</div>
+                        Ca: <strong className="text-slate-300">{t.shift}</strong>
+                      </div>
+                      <div className="text-right">
+                        Hiệu suất: <strong className="text-amber-300 font-mono">{t.performanceScore}đ</strong>
                       </div>
                     </div>
 
-                    <span
-                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
-                        t.activeTasks > 0
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      }`}
-                    >
-                      {t.statusLabel}
-                    </span>
+                    <div className="flex items-center justify-between text-[10.5px] pt-1 border-t border-slate-900/80">
+                      <span className="text-slate-400 truncate max-w-[170px]" title={t.specialty}>
+                        {t.specialty}
+                      </span>
+                      <span className="text-blue-400 group-hover:text-blue-300 font-bold flex items-center gap-0.5 shrink-0 transition">
+                        Xem Radar <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition" />
+                      </span>
+                    </div>
                   </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-900">
-                    <span>Ca làm việc: <strong className="text-slate-300">{t.shift}</strong></span>
-                    <span className="font-mono text-indigo-300 font-bold">
-                      Skill Score: {t.proficiency}%
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Preventive Maintenance Schedule Quick Card */}
@@ -741,6 +1382,38 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 3. Technician Repair Performance & MTTR Leaderboard */}
+      <div className="pt-2">
+        <TechnicianRepairLeaderboard
+          technicians={technicians}
+          viewportMode="PC"
+          onToast={handleShowToast}
+          onSelectTechnician={(tech, perf) => {
+            const r = tech.id === 'tech-03' ? 1 : tech.id === 'tech-01' ? 2 : tech.id === 'tech-02' ? 3 : 4;
+            setInspectingTechnician({ tech, perf, rank: r });
+          }}
+        />
+      </div>
+
+      {/* 4. AI Knowledge Synthesis Engine (Cơ Chế Học Hỏi & Tổng Hợp Tri Thức AI) */}
+      <div className="pt-4">
+        <AIKnowledgeSynthesisEngine
+          devices={devices}
+          onToast={handleShowToast}
+        />
+      </div>
+
+      {/* Technician Detail Modal with Radar Chart & Milestone Timeline */}
+      {inspectingTechnician && (
+        <TechnicianDetailModal
+          technician={inspectingTechnician.tech}
+          performance={inspectingTechnician.perf}
+          rank={inspectingTechnician.rank}
+          onClose={() => setInspectingTechnician(null)}
+          onToast={handleShowToast}
+        />
+      )}
     </div>
   );
 };

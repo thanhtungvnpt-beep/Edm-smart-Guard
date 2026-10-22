@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Trophy,
+  Crown,
   Medal,
   Award,
   Zap,
@@ -24,7 +25,7 @@ import { Technician, MaintenanceRecord } from '../../types';
 import { getStoredMaintenanceRecords } from '../../utils/maintenanceHistoryData';
 import { soundManager } from '../../utils/audio';
 
-export type LeaderboardTimeframe = 'WEEK' | 'MONTH' | 'ALL';
+export type LeaderboardTimeframe = 'WEEK' | 'MONTH' | 'YEAR';
 export type LeaderboardSortMetric = 'RESOLVED' | 'MTTR' | 'SCORE';
 
 interface TechnicianRepairLeaderboardProps {
@@ -32,6 +33,7 @@ interface TechnicianRepairLeaderboardProps {
   viewportMode: 'PC' | 'MOBILE';
   onToast?: (message: string) => void;
   onOpenRepairReport?: (techName: string) => void;
+  onSelectTechnician?: (technician: Technician, performance: TechnicianPerformanceData) => void;
 }
 
 export interface TechnicianPerformanceData {
@@ -58,6 +60,7 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
   viewportMode,
   onToast,
   onOpenRepairReport,
+  onSelectTechnician,
 }) => {
   const [timeframe, setTimeframe] = useState<LeaderboardTimeframe>('MONTH');
   const [sortBy, setSortBy] = useState<LeaderboardSortMetric>('SCORE');
@@ -81,7 +84,7 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
   // Compute live technician ranking metrics
   const performanceData: TechnicianPerformanceData[] = useMemo(() => {
     // Multipliers based on timeframe
-    const multiplier = timeframe === 'WEEK' ? 0.35 : timeframe === 'MONTH' ? 1.0 : 2.5;
+    const multiplier = timeframe === 'WEEK' ? 0.35 : timeframe === 'MONTH' ? 1.0 : 3.2;
 
     // Baselines mapped by technician
     const baselineStats: Record<
@@ -217,14 +220,27 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
     });
   }, [performanceData, sortBy]);
 
-  // Handle Leader Commendation (Tuyên Dương)
-  const handleCommend = (techId: string, techName: string) => {
+  // Handle Leader Commendation (Tuyên Dương) with Real-Time Mobile Push Dispatch
+  const handleCommend = (techId: string, techName: string, isRank1?: boolean) => {
+    soundManager.playPushSound();
     soundManager.playSuccessChime();
     setCommendations((prev) => ({
       ...prev,
       [techId]: (prev[techId] || 0) + 1,
     }));
-    const message = `🏆 Leader EQM đã tuyên dương kỹ thuật viên ${techName} vì thành tích xử lý sự cố xuất sắc!`;
+
+    // Trigger Mobile Push Notification to Technician's Phone
+    fetch('/api/mobile-devices/push-commendation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        technicianId: techId,
+        commendationBadge: isRank1 ? '👑 Huy Hiệu Quán Quân Bảng Xếp Hạng' : '🏆 Huy Hiệu Tuyên Dương Xuất Sắc',
+        rank: isRank1 ? 1 : undefined,
+      }),
+    }).catch(() => {});
+
+    const message = `🏆 Đã tuyên dương và gửi thông báo đẩy trực tiếp tới điện thoại của ${techName}!`;
     if (onToast) {
       onToast(message);
     }
@@ -277,75 +293,34 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
 
           {/* Timeframe & Sort Toggle Bar */}
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            {/* Timeframe */}
-            <div className="flex rounded-xl bg-slate-950 border border-slate-800 p-0.5">
-              <button
-                type="button"
-                onClick={() => setTimeframe('WEEK')}
-                className={`flex-1 rounded-lg py-1 text-[11px] font-semibold transition ${
-                  timeframe === 'WEEK'
-                    ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'text-slate-400'
-                }`}
+            {/* Timeframe Dropdown */}
+            <div className="flex items-center rounded-xl bg-slate-950 border border-slate-800 px-2.5 py-1.5 text-xs shadow-inner">
+              <Calendar className="h-3.5 w-3.5 text-amber-400 mr-1.5 shrink-0" />
+              <select
+                value={timeframe}
+                onChange={(e) => setTimeframe(e.target.value as LeaderboardTimeframe)}
+                className="w-full bg-transparent text-amber-300 font-bold text-xs focus:outline-none cursor-pointer"
+                aria-label="Lọc thời gian bảng xếp hạng kỹ thuật viên"
               >
-                Tuần
-              </button>
-              <button
-                type="button"
-                onClick={() => setTimeframe('MONTH')}
-                className={`flex-1 rounded-lg py-1 text-[11px] font-semibold transition ${
-                  timeframe === 'MONTH'
-                    ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'text-slate-400'
-                }`}
-              >
-                Tháng
-              </button>
-              <button
-                type="button"
-                onClick={() => setTimeframe('ALL')}
-                className={`flex-1 rounded-lg py-1 text-[11px] font-semibold transition ${
-                  timeframe === 'ALL'
-                    ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'text-slate-400'
-                }`}
-              >
-                Tất cả
-              </button>
+                <option value="WEEK" className="bg-slate-900 text-white">Tuần này</option>
+                <option value="MONTH" className="bg-slate-900 text-white">Tháng này</option>
+                <option value="YEAR" className="bg-slate-900 text-white">Năm nay</option>
+              </select>
             </div>
 
-            {/* Sort Metric */}
-            <div className="flex rounded-xl bg-slate-950 border border-slate-800 p-0.5">
-              <button
-                type="button"
-                onClick={() => setSortBy('SCORE')}
-                className={`flex-1 rounded-lg py-1 text-[11px] font-semibold transition ${
-                  sortBy === 'SCORE' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400'
-                }`}
-                title="Sắp xếp theo Điểm Tổng Hợp"
+            {/* Sort Metric Dropdown */}
+            <div className="flex items-center rounded-xl bg-slate-950 border border-slate-800 px-2.5 py-1.5 text-xs shadow-inner">
+              <ArrowUpDown className="h-3.5 w-3.5 text-indigo-400 mr-1.5 shrink-0" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as LeaderboardSortMetric)}
+                className="w-full bg-transparent text-indigo-300 font-bold text-xs focus:outline-none cursor-pointer"
+                aria-label="Sắp xếp bảng xếp hạng theo"
               >
-                Điểm
-              </button>
-              <button
-                type="button"
-                onClick={() => setSortBy('RESOLVED')}
-                className={`flex-1 rounded-lg py-1 text-[11px] font-semibold transition ${
-                  sortBy === 'RESOLVED' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400'
-                }`}
-                title="Sắp xếp theo Số Sự Cố"
-              >
-                Số Ca
-              </button>
-              <button
-                type="button"
-                onClick={() => setSortBy('MTTR')}
-                className={`flex-1 rounded-lg py-1 text-[11px] font-semibold transition ${
-                  sortBy === 'MTTR' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400'
-                }`}
-                title="Sắp xếp theo MTTR Tốc Độ"
-              >
-                MTTR
-              </button>
+                <option value="SCORE" className="bg-slate-900 text-white">Điểm Tổng Hợp</option>
+                <option value="RESOLVED" className="bg-slate-900 text-white">Số Ca Khắc Phục</option>
+                <option value="MTTR" className="bg-slate-900 text-white">MTTR Tốc Độ</option>
+              </select>
             </div>
           </div>
         </div>
@@ -360,7 +335,23 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
             return (
               <div
                 key={item.id}
-                className={`rounded-2xl border p-3.5 space-y-2.5 transition shadow-lg ${
+                onClick={() => {
+                  const techObj = technicians.find((t) => t.id === item.id) || {
+                    id: item.id,
+                    name: item.name,
+                    role: item.role,
+                    phone: item.phone,
+                    email: '',
+                    avatar: item.avatar,
+                    shift: item.shift,
+                    activeStatus: 'ON_DUTY',
+                    fcmToken: '',
+                  };
+                  if (onSelectTechnician) {
+                    onSelectTechnician(techObj, item);
+                  }
+                }}
+                className={`rounded-2xl border p-3.5 space-y-2.5 transition shadow-lg cursor-pointer active:scale-[0.99] ${
                   isRank1
                     ? 'border-amber-500/70 bg-gradient-to-br from-slate-950 via-amber-950/20 to-slate-900 ring-1 ring-amber-400/50'
                     : isRank2
@@ -376,7 +367,7 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
                     <div
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl font-mono font-extrabold text-xs shadow-md ${
                         isRank1
-                          ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950'
+                          ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950 ring-2 ring-amber-300'
                           : isRank2
                           ? 'bg-gradient-to-br from-slate-200 to-slate-400 text-slate-950'
                           : isRank3
@@ -384,7 +375,7 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
                           : 'bg-slate-800 text-slate-300 border border-slate-700'
                       }`}
                     >
-                      {isRank1 ? '🥇 1' : isRank2 ? '🥈 2' : isRank3 ? '🥉 3' : `#${index + 1}`}
+                      {isRank1 ? <Crown className="h-4 w-4 fill-slate-950" /> : isRank2 ? '🥈 2' : isRank3 ? '🥉 3' : `#${index + 1}`}
                     </div>
 
                     <img
@@ -397,8 +388,9 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-white text-xs">{item.name}</span>
                         {isRank1 && (
-                          <span className="rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold px-1.5 py-0.2 border border-amber-500/40">
-                            TOP 1
+                          <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500/25 to-orange-500/25 text-amber-300 text-[9px] font-mono font-extrabold px-2 py-0.2 border border-amber-400/60 shadow-sm animate-pulse">
+                            <Crown className="h-3 w-3 fill-amber-300 text-amber-300" />
+                            <span>TOP 1 • QUÁN QUÂN</span>
                           </span>
                         )}
                       </div>
@@ -512,45 +504,22 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
 
         {/* Filters: Timeframe & Metric Selector */}
         <div className="flex items-center gap-2.5 flex-wrap self-start lg:self-auto">
-          {/* Timeframe Selector */}
-          <div className="flex items-center rounded-xl bg-slate-950 border border-slate-800 p-1 text-xs">
-            <span className="text-slate-500 px-2 font-mono flex items-center gap-1">
+          {/* Timeframe Selector Dropdown */}
+          <div className="flex items-center rounded-xl bg-slate-950 border border-slate-800 px-3 py-1.5 text-xs shadow-inner">
+            <span className="text-slate-400 font-mono flex items-center gap-1.5 mr-2">
               <Calendar className="h-3.5 w-3.5 text-amber-400" />
               <span>Thời gian:</span>
             </span>
-            <button
-              type="button"
-              onClick={() => setTimeframe('WEEK')}
-              className={`rounded-lg px-2.5 py-1 font-semibold transition ${
-                timeframe === 'WEEK'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
+            <select
+              value={timeframe}
+              onChange={(e) => setTimeframe(e.target.value as LeaderboardTimeframe)}
+              className="bg-slate-900 border border-slate-700 text-amber-300 font-bold rounded-lg px-3 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer shadow-sm hover:border-amber-500/50 transition"
+              aria-label="Lọc khoảng thời gian bảng xếp hạng kỹ thuật viên"
             >
-              Tuần Này
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimeframe('MONTH')}
-              className={`rounded-lg px-2.5 py-1 font-semibold transition ${
-                timeframe === 'MONTH'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Tháng Này
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimeframe('ALL')}
-              className={`rounded-lg px-2.5 py-1 font-semibold transition ${
-                timeframe === 'ALL'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Toàn Bộ
-            </button>
+              <option value="WEEK" className="bg-slate-900 text-white font-medium">Tuần này</option>
+              <option value="MONTH" className="bg-slate-900 text-white font-medium">Tháng này</option>
+              <option value="YEAR" className="bg-slate-900 text-white font-medium">Năm nay</option>
+            </select>
           </div>
 
           {/* Sort By Metric */}
@@ -649,11 +618,27 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
 
         {/* RANK 1: GOLD CHAMPION (TALLER PODIUM) */}
         {sortedData[0] && (
-          <div className="rounded-2xl border-2 border-amber-500/80 bg-gradient-to-b from-amber-950/30 via-slate-900 to-slate-950 p-6 shadow-2xl relative flex flex-col items-center text-center order-1 md:order-2 ring-2 ring-amber-400/40">
+          <div
+            onClick={() => {
+              const techObj = technicians.find((t) => t.id === sortedData[0].id) || {
+                id: sortedData[0].id,
+                name: sortedData[0].name,
+                role: sortedData[0].role,
+                phone: sortedData[0].phone,
+                email: '',
+                avatar: sortedData[0].avatar,
+                shift: sortedData[0].shift,
+                activeStatus: 'ON_DUTY',
+                fcmToken: '',
+              };
+              if (onSelectTechnician) onSelectTechnician(techObj, sortedData[0]);
+            }}
+            className="rounded-2xl border-2 border-amber-500/80 bg-gradient-to-b from-amber-950/30 via-slate-900 to-slate-950 p-6 shadow-2xl relative flex flex-col items-center text-center order-1 md:order-2 ring-2 ring-amber-400/40 cursor-pointer hover:border-amber-400 transition active:scale-[0.99]"
+          >
             {/* Glowing Crown Badge */}
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400 text-slate-950 font-mono font-extrabold text-xs px-4 py-1 shadow-lg shadow-amber-950/80 flex items-center gap-1.5 animate-pulse">
-              <Trophy className="h-4 w-4 text-slate-950" />
-              <span>🥇 QUÁN QUÂN • VÀNG</span>
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400 text-slate-950 font-mono font-extrabold text-xs px-4 py-1 shadow-lg shadow-amber-950/80 flex items-center gap-1.5 animate-pulse ring-2 ring-amber-300">
+              <Crown className="h-4 w-4 fill-slate-950 text-slate-950" />
+              <span>👑 QUÁN QUÂN • VÀNG</span>
             </div>
 
             <div className="relative mt-2">
@@ -707,7 +692,10 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
             {/* Commend Button Gold */}
             <button
               type="button"
-              onClick={() => handleCommend(sortedData[0].id, sortedData[0].name)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCommend(sortedData[0].id, sortedData[0].name, true);
+              }}
               className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 py-2.5 text-xs font-extrabold text-slate-950 transition shadow-lg shadow-amber-950/60 active:scale-95"
             >
               <ThumbsUp className="h-4 w-4 text-slate-950" />
@@ -804,7 +792,23 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
                 return (
                   <tr
                     key={item.id}
-                    onClick={() => setSelectedTechId(isSelected ? null : item.id)}
+                    onClick={() => {
+                      setSelectedTechId(isSelected ? null : item.id);
+                      const techObj = technicians.find((t) => t.id === item.id) || {
+                        id: item.id,
+                        name: item.name,
+                        role: item.role,
+                        phone: item.phone,
+                        email: '',
+                        avatar: item.avatar,
+                        shift: item.shift,
+                        activeStatus: 'ON_DUTY',
+                        fcmToken: '',
+                      };
+                      if (onSelectTechnician) {
+                        onSelectTechnician(techObj, item);
+                      }
+                    }}
                     className={`hover:bg-slate-900/60 transition cursor-pointer ${
                       isSelected ? 'bg-slate-900/80 ring-1 ring-indigo-500/30' : ''
                     }`}
@@ -814,7 +818,7 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
                       <span
                         className={`inline-flex h-7 w-7 items-center justify-center rounded-xl font-mono font-bold text-xs ${
                           index === 0
-                            ? 'bg-amber-400 text-slate-950'
+                            ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300'
                             : index === 1
                             ? 'bg-slate-300 text-slate-950'
                             : index === 2
@@ -822,7 +826,7 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
                             : 'bg-slate-800 text-slate-400'
                         }`}
                       >
-                        {index + 1}
+                        {index === 0 ? <Crown className="h-4 w-4 fill-slate-950" /> : index + 1}
                       </span>
                     </td>
 
@@ -835,11 +839,12 @@ export const TechnicianRepairLeaderboard: React.FC<TechnicianRepairLeaderboardPr
                           className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-700 shrink-0"
                         />
                         <div>
-                          <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-1.5">
+                          <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-1.5 flex-wrap">
                             <span>{item.name}</span>
                             {isRank1 && (
-                              <span className="rounded bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold px-1.5 py-0.2 border border-amber-500/30">
-                                TOP RESOLVER
+                              <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500/25 via-orange-500/25 to-amber-500/25 border border-amber-400/60 px-2 py-0.5 text-[10px] font-mono font-extrabold text-amber-300 shadow-sm animate-pulse">
+                                <Crown className="h-3 w-3 fill-amber-300 text-amber-300" />
+                                <span>TOP 1 • KỶ LỤC XƯỞNG</span>
                               </span>
                             )}
                           </div>
