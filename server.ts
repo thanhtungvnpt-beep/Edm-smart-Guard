@@ -118,7 +118,7 @@ export interface Device {
   brand: string;
   type: 'WIRE_EDM' | 'SINKER_EDM' | 'CNC_MILLING' | 'HOLE_POPPER';
   location: string;
-  status: 'RUNNING' | 'ALARM_STOPPED' | 'WARNING' | 'IDLE' | 'MAINTENANCE';
+  status: 'RUNNING' | 'ALARM_STOPPED' | 'WARNING' | 'IDLE' | 'MAINTENANCE' | 'MAINTENANCE_SCHEDULED';
   assignedTechnicianId: string;
   telemetry: MachineTelemetry;
   nominalRanges: {
@@ -137,6 +137,9 @@ export interface Device {
   serviceHoursSinceLastReset?: number;
   lastSyncTime?: string;
   lastSyncLatencyMs?: number;
+  scheduledMaintenanceAt?: string;
+  scheduledMaintenanceReason?: string;
+  maintenanceNote?: string;
 }
 
 export interface TechnicalDocument {
@@ -1645,6 +1648,21 @@ app.post('/api/devices/batch-action', (req, res) => {
         updatedDevices.push(device);
       });
       summaryMessage = `Đã hiệu chuẩn cảm biến hàng loạt về dải tiêu chuẩn cho ${targetDevices.length} máy EDM!`;
+    } else if (action === 'schedule-maintenance') {
+      const { scheduledDate, scheduledTime, scheduledDateTime, reason, note } = req.body;
+      const displayDateTime = scheduledDateTime || (scheduledDate && scheduledTime ? `${scheduledTime} ngày ${scheduledDate}` : `${now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày mai`);
+      const fullReason = reason || 'Bảo dưỡng định kỳ theo kế hoạch xưởng';
+      const fullNote = note ? `[Kế hoạch]: ${note}` : `Lên lịch bảo trì: ${fullReason} vào lúc ${displayDateTime}`;
+
+      targetDevices.forEach((device) => {
+        device.status = 'MAINTENANCE_SCHEDULED';
+        device.scheduledMaintenanceAt = displayDateTime;
+        device.scheduledMaintenanceReason = fullReason;
+        device.maintenanceNote = `MAINTENANCE_SCHEDULED: ${fullNote}`;
+        device.lastEdmSignalTime = now.toISOString();
+        updatedDevices.push(device);
+      });
+      summaryMessage = `Đã lên lịch bảo trì (MAINTENANCE_SCHEDULED) vào ${displayDateTime} cho ${targetDevices.length} máy EDM! (${targetDevices.map((d) => d.code).join(', ')})`;
     } else {
       return res.status(400).json({ success: false, message: `Hành động hàng loạt '${action}' không được hỗ trợ` });
     }
@@ -1662,6 +1680,203 @@ app.post('/api/devices/batch-action', (req, res) => {
   } catch (err: any) {
     console.error('Batch action error:', err);
     res.status(500).json({ success: false, message: err.message || 'Lỗi xử lý tác vụ hàng loạt' });
+  }
+});
+
+// 6.5. Get 7-Day Historical Telemetry (Power Consumption & Temperature) for Degradation Analysis
+app.get('/api/devices/:id/historical-telemetry', (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const device = devices.find((d) => d.id === deviceId || d.code.toLowerCase() === deviceId.toLowerCase());
+    if (!device) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị EDM yêu cầu' });
+    }
+
+    const currentTemp = device.telemetry.dielectricTemp;
+    const nominalTempRange = device.nominalRanges.dielectricTemp || [18, 24];
+    const isWire = device.type === 'WIRE_EDM';
+    const nominalPowerMax = isWire ? 7.5 : 8.5;
+    const nominalPowerMin = isWire ? 4.5 : 5.0;
+
+    // Calculate current power in kW
+    const currentPowerKw = Math.max(
+      2.0,
+      Number(((device.telemetry.dischargeVoltage * device.telemetry.peakCurrent / 1000) * 1.85 + (device.status === 'RUNNING' ? 4.2 : 1.2)).toFixed(2))
+    );
+
+    // Determine if this machine exhibits thermal degradation pattern
+    const isDegrading =
+      device.status === 'ALARM_STOPPED' ||
+      currentTemp >= 23.0 ||
+      device.code === 'EDM-W01' ||
+      device.code === 'EDM-W03';
+
+    const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+    const now = new Date();
+    const history = [];
+
+    const startTemp = isDegrading ? 20.2 : 20.4;
+    const startPower = isDegrading ? 6.2 : 6.0;
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dayIndex = 7 - i;
+      const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+      const dayOfWeek = dayLabels[d.getDay() === 0 ? 6 : d.getDay() - 1];
+
+      let dayAvgTemp: number;
+      let dayPeakTemp: number;
+      let dayAvgPower: number;
+      let dayPeakPower: number;
+      let dayVibration: number;
+      let pointStatus: 'NORMAL' | 'ELEVATED' | 'ANOMALY' = 'NORMAL';
+      let anomalyNote: string | undefined = undefined;
+
+      if (i === 0) {
+        // Today
+        dayAvgTemp = Number(currentTemp.toFixed(1));
+        dayPeakTemp = Number((currentTemp + (isDegrading ? 1.4 : 0.8)).toFixed(1));
+        dayAvgPower = currentPowerKw;
+        dayPeakPower = Number((currentPowerKw * 1.22).toFixed(2));
+        dayVibration = Number(device.telemetry.vibration.toFixed(2));
+        if (dayAvgTemp >= nominalTempRange[1]) {
+          pointStatus = 'ANOMALY';
+          anomalyNote = `Vượt ngưỡng nhiệt an toàn (${nominalTempRange[1]}°C)`;
+        } else if (dayAvgTemp >= nominalTempRange[1] - 1.0) {
+          pointStatus = 'ELEVATED';
+          anomalyNote = 'Cận ngưỡng nhiệt độ tối đa';
+        }
+      } else {
+        const progress = (7 - i) / 7;
+        if (isDegrading) {
+          // Degrading progression curve
+          dayAvgTemp = Number((startTemp + progress * (currentTemp - startTemp) + (Math.sin(i * 1.5) * 0.25)).toFixed(1));
+          dayPeakTemp = Number((dayAvgTemp + 1.2 + (Math.cos(i) * 0.3)).toFixed(1));
+          dayAvgPower = Number((startPower + progress * (currentPowerKw - startPower) + (Math.sin(i * 2.1) * 0.2)).toFixed(2));
+          dayPeakPower = Number((dayAvgPower * 1.25 + 0.3).toFixed(2));
+          dayVibration = Number((0.55 + progress * (device.telemetry.vibration - 0.55)).toFixed(2));
+
+          if (dayAvgTemp >= nominalTempRange[1]) {
+            pointStatus = 'ANOMALY';
+            anomalyNote = `Vượt ngưỡng nhiệt an toàn (${nominalTempRange[1]}°C)`;
+          } else if (dayAvgTemp >= nominalTempRange[1] - 1.2) {
+            pointStatus = 'ELEVATED';
+          }
+        } else {
+          // Stable nominal fluctuations
+          const noise = Math.sin(i * 1.8) * 0.35;
+          dayAvgTemp = Number((20.5 + noise).toFixed(1));
+          dayPeakTemp = Number((dayAvgTemp + 0.9).toFixed(1));
+          dayAvgPower = Number((6.1 + Math.cos(i * 1.5) * 0.3).toFixed(2));
+          dayPeakPower = Number((dayAvgPower * 1.18).toFixed(2));
+          dayVibration = Number((0.55 + Math.sin(i) * 0.08).toFixed(2));
+        }
+      }
+
+      const totalKwh = Number((dayAvgPower * 18.5).toFixed(1));
+      const ambientTemp = Number((24.5 + (Math.sin(i * 0.9) * 1.2)).toFixed(1));
+
+      history.push({
+        dayIndex,
+        date: dateStr,
+        fullDate: d.toISOString().split('T')[0],
+        dayOfWeek,
+        avgPowerKw: dayAvgPower,
+        peakPowerKw: dayPeakPower,
+        totalKwh,
+        avgTemp: dayAvgTemp,
+        peakTemp: dayPeakTemp,
+        ambientTemp,
+        nominalTempMax: nominalTempRange[1],
+        nominalPowerMax,
+        vibration: dayVibration,
+        status: pointStatus,
+        anomalyNote,
+      });
+    }
+
+    // Calculate aggregated metrics
+    const avgPower7d = Number((history.reduce((acc, h) => acc + h.avgPowerKw, 0) / 7).toFixed(2));
+    const peakPower7d = Number(Math.max(...history.map((h) => h.peakPowerKw)).toFixed(2));
+    const powerChangePct = Number((((history[6].avgPowerKw - history[0].avgPowerKw) / history[0].avgPowerKw) * 100).toFixed(1));
+
+    const avgTemp7d = Number((history.reduce((acc, h) => acc + h.avgTemp, 0) / 7).toFixed(1));
+    const peakTemp7d = Number(Math.max(...history.map((h) => h.peakTemp)).toFixed(1));
+    const tempChangeDelta = Number((history[6].avgTemp - history[0].avgTemp).toFixed(1));
+
+    let coolingEfficiency: 'OPTIMAL' | 'FAIR' | 'DEGRADING' | 'CRITICAL' = 'OPTIMAL';
+    if (isDegrading) {
+      coolingEfficiency = tempChangeDelta >= 3.5 ? 'CRITICAL' : 'DEGRADING';
+    } else if (tempChangeDelta >= 1.5) {
+      coolingEfficiency = 'FAIR';
+    }
+
+    const degradationAnalysis = isDegrading
+      ? {
+          hasDegradation: true,
+          patternType: 'THERMAL_CHILLER_FOULING_AND_FRICTION',
+          patternTitle: 'Mô hình suy giảm hiệu suất tản nhiệt Chiller & Ma sát mòn dẫn hướng',
+          severity: (tempChangeDelta >= 3.5 ? 'CRITICAL' : 'WARNING') as 'CRITICAL' | 'WARNING',
+          confidenceScore: 92,
+          evidencePoints: [
+            `Nhiệt độ dung môi điện môi tăng lũy tiến +${tempChangeDelta}°C trong 7 ngày qua, vượt quá dao động nhiệt tự nhiên của xưởng`,
+            `Công suất tiêu thụ tăng +${powerChangePct}% tương quan thuận với nhiệt độ do máy nén làm lạnh Chiller phải gồng tải liên tục 100%`,
+            `Vào ngày gần nhất, nhiệt độ đỉnh chạm ${peakTemp7d}°C (vượt ngưỡng cho phép ${nominalTempRange[1]}°C), làm giảm độ chính xác gia công phôi`,
+          ],
+          rootCauseHypothesis: 'Cặn bẩn kim loại EDM bám trên dàn trao đổi nhiệt ống đồng của Chiller phụ trợ, làm giảm hệ số truyền nhiệt; đồng thời bộ lọc hạt deion nghẹt một phần làm giảm lưu lượng đối lưu.',
+          daysUntilCritical: Math.max(1, Math.round(5 - tempChangeDelta)),
+          recommendedActions: [
+            'Tiến hành vệ sinh súc rửa dàn làm mát Chiller bằng khí nén áp lực và dung dịch tẩy cặn nhẹ',
+            'Kiểm tra áp lực chênh áp và thay thế lõi lọc tinh 3-micron trước khi nhiệt độ vượt quá 26°C',
+            'Hiệu chuẩn lại van tiết lưu nhiệt tự động và cảm biến nhiệt PT100 đầu cấp',
+          ],
+        }
+      : {
+          hasDegradation: false,
+          patternType: 'STABLE_BASELINE',
+          patternTitle: 'Đặc tính tiêu thụ điện & nhiệt độ vận hành ổn định trong dải chuẩn',
+          severity: 'NORMAL' as const,
+          confidenceScore: 96,
+          evidencePoints: [
+            `Nhiệt độ dung môi dao động ổn định trong biên độ hẹp (${history[0].avgTemp}°C - ${history[6].avgTemp}°C), cách xa ngưỡng nguy hiểm ${nominalTempRange[1]}°C`,
+            `Công suất tiêu thụ điện dao động nhịp nhàng theo chu kỳ gia công (trung bình ${avgPower7d} kW), không ghi nhận hiện tượng ăn dòng bất thường`,
+            `Hệ số hiệu quả năng lượng (COP) của bộ điều hòa dung môi duy trì ổn định mức tối ưu > 3.2`,
+          ],
+          rootCauseHypothesis: 'Hệ thống làm mát, bôi trơn và động cơ servo truyền động hoạt động hoàn toàn trơn tru, không có ma sát cơ khí bất thường.',
+          daysUntilCritical: undefined,
+          recommendedActions: [
+            'Duy trì chế độ vận hành tiêu chuẩn theo lịch trình sản xuất hiện tại',
+            'Thực hiện kiểm tra bồn dầu và vệ sinh định kỳ 250 giờ theo SOP nhà máy',
+          ],
+        };
+
+    return res.json({
+      success: true,
+      deviceId: device.id,
+      deviceCode: device.code,
+      deviceName: device.name,
+      model: device.model,
+      period: '7_DAYS',
+      nominalRanges: {
+        dielectricTemp: nominalTempRange,
+        powerKw: [nominalPowerMin, nominalPowerMax],
+      },
+      history,
+      metrics: {
+        avgPower7d,
+        peakPower7d,
+        powerChangePct,
+        avgTemp7d,
+        peakTemp7d,
+        tempChangeDelta,
+        coolingEfficiency,
+      },
+      degradationAnalysis,
+    });
+  } catch (err: any) {
+    console.error('Historical telemetry fetch error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Lỗi truy xuất dữ liệu đo đạc lịch sử' });
   }
 });
 

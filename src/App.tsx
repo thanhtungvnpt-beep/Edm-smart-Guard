@@ -58,6 +58,7 @@ import { PredictiveMaintenanceAlerts } from './components/PredictiveMaintenanceA
 import { AIPredictiveMaintenanceScheduleBanner } from './components/AIPredictiveMaintenanceScheduleBanner';
 import { AIVibrationCurrentPredictiveModal } from './components/AIVibrationCurrentPredictiveModal';
 import { MachineDetailsModal } from './components/MachineDetailsModal';
+import { MachineTelemetryHistoryModal } from './components/MachineTelemetryHistoryModal';
 import { TechnicianStatusSidebar } from './components/TechnicianStatusSidebar';
 import { QRCodeScannerModal } from './components/QRCodeScannerModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
@@ -127,7 +128,7 @@ export default function App() {
   const [inventoryTargetPartId, setInventoryTargetPartId] = useState<string>('');
 
   // Filters
-  const [deviceFilter, setDeviceFilter] = useState<'ALL' | 'ALARM' | 'RUNNING' | 'MAINTENANCE' | 'IDLE' | 'WIRE_EDM' | 'SINKER_EDM'>('ALL');
+  const [deviceFilter, setDeviceFilter] = useState<'ALL' | 'ALARM' | 'RUNNING' | 'MAINTENANCE' | 'MAINTENANCE_SCHEDULED' | 'IDLE' | 'WIRE_EDM' | 'SINKER_EDM'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilterCriteria>(DEFAULT_ADVANCED_FILTERS);
@@ -143,6 +144,7 @@ export default function App() {
   const [repairDevice, setRepairDevice] = useState<Device | null>(null);
   const [detailsDevice, setDetailsDevice] = useState<Device | null>(null);
   const [predictiveDevice, setPredictiveDevice] = useState<Device | null>(null);
+  const [telemetryHistoryDevice, setTelemetryHistoryDevice] = useState<Device | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
   const [showTechSidebar, setShowTechSidebar] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -902,7 +904,8 @@ export default function App() {
     let matchesFilter = true;
     if (deviceFilter === 'ALARM') matchesFilter = d.status === 'ALARM_STOPPED';
     else if (deviceFilter === 'RUNNING') matchesFilter = d.status === 'RUNNING';
-    else if (deviceFilter === 'MAINTENANCE') matchesFilter = d.status === 'MAINTENANCE';
+    else if (deviceFilter === 'MAINTENANCE') matchesFilter = d.status === 'MAINTENANCE' || d.status === 'MAINTENANCE_SCHEDULED';
+    else if (deviceFilter === 'MAINTENANCE_SCHEDULED') matchesFilter = d.status === 'MAINTENANCE_SCHEDULED';
     else if (deviceFilter === 'IDLE') matchesFilter = d.status === 'IDLE';
     else if (deviceFilter === 'WIRE_EDM') matchesFilter = d.type === 'WIRE_EDM';
     else if (deviceFilter === 'SINKER_EDM') matchesFilter = d.type === 'SINKER_EDM';
@@ -1430,6 +1433,16 @@ export default function App() {
                   Bảo Trì ({devices.filter((d) => d.status === 'MAINTENANCE').length})
                 </button>
                 <button
+                  onClick={() => setDeviceFilter('MAINTENANCE_SCHEDULED')}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                    deviceFilter === 'MAINTENANCE_SCHEDULED'
+                      ? 'bg-indigo-600 text-white font-bold'
+                      : 'text-indigo-400 hover:bg-indigo-500/10'
+                  }`}
+                >
+                  Lịch Hẹn ({devices.filter((d) => d.status === 'MAINTENANCE_SCHEDULED').length})
+                </button>
+                <button
                   onClick={() => setDeviceFilter('RUNNING')}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                     deviceFilter === 'RUNNING'
@@ -1679,6 +1692,7 @@ export default function App() {
                     onQuickActionSuccess={(updated, msg) => handleQuickActionSuccess(updated, msg)}
                     onQuickSyncDirect={(id) => handleQuickSyncDirect(id)}
                     onOpenPredictiveDetails={(d) => setPredictiveDevice(d)}
+                    onOpenTelemetryHistory={(d) => setTelemetryHistoryDevice(d)}
                   />
                 </div>
               ))}
@@ -1934,6 +1948,25 @@ export default function App() {
         technicians={technicians}
         onToast={(msg) => showToast(msg)}
       />
+
+      {/* 13. Historical Telemetry & Power/Temp Degradation Trend Modal (Recharts) */}
+      {telemetryHistoryDevice && (
+        <MachineTelemetryHistoryModal
+          device={telemetryHistoryDevice}
+          onClose={() => setTelemetryHistoryDevice(null)}
+          onScheduleMaintenance={(d, reason) => {
+            handleSetDeviceStatus(
+              d.id,
+              'MAINTENANCE',
+              reason || 'Khắc phục cảnh báo suy thoái công suất và nhiệt độ 7 ngày'
+            );
+            setTelemetryHistoryDevice(null);
+            showToast(
+              `⚡ Đã chuyển máy ${d.code} (${d.name}) sang chế độ Bảo Trì: ${reason || 'Suy thoái nhiệt & công suất'}`
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

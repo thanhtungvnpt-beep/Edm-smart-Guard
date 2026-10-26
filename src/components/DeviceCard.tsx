@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Sliders,
   RefreshCw,
+  TrendingUp,
 } from 'lucide-react';
 import { Device } from '../types';
 import { calculatePredictedMaintenance } from '../utils/maintenancePrediction';
@@ -40,6 +41,7 @@ interface DeviceCardProps {
   onQuickActionSuccess?: (device: Device, message: string) => void;
   onQuickSyncDirect?: (deviceId: string) => Promise<void>;
   onOpenPredictiveDetails?: (device: Device) => void;
+  onOpenTelemetryHistory?: (device: Device) => void;
 }
 
 // Small circular OEE gauge indicator with color-coded system
@@ -134,12 +136,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   onQuickActionSuccess,
   onQuickSyncDirect,
   onOpenPredictiveDetails,
+  onOpenTelemetryHistory,
 }) => {
   const [quickActionMode, setQuickActionMode] = useState<QuickActionMode>(null);
   const isAlarm = device.status === 'ALARM_STOPPED';
   const isRunning = device.status === 'RUNNING';
   const isIdle = device.status === 'IDLE';
   const isMaintenance = device.status === 'MAINTENANCE';
+  const isScheduledMaintenance = device.status === 'MAINTENANCE_SCHEDULED';
   const isWarning = device.status === 'WARNING';
 
   // AI-Driven Predictive Maintenance Schedule based on Vibration & Sensor Current
@@ -156,6 +160,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           ? 'border-red-500/80 bg-red-950/20 shadow-red-950/50 ring-2 ring-red-500/40 animate-pulse'
           : isMaintenance
           ? 'border-blue-500/80 bg-blue-950/20 shadow-blue-950/40 ring-1 ring-blue-500/30'
+          : isScheduledMaintenance
+          ? 'border-indigo-500/80 bg-indigo-950/25 shadow-indigo-950/40 ring-1 ring-indigo-500/40'
           : isWarning
           ? 'border-amber-500/70 bg-amber-950/20 shadow-amber-950/30 ring-1 ring-amber-500/30'
           : isRunning
@@ -229,6 +235,12 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               Đang Bảo Trì
             </span>
           )}
+          {isScheduledMaintenance && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/50 px-2.5 py-0.5 text-xs font-bold text-indigo-300 shadow-sm shadow-indigo-500/20" title={`Lịch bảo trì: ${device.scheduledMaintenanceAt || ''}`}>
+              <CalendarClock className="h-3.5 w-3.5 text-indigo-400" />
+              Lịch Bảo Trì
+            </span>
+          )}
           {isWarning && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
               <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
@@ -256,6 +268,27 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           />
         </div>
       </div>
+
+      {/* SCHEDULED MAINTENANCE BANNER (WHEN STATUS IS MAINTENANCE_SCHEDULED) */}
+      {isScheduledMaintenance && (
+        <div className="border-b border-indigo-500/30 bg-indigo-950/60 px-4 py-2.5 text-xs flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-indigo-300 min-w-0">
+            <CalendarClock className="h-4 w-4 text-indigo-400 shrink-0" />
+            <span className="truncate">
+              Lịch bảo trì dự kiến:{' '}
+              <strong className="text-white font-mono">{device.scheduledMaintenanceAt || 'Theo kế hoạch'}</strong>
+            </span>
+          </div>
+          {device.scheduledMaintenanceReason && (
+            <span
+              className="text-[11px] text-indigo-200 bg-indigo-900/60 border border-indigo-700/50 px-2.5 py-0.5 rounded-lg font-mono truncate max-w-xs shrink-0"
+              title={device.maintenanceNote || device.scheduledMaintenanceReason}
+            >
+              {device.scheduledMaintenanceReason}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* EMERGENCY BANNER IF STOPPED */}
       {isAlarm && device.activeIncident && (
@@ -354,13 +387,25 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           </div>
 
           {/* Temperature or Tension */}
-          <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
+          <div
+            onClick={() => onOpenTelemetryHistory?.(device)}
+            role={onOpenTelemetryHistory ? 'button' : undefined}
+            title={onOpenTelemetryHistory ? 'Nhấn để xem biểu đồ xu hướng 7 ngày: Công suất điện & Nhiệt độ (Recharts)' : undefined}
+            className={`rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5 ${
+              onOpenTelemetryHistory ? 'cursor-pointer hover:border-cyan-500/60 hover:bg-cyan-950/20 transition group' : ''
+            }`}
+          >
             <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 group-hover:text-cyan-300">
                 <Flame className={`h-3 w-3 ${opMetrics.tempStatus === 'OVERHEATING' ? 'text-red-400 animate-pulse' : opMetrics.tempStatus === 'ELEVATED' ? 'text-amber-400' : 'text-rose-400'}`} />
                 Nhiệt độ dung môi
               </span>
-              <span className="font-mono text-[10px]">°C</span>
+              <div className="flex items-center gap-1">
+                <span className="font-mono text-[10px]">°C</span>
+                {onOpenTelemetryHistory && (
+                  <TrendingUp className="h-3 w-3 text-slate-500 group-hover:text-cyan-400" />
+                )}
+              </div>
             </div>
             <div className={`mt-1 font-mono text-lg font-bold ${opMetrics.tempStatus === 'OVERHEATING' ? 'text-red-400' : 'text-white'}`}>
               {device.telemetry.dielectricTemp.toFixed(1)}
@@ -378,15 +423,25 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
         {/* Operational Diagnostics Strip: Real-time Power & Continuous Uptime */}
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="flex items-center justify-between rounded-xl bg-slate-950/50 border border-slate-800/90 px-2.5 py-1.5">
+          <div
+            onClick={() => onOpenTelemetryHistory?.(device)}
+            role={onOpenTelemetryHistory ? 'button' : undefined}
+            title={onOpenTelemetryHistory ? 'Nhấn để xem biểu đồ xu hướng 7 ngày: Công suất điện & Nhiệt độ (Recharts)' : undefined}
+            className={`flex items-center justify-between rounded-xl bg-slate-950/50 border border-slate-800/90 px-2.5 py-1.5 ${
+              onOpenTelemetryHistory ? 'cursor-pointer hover:border-amber-500/60 hover:bg-amber-950/20 transition group' : ''
+            }`}
+          >
             <div className="flex items-center gap-1.5 min-w-0">
               <Zap className={`h-3.5 w-3.5 shrink-0 ${opMetrics.powerStatus === 'OVERCONSUMPTION' ? 'text-red-400 animate-pulse' : opMetrics.powerKw >= 8 ? 'text-amber-400' : 'text-yellow-400'}`} />
-              <span className="text-slate-400 text-[11px] truncate">Công suất điện:</span>
+              <span className="text-slate-400 text-[11px] truncate group-hover:text-amber-300">Công suất điện:</span>
             </div>
-            <div className="text-right shrink-0">
+            <div className="text-right shrink-0 flex items-center gap-1">
               <span className={`font-mono text-xs font-bold ${opMetrics.powerStatus === 'OVERCONSUMPTION' ? 'text-red-400' : 'text-amber-300'}`}>
                 {opMetrics.powerKw.toFixed(1)} kW
               </span>
+              {onOpenTelemetryHistory && (
+                <TrendingUp className="h-3 w-3 text-slate-500 group-hover:text-amber-400" />
+              )}
             </div>
           </div>
 
@@ -622,6 +677,19 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 </button>
               )}
 
+              {/* 7-Day Telemetry Trend for Alarming Machine */}
+              {onOpenTelemetryHistory && (
+                <button
+                  type="button"
+                  onClick={() => onOpenTelemetryHistory(device)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 py-2.5 px-2.5 text-xs font-semibold text-indigo-300 transition"
+                  title="Xem biểu đồ 7 ngày: Diễn biến nhiệt độ & công suất trước khi xảy ra sự cố"
+                >
+                  <TrendingUp className="h-4 w-4 text-indigo-400" />
+                  <span className="hidden sm:inline">Xu Hướng 7N</span>
+                </button>
+              )}
+
               {/* Quick Actions Menu Trigger */}
               <button
                 type="button"
@@ -653,6 +721,19 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 >
                   <History className="h-3.5 w-3.5" />
                   <span>Lịch Sử Bảo Dưỡng</span>
+                </button>
+              )}
+
+              {/* 7-Day Telemetry Trend Button */}
+              {onOpenTelemetryHistory && (
+                <button
+                  type="button"
+                  onClick={() => onOpenTelemetryHistory(device)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 py-2 px-3 text-xs font-semibold text-indigo-300 transition"
+                  title="Xem biểu đồ Recharts 7 ngày: Công suất điện & Nhiệt độ phát hiện mô hình suy thoái"
+                >
+                  <TrendingUp className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Xu Hướng 7 Ngày</span>
                 </button>
               )}
 

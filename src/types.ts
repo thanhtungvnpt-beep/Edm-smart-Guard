@@ -127,7 +127,7 @@ export interface Device {
   brand: string;
   type: 'WIRE_EDM' | 'SINKER_EDM' | 'CNC_MILLING' | 'HOLE_POPPER';
   location: string;
-  status: 'RUNNING' | 'ALARM_STOPPED' | 'WARNING' | 'IDLE' | 'MAINTENANCE';
+  status: 'RUNNING' | 'ALARM_STOPPED' | 'WARNING' | 'IDLE' | 'MAINTENANCE' | 'MAINTENANCE_SCHEDULED';
   assignedTechnicianId: string;
   assignedTechnician?: Technician;
   telemetry: MachineTelemetry;
@@ -147,6 +147,62 @@ export interface Device {
   serviceHoursSinceLastReset?: number;
   lastSyncTime?: string;
   lastSyncLatencyMs?: number;
+  scheduledMaintenanceAt?: string;
+  scheduledMaintenanceReason?: string;
+  maintenanceNote?: string;
+}
+
+export interface DailyTelemetryPoint {
+  dayIndex: number;
+  date: string;
+  fullDate: string;
+  dayOfWeek: string;
+  avgPowerKw: number;
+  peakPowerKw: number;
+  totalKwh: number;
+  avgTemp: number;
+  peakTemp: number;
+  ambientTemp: number;
+  nominalTempMax: number;
+  nominalPowerMax: number;
+  vibration: number;
+  status: 'NORMAL' | 'ELEVATED' | 'ANOMALY';
+  anomalyNote?: string;
+}
+
+export interface DegradationAnalysis {
+  hasDegradation: boolean;
+  patternType: string;
+  patternTitle: string;
+  severity: 'NORMAL' | 'WARNING' | 'CRITICAL';
+  confidenceScore: number;
+  evidencePoints: string[];
+  rootCauseHypothesis: string;
+  daysUntilCritical?: number;
+  recommendedActions: string[];
+}
+
+export interface HistoricalTelemetryData {
+  deviceId: string;
+  deviceCode: string;
+  deviceName: string;
+  model: string;
+  period: string;
+  nominalRanges: {
+    dielectricTemp: [number, number];
+    powerKw: [number, number];
+  };
+  history: DailyTelemetryPoint[];
+  metrics: {
+    avgPower7d: number;
+    peakPower7d: number;
+    powerChangePct: number;
+    avgTemp7d: number;
+    peakTemp7d: number;
+    tempChangeDelta: number;
+    coolingEfficiency: 'OPTIMAL' | 'FAIR' | 'DEGRADING' | 'CRITICAL';
+  };
+  degradationAnalysis: DegradationAnalysis;
 }
 
 export interface TechnicalDocument {
