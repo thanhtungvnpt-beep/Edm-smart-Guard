@@ -18,10 +18,19 @@ import {
   LayoutGrid,
   Maximize2,
   Minimize2,
+  Database,
 } from 'lucide-react';
 
-export type UserRole = 'DIRECTOR' | 'EQM_LEADER' | 'TECHNICIAN';
+export type UserRole = 'DIRECTOR' | 'EQM_LEADER' | 'TECHNICIAN' | 'COMMUNITY';
 export type ViewportMode = 'PC' | 'MOBILE';
+export type MainViewMode =
+  | 'ROLE_VIEW'
+  | 'FLEET_GRID'
+  | 'CONTROL_TOWER'
+  | 'DATA_TRUST'
+  | 'HITL_WORKFLOW'
+  | 'AUDIT_RBAC'
+  | 'ALERT_GOVERNANCE';
 
 interface RoleNavigationHeaderProps {
   currentRole: UserRole;
@@ -31,8 +40,8 @@ interface RoleNavigationHeaderProps {
   currentPlant: string;
   onSelectPlant: (plant: string) => void;
   activeAlarmCount: number;
-  mainViewMode?: 'ROLE_VIEW' | 'FLEET_GRID';
-  onSelectMainViewMode?: (mode: 'ROLE_VIEW' | 'FLEET_GRID') => void;
+  mainViewMode?: MainViewMode;
+  onSelectMainViewMode?: (mode: MainViewMode) => void;
   phoneFramePreview?: boolean;
   onTogglePhoneFramePreview?: () => void;
 }
@@ -128,6 +137,26 @@ export const RoleNavigationHeader: React.FC<RoleNavigationHeaderProps> = ({
               QR & Checklist
             </span>
           </button>
+
+          {/* 4. Cộng Đồng Chuyên Gia Liên Nhà Máy (COM-01 -> COM-06) */}
+          <button
+            type="button"
+            onClick={() => {
+              onSelectRole('COMMUNITY');
+              onSelectMainViewMode?.('ROLE_VIEW');
+            }}
+            className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition shadow-sm ${
+              mainViewMode === 'ROLE_VIEW' && currentRole === 'COMMUNITY'
+                ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 text-white shadow-purple-900/40 ring-2 ring-purple-400/60'
+                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Sparkles className="h-4 w-4 shrink-0 text-amber-300 animate-pulse" />
+            <span>Cộng Đồng Liên Nhà Máy</span>
+            <span className="hidden md:inline rounded bg-black/30 px-1.5 py-0.2 text-[10px] font-mono font-medium text-amber-200">
+              3 Nhà Máy • SOP
+            </span>
+          </button>
         </div>
 
         {/* Right: Plant Selector & PC/Mobile Toggle & View Mode */}
@@ -197,25 +226,97 @@ export const RoleNavigationHeader: React.FC<RoleNavigationHeaderProps> = ({
             </button>
           )}
 
-          {/* Switch to Fleet Grid / Overview */}
+          {/* Switch to Control Tower / Roles / Fleet / Phase 1 Governance */}
           {onSelectMainViewMode && (
-            <button
-              type="button"
-              onClick={() =>
-                onSelectMainViewMode(mainViewMode === 'ROLE_VIEW' ? 'FLEET_GRID' : 'ROLE_VIEW')
-              }
-              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold border transition ${
-                mainViewMode === 'FLEET_GRID'
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
-                  : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
-              }`}
-              title="Chuyển đổi giữa Chế độ xem theo Vai Trò và Lưới thiết bị toàn xưởng"
-            >
-              <LayoutGrid className="h-3.5 w-3.5 text-amber-400" />
-              <span className="hidden md:inline">
-                {mainViewMode === 'ROLE_VIEW' ? 'Xem Lưới Thiết Bị' : 'Xem Theo Vai Trò'}
-              </span>
-            </button>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => onSelectMainViewMode('DATA_TRUST')}
+                className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold border transition ${
+                  mainViewMode === 'DATA_TRUST'
+                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-cyan-400 shadow-md shadow-cyan-900/40 ring-1 ring-cyan-400'
+                    : 'bg-slate-950 border-slate-800 text-cyan-300 hover:text-white hover:border-slate-700'
+                }`}
+                title="Data Trust Center (Mô-đun 2: 6 Chiều Chất Lượng & Phả Hệ Dữ Liệu)"
+              >
+                <Database className="h-3.5 w-3.5 text-cyan-300" />
+                <span>Data Trust Center</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectMainViewMode('HITL_WORKFLOW')}
+                className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold border transition ${
+                  mainViewMode === 'HITL_WORKFLOW'
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-900/40 ring-1 ring-indigo-400'
+                    : 'bg-slate-950 border-slate-800 text-indigo-300 hover:text-white hover:border-slate-700'
+                }`}
+                title="Quy Trình Duyệt Human-in-the-Loop (Mô-đun 3: 8 Trạng Thái)"
+              >
+                <ShieldCheck className="h-3.5 w-3.5 text-indigo-300" />
+                <span>Duyệt HITL</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectMainViewMode('AUDIT_RBAC')}
+                className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold border transition ${
+                  mainViewMode === 'AUDIT_RBAC'
+                    ? 'bg-gradient-to-r from-purple-600 to-rose-600 text-white border-purple-400 shadow-md shadow-purple-900/40 ring-1 ring-purple-400'
+                    : 'bg-slate-950 border-slate-800 text-purple-300 hover:text-white hover:border-slate-700'
+                }`}
+                title="Nhật Ký Kiểm Toán Bất Biến & RBAC (Mô-đun 4 & 5)"
+              >
+                <Layers className="h-3.5 w-3.5 text-purple-300" />
+                <span>Audit & RBAC</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectMainViewMode('ALERT_GOVERNANCE')}
+                className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold border transition ${
+                  mainViewMode === 'ALERT_GOVERNANCE'
+                    ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white border-rose-400 shadow-md shadow-rose-900/40 ring-1 ring-rose-400'
+                    : 'bg-slate-950 border-slate-800 text-rose-300 hover:text-white hover:border-slate-700'
+                }`}
+                title="Quản Trị Cảnh Báo 8 Bước & 4 Nhãn Nguồn Gốc (Mô-đun 6)"
+              >
+                <Zap className="h-3.5 w-3.5 text-rose-300" />
+                <span>Cảnh Báo (M6)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectMainViewMode('CONTROL_TOWER')}
+                className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold border transition ${
+                  mainViewMode === 'CONTROL_TOWER'
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-900/40 ring-1 ring-indigo-400'
+                    : 'bg-slate-950 border-slate-800 text-indigo-300 hover:text-white hover:border-slate-700'
+                }`}
+                title="Mở Tháp Điều Hành Hiệu Suất AI (P2-01 Control Tower)"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-amber-300 animate-pulse" />
+                <span>Tháp P2</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onSelectMainViewMode(mainViewMode === 'ROLE_VIEW' ? 'FLEET_GRID' : 'ROLE_VIEW')
+                }
+                className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold border transition ${
+                  mainViewMode === 'FLEET_GRID'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+                }`}
+                title="Chuyển đổi giữa Chế độ xem theo Vai Trò và Lưới thiết bị toàn xưởng"
+              >
+                <LayoutGrid className="h-3.5 w-3.5 text-amber-400" />
+                <span className="hidden md:inline">
+                  {mainViewMode === 'ROLE_VIEW' ? 'Xem Lưới Máy' : 'Xem Vai Trò'}
+                </span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -237,6 +338,11 @@ export const RoleNavigationHeader: React.FC<RoleNavigationHeaderProps> = ({
           {currentRole === 'TECHNICIAN' && (
             <span>
               <strong className="text-emerald-400">Góc nhìn Kỹ Thuật Viên:</strong> Tiếp nhận sự cố 1-chạm, quét QR tại máy, quy trình checklist động theo model máy, ghi âm giọng nói rảnh tay, chat nhóm sự cố & AI Copilot.
+            </span>
+          )}
+          {currentRole === 'COMMUNITY' && (
+            <span>
+              <strong className="text-purple-400">Góc nhìn Chuyên Gia & Cộng Đồng Liên Nhà Máy:</strong> Bảng tin sự cố 3 cơ sở (Bắc Ninh, Hà Nội, TP.HCM), bộ lọc tự động ẩn danh hóa bảo mật, quy trình 5 bước xác minh & chuẩn hóa tri thức SOP chính thức.
             </span>
           )}
         </div>

@@ -88,12 +88,18 @@ import { useOfflineStatus } from './hooks/useOfflineStatus';
 import { cacheOfflineSnapshot, getOfflineSnapshot } from './utils/offlineManager';
 import { soundManager } from './utils/audio';
 import { getPushPermissionStatus, requestPushPermission, triggerEmergencyPushNotification } from './utils/notifications';
-import { RoleNavigationHeader, UserRole, ViewportMode, PLANTS } from './components/roles/RoleNavigationHeader';
+import { RoleNavigationHeader, UserRole, ViewportMode, MainViewMode, PLANTS } from './components/roles/RoleNavigationHeader';
 import { PlantDirectorView } from './components/roles/PlantDirectorView';
 import { EqmLeaderView } from './components/roles/EqmLeaderView';
 import { FieldTechnicianView } from './components/roles/FieldTechnicianView';
+import { CrossFactoryCommunityView } from './components/roles/CrossFactoryCommunityView';
+import { AiPerformanceControlTower } from './components/phase2/AiPerformanceControlTower';
 import { WeeklyIncidentReportModal } from './components/WeeklyIncidentReportModal';
 import { getStoredMaintenanceRecords } from './utils/maintenanceHistoryData';
+import { DataTrustCenter } from './components/trust/DataTrustCenter';
+import { AuditLogAndRbacCenter } from './components/trust/AuditLogAndRbacCenter';
+import { EnhancedAlertManagementCenter } from './components/trust/EnhancedAlertManagementCenter';
+import { HitlWorkflowManagementCenter } from './components/trust/HitlWorkflowManagementCenter';
 
 export default function App() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -108,7 +114,7 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('DIRECTOR');
   const [viewportMode, setViewportMode] = useState<ViewportMode>('PC');
   const [currentPlant, setCurrentPlant] = useState<string>('plant-01');
-  const [mainViewMode, setMainViewMode] = useState<'ROLE_VIEW' | 'FLEET_GRID'>('ROLE_VIEW');
+  const [mainViewMode, setMainViewMode] = useState<MainViewMode>('ROLE_VIEW');
   const [phoneFramePreview, setPhoneFramePreview] = useState<boolean>(true);
   const [showWeeklyReportModal, setShowWeeklyReportModal] = useState<boolean>(false);
 
@@ -1079,9 +1085,81 @@ export default function App() {
         )}
 
         {/* ============================================================== */}
-        {/* VIEW MODE 1: ROLE-BASED WORKSPACE (Director / EQM / Technician) */}
+        {/* VIEW MODE 0: AI PERFORMANCE CONTROL TOWER (P2-01)            */}
         {/* ============================================================== */}
-        {mainViewMode === 'ROLE_VIEW' ? (
+        {mainViewMode === 'CONTROL_TOWER' ? (
+          viewportMode === 'MOBILE' && phoneFramePreview ? (
+            /* Smartphone Frame Shell for Control Tower */
+            <div className="flex flex-col items-center justify-center py-2 sm:py-4">
+              <div className="text-center mb-3">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 px-3 py-1 text-xs font-semibold text-indigo-300">
+                  <Smartphone className="h-3.5 w-3.5" />
+                  <span>Mobile AI Operations (P2-09 Pocket Control Tower)</span>
+                </span>
+              </div>
+              <div className="relative w-full max-w-[420px] rounded-[52px] border-[10px] border-slate-800 bg-slate-950 p-3 shadow-2xl shadow-indigo-950/40 ring-2 ring-slate-700/60 overflow-hidden">
+                <div className="max-h-[750px] overflow-y-auto pr-0.5 scrollbar-thin scrollbar-thumb-slate-700">
+                  <AiPerformanceControlTower
+                    devices={devices}
+                    technicians={technicians}
+                    stats={stats}
+                    currentPlant={currentPlant}
+                    viewportMode="MOBILE"
+                    onOpenDeviceDetails={(d) => setDetailsDevice(d)}
+                    onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+                    onOpenWorkOrderDraft={(devCode, action) => {
+                      const dev = devices.find((d) => d.code === devCode) || devices[0];
+                      if (dev) {
+                        setRepairDevice(dev);
+                        showToast(`Đã tự động khởi tạo Work Order cho máy ${devCode}: "${action}"`);
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <AiPerformanceControlTower
+              devices={devices}
+              technicians={technicians}
+              stats={stats}
+              currentPlant={currentPlant}
+              viewportMode={viewportMode}
+              onOpenDeviceDetails={(d) => setDetailsDevice(d)}
+              onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+              onOpenWorkOrderDraft={(devCode, action) => {
+                const dev = devices.find((d) => d.code === devCode) || devices[0];
+                if (dev) {
+                  setRepairDevice(dev);
+                  showToast(`Đã tự động khởi tạo Work Order cho máy ${devCode}: "${action}"`);
+                }
+              }}
+            />
+          )
+        ) : mainViewMode === 'DATA_TRUST' ? (
+          /* ============================================================== */
+          /* PHASE 1 - MÔ-ĐUN 2: DATA TRUST CENTER                          */
+          /* ============================================================== */
+          <DataTrustCenter onToast={(msg) => showToast(msg)} />
+        ) : mainViewMode === 'HITL_WORKFLOW' ? (
+          /* ============================================================== */
+          /* PHASE 1 - MÔ-ĐUN 3: HUMAN-IN-THE-LOOP WORKFLOW                 */
+          /* ============================================================== */
+          <HitlWorkflowManagementCenter
+            onToast={(msg) => showToast(msg)}
+            currentUserRole={currentRole}
+          />
+        ) : mainViewMode === 'AUDIT_RBAC' ? (
+          /* ============================================================== */
+          /* PHASE 1 - MÔ-ĐUN 4 & 5: AUDIT LOG & RBAC 8 VAI TRÒ             */
+          /* ============================================================== */
+          <AuditLogAndRbacCenter onToast={(msg) => showToast(msg)} />
+        ) : mainViewMode === 'ALERT_GOVERNANCE' ? (
+          /* ============================================================== */
+          /* PHASE 1 - MÔ-ĐUN 6: ALERT GOVERNANCE                           */
+          /* ============================================================== */
+          <EnhancedAlertManagementCenter onToast={(msg) => showToast(msg)} />
+        ) : mainViewMode === 'ROLE_VIEW' ? (
           <div className="space-y-6">
             {viewportMode === 'MOBILE' && phoneFramePreview ? (
               /* Beautiful Centered Smartphone Bezel Simulator on Desktop */
@@ -1156,6 +1234,19 @@ export default function App() {
                         }}
                       />
                     )}
+                    {currentRole === 'COMMUNITY' && (
+                      <CrossFactoryCommunityView
+                        currentPlant={currentPlant}
+                        viewportMode="MOBILE"
+                        onApplyKnowledgeToRepair={(post) => {
+                          const matched = devices.find((d) => d.model.toLowerCase().includes(post.targetModel.toLowerCase().split(' ')[0])) || devices[0];
+                          if (matched) {
+                            setRepairDevice(matched);
+                            showToast(`Đã áp dụng SOP "${post.title}" vào ca sửa máy ${matched.code}!`);
+                          }
+                        }}
+                      />
+                    )}
                   </div>
 
                   {/* Home Indicator bar */}
@@ -1207,6 +1298,19 @@ export default function App() {
                       setInventoryTargetPartId(partSku);
                       setActiveTab('spare-parts');
                       setMainViewMode('FLEET_GRID');
+                    }}
+                  />
+                )}
+                {currentRole === 'COMMUNITY' && (
+                  <CrossFactoryCommunityView
+                    currentPlant={currentPlant}
+                    viewportMode={viewportMode}
+                    onApplyKnowledgeToRepair={(post) => {
+                      const matched = devices.find((d) => d.model.toLowerCase().includes(post.targetModel.toLowerCase().split(' ')[0])) || devices[0];
+                      if (matched) {
+                        setRepairDevice(matched);
+                        showToast(`Đã áp dụng SOP "${post.title}" vào ca sửa máy ${matched.code}!`);
+                      }
                     }}
                   />
                 )}

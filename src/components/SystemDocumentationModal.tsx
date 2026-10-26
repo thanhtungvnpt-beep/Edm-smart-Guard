@@ -28,6 +28,11 @@ import {
   Bookmark,
   SlidersHorizontal,
   Keyboard,
+  Users2,
+  Trophy,
+  Brain,
+  StickyNote,
+  Crown,
 } from 'lucide-react';
 
 interface SystemDocumentationModalProps {
@@ -72,15 +77,22 @@ export const SystemDocumentationModal: React.FC<SystemDocumentationModalProps> =
     { id: 'overview', title: '1. Tổng Quan & Tầm Nhìn', icon: BookOpen },
     { id: 'tech-stack', title: '2. Kiến Trúc Kỹ Thuật', icon: Cpu },
     { id: 'telemetry', title: '3. Giám Sát Cảm Biến IoT', icon: Activity },
-    { id: 'dashboard', title: '4. Tùy Biến Dashboard Kéo Thả', icon: Layers },
-    { id: 'analytics', title: '5. Factory Health Trend & OEE 7 Ngày (Recharts)', icon: Gauge },
-    { id: 'ai-voice', title: '6. AI Chẩn Đoán & Voice-to-Text', icon: Mic },
-    { id: 'smart-history', title: '7. Chẩn Đoán Dựa Trên Lịch Sử Máy', icon: History },
-    { id: 'copilot-audio', title: '8. Trợ Lý Copilot & Audio SOP', icon: Volume2 },
-    { id: 'repair-ettr', title: '9. Nghiệm Thu & AI Dự Báo ETTR', icon: Clock },
-    { id: 'proficiency', title: '10. Bảng Điểm Thành Thạo KTV', icon: Award },
-    { id: 'maintenance-sched', title: '11. Lập Lịch & Nhắc Bảo Dưỡng', icon: Calendar },
-    { id: 'mobile-reports', title: '12. Mobile Sync, PDF & CSV', icon: FileText },
+    { id: 'leader-view', title: '4. Trung Tâm Điều Hành EQM Leader (PC & Mobile)', icon: Users2 },
+    { id: 'leaderboard', title: '5. Bảng Xếp Hạng KTV & Top 1 Crown', icon: Trophy },
+    { id: 'radar-chart', title: '6. Hồ Sơ KTV & Radar 5 Dòng Máy EDM', icon: Award },
+    { id: 'ai-synthesis', title: '7. Bộ Não Tổng Hợp Tri Thức AI Kép', icon: Brain },
+    { id: 'quick-notes', title: '8. Ghi Chú Nhanh & Tìm Kiếm Đa Năng', icon: StickyNote },
+    { id: 'analytics', title: '9. Factory Health Trend & OEE 7 Ngày', icon: Gauge },
+    { id: 'ai-voice', title: '10. AI Chẩn Đoán & Voice-to-Text', icon: Mic },
+    { id: 'smart-history', title: '11. Chẩn Đoán Dựa Trên Lịch Sử Máy', icon: History },
+    { id: 'copilot-audio', title: '12. Trợ Lý Copilot & Audio SOP', icon: Volume2 },
+    { id: 'repair-ettr', title: '13. Nghiệm Thu & AI Dự Báo ETTR', icon: Clock },
+    { id: 'maintenance-sched', title: '14. Lập Lịch & Nhắc Bảo Dưỡng', icon: Calendar },
+    { id: 'mobile-reports', title: '15. Mobile Sync, PDF & CSV', icon: FileText },
+    { id: 'community', title: '16. Cộng Đồng Liên Nhà Máy (COM-01 → 06)', icon: Sparkles },
+    { id: 'approvals', title: '17. Phê Duyệt & Audit Trail Quản Đốc (MGR-03)', icon: ShieldCheck },
+    { id: 'phase2-suite', title: '18. Giai Đoạn 2 — Control Tower & 4 Engines (P2-01 → P2-09)', icon: Activity },
+    { id: 'phase1-trust', title: '19. Giai Đoạn 1 — Trusted AI Foundation (Mô-đun 1 → 6)', icon: ShieldCheck },
   ];
 
   return (
@@ -346,13 +358,83 @@ export const SystemDocumentationModal: React.FC<SystemDocumentationModalProps> =
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-slate-950/70 border border-amber-500/30 p-3.5 bg-gradient-to-r from-amber-950/20 to-slate-950/60">
+                <div className="rounded-xl bg-slate-950/70 border border-blue-500/30 p-3.5 bg-gradient-to-r from-blue-950/20 to-slate-950/60">
                   <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
-                    <Wrench className="h-4 w-4 text-amber-400" />
-                    <span>Lưu Trữ & Tra Cứu Lịch Sử Bảo Trì Sửa Chữa (Maintenance & Repair History Log)</span>
+                    <Users2 className="h-4 w-4 text-blue-400" />
+                    <span>Trung Tâm Điều Hành EQM Leader (EqmLeaderView - PC & Mobile Dual Viewport)</span>
                   </h4>
                   <p className="mt-1 text-slate-300 text-xs">
-                    Lưu trữ hồ sơ bảo trì và sửa chữa chi tiết cho từng thiết bị EDM. Bao gồm đầy đủ: <strong>Ngày thực hiện</strong>, <strong>Mô tả sự cố</strong> (hiện tượng hư hỏng ban đầu), <strong>Hành động sửa chữa</strong> (quy trình kỹ thuật xử lý), <strong>Bộ phận thay thế</strong> (phụ tùng tiêu hao) và <strong>Kỹ thuật viên thực hiện</strong>. Cung cấp bộ lọc thông minh đa chiều theo thiết bị (máy), ngày tháng (khoảng thời gian) và loại sự cố (sửa chữa khẩn cấp, bảo dưỡng định kỳ, thay linh kiện, hiệu chuẩn, đại tu) cùng tìm kiếm tức thì và xuất file CSV/In báo cáo.
+                    Hệ thống điều hành kép: Bảng điều khiển PC toàn cảnh giám sát sự cố mở, SLA, phân công KTV 1-chạm, duyệt xuất kho phụ tùng khẩn cấp và phát thông báo bộ đàm; cùng phiên bản Mobile Pocket Companion hiện trường với 4 tab chuyên biệt (Điều phối, Kíp KTV, Xếp hạng, Bộ não AI).
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-amber-500/30 p-3.5 bg-gradient-to-r from-amber-950/20 to-slate-950/60">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-amber-400" />
+                    <span>Bảng Xếp Hạng Kỹ Thuật Viên & Tuyên Dương Đẩy Di Động (Push Commendation)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Đo lường thành tích sửa chữa theo Tuần/Tháng/Năm dựa trên số ca khắc phục, MTTR và tỷ lệ Pass lần đầu. Bục vinh danh Top 1-2-3 với vương miện Top 1 (Crown) và tính năng gửi thông báo đẩy trực tiếp tới điện thoại KTV khi được tuyên dương qua API <code>/api/mobile-devices/push-commendation</code>.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-purple-500/30 p-3.5 bg-gradient-to-r from-purple-950/20 to-slate-950/60">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <Award className="h-4 w-4 text-purple-400" />
+                    <span>Hồ Sơ KTV & Biểu Đồ Radar Đa Chiều Năng Lực 5 Dòng Máy EDM (Spider Chart)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Trực quan hóa phân bổ kỹ năng trên 5 dòng máy EDM công nghiệp hàng đầu (Makino U6, Sodick ALC, Makino EDAF3, Fanuc C600iB, Mitsubishi EA12V). Tích hợp thống kê số giờ làm việc, lịch sử phiếu sửa chữa và dòng thời gian huy hiệu thành tích (Milestone Timeline).
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-indigo-500/30 p-3.5 bg-gradient-to-r from-indigo-950/20 to-slate-950/60">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-indigo-400" />
+                    <span>Bộ Não Tổng Hợp Tri Thức AI Kép (AI Knowledge Synthesis Engine)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Cơ chế tự học hỏi song song từ 2 trụ cột: Tài liệu kỹ thuật SOP OEM và Báo cáo nghiệm thu thực chiến của con người qua API <code>/api/ai/synthesize-knowledge</code>. Xuất thẻ trích dẫn nguồn có thể kiểm chứng (Verifiable Citations) đảm bảo tính chính xác và an toàn phân xưởng.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-emerald-500/30 p-3.5 bg-gradient-to-r from-emerald-950/20 to-slate-950/60">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <StickyNote className="h-4 w-4 text-emerald-400" />
+                    <span>Ghi Chú Nhanh (Quick Notes) & Thanh Tìm Kiếm / Sắp Xếp Đa Năng</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Thanh tìm kiếm theo tên, ca trực, chuyên môn, số điện thoại hoặc nội dung ghi chú. Sắp xếp linh hoạt theo Điểm kỹ năng, Tên A-Z, Tải việc. Trưởng nhóm có thể gắn ghi chú nhắc việc nhanh nội dòng với phân loại mức độ ưu tiên (Bình thường / Khẩn cấp ⚠️) và tự động ghim lời nhắc lên phiếu điều phối sự cố.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-purple-500/30 p-3.5 bg-gradient-to-r from-purple-950/20 to-slate-950/60">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-purple-400" />
+                    <span>Cộng Đồng Kỹ Thuật Viên Liên Nhà Máy (COM-01 → COM-06)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Mạng lưới tri thức kết nối KTV 3 nhà máy (Bắc Ninh, Hà Nội, TP.HCM). Tự động kích hoạt bộ lọc bảo mật ẩn danh hóa (Anonymization Sanitizer) các số seri và dữ liệu độc quyền trước khi đăng; AI Copilot phân tích tiền lệ và cảnh báo an toàn; bảng vinh danh chuyên gia theo từng dòng máy EDM; và quy trình 5 bước nghiêm ngặt chuyển hóa thảo luận thành SOP chính hãng.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-amber-500/30 p-3.5 bg-gradient-to-r from-amber-950/20 to-slate-950/60">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-amber-400" />
+                    <span>Thẩm Định Đề Xuất & Sổ Lưu Vết Quản Đốc (Human in the Loop - MGR-03)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Cơ chế Human-in-the-Loop bắt buộc: AI chỉ đề xuất, giải trình bằng chứng (AI Evidence) và rủi ro (Risk Hypothesis). Quản đốc nhà máy có toàn quyền Ký Duyệt, Từ Chối, Yêu Cầu Bổ Sung Dữ Liệu hoặc Chuyển Giao Trực Tiếp cho Leader. Toàn bộ quyết định được lưu vết điện tử (Audit Trail) phục vụ truy vết và nâng cao chất lượng tri thức.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-950/70 border border-indigo-500/40 p-3.5 bg-gradient-to-r from-indigo-950/30 to-purple-950/20">
+                  <h4 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-indigo-400" />
+                    <span>Giai Đoạn 2: AI Performance Control Tower & Liên Kết 4 Engine (P2-01 → P2-09)</span>
+                  </h4>
+                  <p className="mt-1 text-slate-300 text-xs">
+                    Kiến trúc liên kết 4 Engine: <strong>Bảo Dưỡng Dự Đoán (Engine A)</strong> với Risk Timeline 5 nấc → <strong>Tối Ưu Sản Xuất (Engine C)</strong> giải quyết nghẽn bottleneck với 5 kịch bản mô phỏng → <strong>Dự Báo Chất Lượng (Engine D)</strong> phát hiện rỗ và trôi dung sai → <strong>Phân Tích Nguyên Nhân Gốc (Engine B)</strong> với bằng chứng xác thực. Tích hợp cổng kiểm định dữ liệu <strong>Data Quality Gate (94.8%)</strong> và vòng lặp học tập <strong>AI Learning Loop (P2-08)</strong> đo lường kết quả thực tế.
                   </p>
                 </div>
               </div>

@@ -27,7 +27,7 @@ import {
   BarChart3,
   Wrench,
 } from 'lucide-react';
-import { Device, FactoryStats, Technician } from '../../types';
+import { Device, FactoryStats, Technician, ExecutiveAIProposal } from '../../types';
 import { soundManager } from '../../utils/audio';
 
 interface PlantDirectorViewProps {
@@ -41,17 +41,61 @@ interface PlantDirectorViewProps {
   onOpenWeeklyReport?: () => void;
 }
 
-interface ExecutiveApprovalItem {
-  id: string;
-  type: 'CAPEX_PURCHASE' | 'MAINTENANCE_DOWNTIME' | 'SPECIAL_SHIFT';
-  title: string;
-  requestedBy: string;
-  amountUSD?: number;
-  downtimeHours?: number;
-  urgency: 'HIGH' | 'MEDIUM';
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  timestamp: string;
-}
+const INITIAL_PROPOSALS: ExecutiveAIProposal[] = [
+  {
+    id: 'app-01',
+    type: 'CAPEX_PURCHASE',
+    title: 'Duyệt mua khẩn cấp 10 lõi lọc áp lực 3µm & 4 cặp tiếp điện Carbide Sodick/Makino',
+    targetDeviceCode: 'EDM-W01',
+    requestedBy: 'Trần Minh Tuấn (Leader EQM)',
+    amountUSD: 1420,
+    urgency: 'HIGH',
+    confidenceScore: 94,
+    aiEvidenceSummary: 'Áp lực bơm xả Dielectric tụt dốc 35% trong 3 ca liên tiếp. Đã phát hiện 14 lần chớp hồ quang thứ cấp trên phôi khuôn SKD11 do cặn xỉ thoát chậm.',
+    riskHypothesis: 'Nếu trì hoãn quá 24 giờ: Nguy cơ đứt dây phôi khuôn giá trị cao ($18,000) và cháy tấm dẫn hướng trên.',
+    alternativeOptions: [
+      'Giảm 30% tốc độ cắt và dừng gia công chi tiết dung sai < 0.005mm',
+      'Chuyển phôi gấp sang máy Makino U6 số 2 phân xưởng B',
+    ],
+    missingDataNotes: 'Đã xác minh số đo áp suất thực tế 1.4 Bar và kiểm tra kho linh kiện hiện đã hết màng lọc 3µm.',
+    status: 'PENDING',
+    timestamp: '18:15 hôm nay',
+  },
+  {
+    id: 'app-02',
+    type: 'MAINTENANCE_DOWNTIME',
+    title: 'Kế hoạch bảo trì phòng ngừa 250h & căn chỉnh laser trục Z máy Makino U6 Chủ Nhật',
+    targetDeviceCode: 'EDM-W02',
+    requestedBy: 'Nguyễn Văn Hùng (Kỹ sư Trưởng)',
+    downtimeHours: 2.5,
+    urgency: 'MEDIUM',
+    confidenceScore: 91,
+    aiEvidenceSummary: 'Biên độ rung động trục chính đạt 3.4 mm/s (tiệm cận ngưỡng báo động 3.5 mm/s). Sai lệch bước vitme bi trục Z sau 248 giờ vận hành đo được 0.0035mm.',
+    riskHypothesis: 'Gây sai lệch dung sai độ sâu rãnh khuôn ép nhựa và tăng độ nhám bề mặt vượt Ra 0.8µm.',
+    alternativeOptions: [
+      'Bảo trì trong ca đêm thứ Bảy để không ảnh hưởng sản lượng ban ngày',
+      'Chạy phôi thô không yêu cầu bề mặt bóng gương',
+    ],
+    status: 'PENDING',
+    timestamp: '16:30 hôm nay',
+  },
+  {
+    id: 'app-03',
+    type: 'PARAMETER_OVERRIDE',
+    title: 'Hiệu chỉnh xung T_OFF (32µs -> 38µs) & Tăng áp xối phụ cho máy Sodick ALC600G',
+    targetDeviceCode: 'EDM-W03',
+    requestedBy: 'AI Copilot System',
+    urgency: 'MEDIUM',
+    confidenceScore: 88,
+    aiEvidenceSummary: 'Dung môi làm mát đang dao động quanh 24.3°C. Tăng thời gian nghỉ T_OFF thêm 6µs sẽ hạ nhiệt khe hở phóng điện 1.8°C mà chỉ giảm 4% tốc độ cắt.',
+    riskHypothesis: 'Nếu không điều chỉnh, nhiệt độ Chiller tiếp tục chạm ngưỡng ngắt an toàn 25°C làm dừng máy.',
+    alternativeOptions: [
+      'Vệ sinh gấp giàn giải nhiệt Chiller trong 15 phút nghỉ giữa ca',
+    ],
+    status: 'PENDING',
+    timestamp: '15:10 hôm nay',
+  },
+];
 
 export const PlantDirectorView: React.FC<PlantDirectorViewProps> = ({
   devices,
@@ -63,30 +107,12 @@ export const PlantDirectorView: React.FC<PlantDirectorViewProps> = ({
   onOpenDiagnosis,
   onOpenWeeklyReport,
 }) => {
-  // Executive Approvals State
-  const [approvals, setApprovals] = useState<ExecutiveApprovalItem[]>([
-    {
-      id: 'app-01',
-      type: 'CAPEX_PURCHASE',
-      title: 'Duyệt mua khẩn cấp 10 lõi lọc áp lực 3µm & 4 cặp tiếp điện Carbide Sodick/Makino',
-      requestedBy: 'Trần Minh Tuấn (Leader EQM)',
-      amountUSD: 1420,
-      urgency: 'HIGH',
-      status: 'PENDING',
-      timestamp: '18:15 hôm nay',
-    },
-    {
-      id: 'app-02',
-      type: 'MAINTENANCE_DOWNTIME',
-      title: 'Kế hoạch bảo trì phòng ngừa 250h & căn chỉnh laser trục Z máy Makino U6 Chủ Nhật',
-      requestedBy: 'Nguyễn Văn Hùng (Kỹ sư Trưởng)',
-      downtimeHours: 2.5,
-      urgency: 'MEDIUM',
-      status: 'PENDING',
-      timestamp: '16:30 hôm nay',
-    },
-  ]);
-
+  // Executive Approvals State (Human in the loop - MGR-03)
+  const [approvals, setApprovals] = useState<ExecutiveAIProposal[]>(INITIAL_PROPOSALS);
+  const [selectedProposal, setSelectedProposal] = useState<ExecutiveAIProposal | null>(null);
+  const [decisionReason, setDecisionReason] = useState<string>('');
+  const [delegateTechId, setDelegateTechId] = useState<string>('tech-01');
+  const [showAuditTrailModal, setShowAuditTrailModal] = useState<boolean>(false);
   const [approvedToast, setApprovedToast] = useState<string | null>(null);
 
   // Compute Plant Executive Metrics
@@ -110,19 +136,63 @@ export const PlantDirectorView: React.FC<PlantDirectorViewProps> = ({
   const estimatedDowntimeCost = Math.round(downtimeHoursThisMonth * 125);
   const costSavingsByAI = 4250;
 
-  const handleApprove = (id: string, title: string) => {
+  // Human-in-the-Loop Approval Action (MGR-03)
+  const handleApproveProposal = (proposal: ExecutiveAIProposal) => {
     soundManager.playSuccessChime();
-    setApprovals((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: 'APPROVED' } : item))
-    );
-    setApprovedToast(`Đã ký duyệt: ${title}`);
-    setTimeout(() => setApprovedToast(null), 3000);
+    const updated: ExecutiveAIProposal = {
+      ...proposal,
+      status: 'APPROVED',
+      auditTrail: {
+        actionBy: 'Lê Đức Trọng (Giám Đốc Kỹ Thuật Nhà Máy)',
+        actionAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' hôm nay',
+        decisionReason: decisionReason.trim() || 'Phê duyệt dựa trên khuyến nghị đầy đủ bằng chứng của AI Copilot và xác nhận hiện trường.',
+        delegatedTo: delegateTechId ? technicians.find((t) => t.id === delegateTechId)?.name : undefined,
+      },
+    };
+
+    setApprovals((prev) => prev.map((p) => (p.id === proposal.id ? updated : p)));
+    setSelectedProposal(null);
+    setDecisionReason('');
+    setApprovedToast(`Đã ký duyệt có ghi vết quyết định: "${proposal.title}"`);
+    setTimeout(() => setApprovedToast(null), 3500);
   };
 
-  const handleReject = (id: string) => {
-    setApprovals((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: 'REJECTED' } : item))
-    );
+  const handleRejectProposal = (proposal: ExecutiveAIProposal) => {
+    soundManager.playBeep();
+    const updated: ExecutiveAIProposal = {
+      ...proposal,
+      status: 'REJECTED',
+      auditTrail: {
+        actionBy: 'Lê Đức Trọng (Giám Đốc Kỹ Thuật Nhà Máy)',
+        actionAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' hôm nay',
+        decisionReason: decisionReason.trim() || 'Từ chối: Chưa đủ căn cứ dừng máy trong giờ cao điểm đơn hàng.',
+      },
+    };
+
+    setApprovals((prev) => prev.map((p) => (p.id === proposal.id ? updated : p)));
+    setSelectedProposal(null);
+    setDecisionReason('');
+    setApprovedToast(`Đã từ chối đề xuất: "${proposal.title}"`);
+    setTimeout(() => setApprovedToast(null), 3500);
+  };
+
+  const handleRequestMoreInfo = (proposal: ExecutiveAIProposal) => {
+    soundManager.playBeep();
+    const updated: ExecutiveAIProposal = {
+      ...proposal,
+      status: 'REQUEST_MORE_INFO',
+      auditTrail: {
+        actionBy: 'Lê Đức Trọng (Giám Đốc Kỹ Thuật Nhà Máy)',
+        actionAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' hôm nay',
+        decisionReason: decisionReason.trim() || 'Yêu cầu Kíp Trưởng đo kiểm lại độ mòn thực tế trước khi đặt mua mới.',
+      },
+    };
+
+    setApprovals((prev) => prev.map((p) => (p.id === proposal.id ? updated : p)));
+    setSelectedProposal(null);
+    setDecisionReason('');
+    setApprovedToast(`Đã gửi yêu cầu bổ sung số liệu: "${proposal.title}"`);
+    setTimeout(() => setApprovedToast(null), 3500);
   };
 
   // Workshop Grouping for Executive View
@@ -272,6 +342,8 @@ export const PlantDirectorView: React.FC<PlantDirectorViewProps> = ({
                 className={`rounded-xl border p-3 text-xs transition ${
                   app.status === 'APPROVED'
                     ? 'border-emerald-500/40 bg-emerald-950/20 text-emerald-200'
+                    : app.status === 'REJECTED'
+                    ? 'border-red-500/40 bg-red-950/20 text-red-300'
                     : 'border-slate-800 bg-slate-950 text-slate-300'
                 }`}
               >
@@ -283,34 +355,54 @@ export const PlantDirectorView: React.FC<PlantDirectorViewProps> = ({
                     </span>
                   )}
                 </div>
-                <div className="mt-1 text-[11px] text-slate-400 flex items-center gap-2">
-                  <span>Yêu cầu bởi: {app.requestedBy}</span>
-                  <span>•</span>
-                  <span>{app.timestamp}</span>
+
+                <div className="mt-1 flex items-center gap-2 flex-wrap text-[10px]">
+                  <span className="rounded bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 font-mono">
+                    AI Tin Cậy: {app.confidenceScore}%
+                  </span>
+                  {app.targetDeviceCode && (
+                    <span className="rounded bg-slate-800 text-slate-300 px-1.5 py-0.2 font-mono">
+                      {app.targetDeviceCode}
+                    </span>
+                  )}
+                  <span className="text-slate-400">{app.timestamp}</span>
                 </div>
+
+                <p className="mt-1.5 text-[11px] text-slate-400 line-clamp-2 italic">
+                  &quot;{app.aiEvidenceSummary}&quot;
+                </p>
 
                 {app.status === 'PENDING' ? (
                   <div className="mt-3 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => handleApprove(app.id, app.title)}
-                      className="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 py-1.5 text-xs font-bold text-white transition flex items-center justify-center gap-1 shadow-md shadow-emerald-900/30"
+                      onClick={() => setSelectedProposal(app)}
+                      className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 py-1.5 text-xs font-bold text-white transition flex items-center justify-center gap-1 shadow-md shadow-indigo-900/30"
                     >
-                      <Check className="h-3.5 w-3.5" />
-                      <span>Ký Duyệt</span>
+                      <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                      <span>Xem Bằng Chứng & Ký Duyệt</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleReject(app.id)}
-                      className="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:text-white transition"
+                      onClick={() => handleRejectProposal(app)}
+                      className="rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white transition"
                     >
                       Từ Chối
                     </button>
                   </div>
                 ) : (
-                  <div className="mt-2 text-[11px] font-bold text-emerald-400 flex items-center gap-1 font-mono">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Đã phê duyệt điện tử</span>
+                  <div className="mt-2 text-[11px] font-bold text-emerald-400 flex items-center justify-between font-mono">
+                    <span className="flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>{app.status === 'APPROVED' ? 'Đã phê duyệt điện tử' : 'Đã từ chối'}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProposal(app)}
+                      className="text-xs text-indigo-400 underline"
+                    >
+                      Lưu vết
+                    </button>
                   </div>
                 )}
               </div>
@@ -646,13 +738,29 @@ export const PlantDirectorView: React.FC<PlantDirectorViewProps> = ({
           {/* Executive Approval Gate */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                <span>Khu Vực Phê Duyệt Của Giám Đốc</span>
-              </h3>
-              <span className="rounded-full bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-xs font-mono font-bold text-amber-300">
-                {approvals.filter((a) => a.status === 'PENDING').length} Chờ Duyệt
-              </span>
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                  <span>Khu Vực Phê Duyệt Của Giám Đốc (MGR-03)</span>
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  Cơ chế Human-in-the-Loop: AI đề xuất & giải trình, Giám đốc ký duyệt
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAuditTrailModal(true)}
+                  className="rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-xs text-indigo-300 font-semibold border border-slate-700 transition"
+                  title="Xem lịch sử ký duyệt & lý do"
+                >
+                  Sổ Lưu Vết ({approvals.filter((a) => a.auditTrail).length})
+                </button>
+                <span className="rounded-full bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-xs font-mono font-bold text-amber-300">
+                  {approvals.filter((a) => a.status === 'PENDING').length} Chờ Duyệt
+                </span>
+              </div>
             </div>
 
             <div className="mt-3 space-y-3">
@@ -662,6 +770,8 @@ export const PlantDirectorView: React.FC<PlantDirectorViewProps> = ({
                   className={`rounded-xl border p-3.5 text-xs transition ${
                     app.status === 'APPROVED'
                       ? 'border-emerald-500/40 bg-emerald-950/20 text-emerald-300'
+                      : app.status === 'REJECTED'
+                      ? 'border-red-500/40 bg-red-950/20 text-red-300'
                       : 'border-slate-800 bg-slate-950 text-slate-300'
                   }`}
                 >
@@ -674,34 +784,56 @@ export const PlantDirectorView: React.FC<PlantDirectorViewProps> = ({
                     )}
                   </div>
 
-                  <div className="mt-1 text-[11px] text-slate-400 flex items-center gap-2">
+                  <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+                    <span className="rounded bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 font-mono">
+                      AI Tin Cậy {app.confidenceScore}%
+                    </span>
+                    {app.targetDeviceCode && (
+                      <span className="rounded bg-slate-800 text-slate-300 px-1.5 py-0.2 font-mono">
+                        {app.targetDeviceCode}
+                      </span>
+                    )}
+                    <span>•</span>
                     <span>{app.requestedBy}</span>
                     <span>•</span>
                     <span>{app.timestamp}</span>
                   </div>
 
+                  <p className="mt-1.5 text-[11px] text-slate-400 line-clamp-2 italic">
+                    &quot;{app.aiEvidenceSummary}&quot;
+                  </p>
+
                   {app.status === 'PENDING' ? (
                     <div className="mt-3 flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => handleApprove(app.id, app.title)}
-                        className="flex-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 py-2 text-xs font-bold text-white transition flex items-center justify-center gap-1 shadow-md shadow-emerald-950/40"
+                        onClick={() => setSelectedProposal(app)}
+                        className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 py-2 text-xs font-bold text-white transition flex items-center justify-center gap-1.5 shadow-md shadow-indigo-950/40"
                       >
-                        <Check className="h-3.5 w-3.5" />
-                        <span>Ký Duyệt Ngay</span>
+                        <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                        <span>Xem Bằng Chứng AI & Ký Duyệt</span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleReject(app.id)}
+                        onClick={() => handleRejectProposal(app)}
                         className="rounded-xl bg-slate-800 hover:bg-slate-700 px-3 py-2 text-xs text-slate-400 hover:text-white transition"
                       >
                         Từ Chối
                       </button>
                     </div>
                   ) : (
-                    <div className="mt-2 text-xs font-bold text-emerald-400 flex items-center gap-1.5 font-mono">
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span>Đã hoàn tất ký số điện tử</span>
+                    <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
+                      <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>{app.status === 'APPROVED' ? 'Đã hoàn tất ký số điện tử' : 'Đã từ chối đề xuất'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProposal(app)}
+                        className="text-indigo-400 hover:text-indigo-300 underline"
+                      >
+                        Xem vết ký
+                      </button>
                     </div>
                   )}
                 </div>
@@ -740,6 +872,237 @@ export const PlantDirectorView: React.FC<PlantDirectorViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* ============================================================== */}
+      {/* MODAL 1: PROPOSAL REVIEW & HUMAN-IN-THE-LOOP APPROVAL (MGR-03) */}
+      {/* ============================================================== */}
+      {selectedProposal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-700 bg-slate-900 p-6 space-y-5 shadow-2xl my-8">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Thẩm Định & Ký Duyệt Đề Xuất Của AI</h3>
+                  <div className="text-xs text-slate-400">Quy trình Human in the Loop (MGR-03) • Mã: {selectedProposal.id}</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedProposal(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Proposal Details Card */}
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-slate-950 border border-slate-800 p-4 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-bold text-white leading-snug">{selectedProposal.title}</h4>
+                  <span className="rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 text-xs font-mono font-bold shrink-0">
+                    AI Tin Cậy: {selectedProposal.confidenceScore}%
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400 flex items-center gap-3">
+                  <span>Yêu cầu bởi: <strong className="text-slate-200">{selectedProposal.requestedBy}</strong></span>
+                  {selectedProposal.amountUSD && (
+                    <span>• Chi phí dự kiến: <strong className="text-amber-400 font-mono">${selectedProposal.amountUSD}</strong></span>
+                  )}
+                  {selectedProposal.downtimeHours && (
+                    <span>• Dừng máy: <strong className="text-amber-400 font-mono">{selectedProposal.downtimeHours} giờ</strong></span>
+                  )}
+                </div>
+              </div>
+
+              {/* 1. Bằng chứng AI & Cảm biến */}
+              <div className="rounded-2xl bg-indigo-950/20 border border-indigo-500/30 p-4 space-y-2">
+                <div className="text-xs font-bold text-indigo-300 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Sparkles className="h-4 w-4 text-purple-400" />
+                  <span>1. Bằng Chứng Dữ Liệu & Chẩn Đoán AI (AI Evidence):</span>
+                </div>
+                <p className="text-xs text-slate-200 leading-relaxed">
+                  {selectedProposal.aiEvidenceSummary}
+                </p>
+              </div>
+
+              {/* 2. Rủi ro nếu không duyệt */}
+              <div className="rounded-2xl bg-red-950/20 border border-red-500/30 p-4 space-y-2">
+                <div className="text-xs font-bold text-red-300 flex items-center gap-1.5 uppercase tracking-wider">
+                  <AlertTriangle className="h-4 w-4 text-red-400" />
+                  <span>2. Rủi Ro Dự Kiến Nếu Trì Hoãn Quyết Định (Risk Hypothesis):</span>
+                </div>
+                <p className="text-xs text-slate-200 leading-relaxed">
+                  {selectedProposal.riskHypothesis}
+                </p>
+              </div>
+
+              {/* 3. Phương án thay thế */}
+              {selectedProposal.alternativeOptions && (
+                <div className="rounded-2xl bg-slate-950 border border-slate-800 p-4 space-y-2">
+                  <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    3. Phương Án Thay Thế Nếu Không Ký Duyệt:
+                  </div>
+                  <ul className="list-disc list-inside text-xs text-slate-300 space-y-1">
+                    {selectedProposal.alternativeOptions.map((opt, i) => (
+                      <li key={i}>{opt}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Decision Input & Delegation Selector */}
+              <div className="space-y-3 pt-2 border-t border-slate-800">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-200">
+                    Lý Do Phê Duyệt / Chỉ Đạo Kỹ Thuật (Lưu vết Audit Log):
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={decisionReason}
+                    onChange={(e) => setDecisionReason(e.target.value)}
+                    placeholder="Nhập ghi chú chỉ đạo kỹ thuật của Quản đốc..."
+                    className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-200">
+                    Ủy Quyền & Giao Việc Xử Lý Trực Tiếp Cho Kíp Trưởng (MGR-02):
+                  </label>
+                  <select
+                    value={delegateTechId}
+                    onChange={(e) => setDelegateTechId(e.target.value)}
+                    className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    {technicians.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} — {t.role} ({t.shift})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Historical Audit Trail if already decided */}
+              {selectedProposal.auditTrail && (
+                <div className="rounded-xl bg-emerald-950/30 border border-emerald-500/40 p-3 text-xs space-y-1">
+                  <div className="font-bold text-emerald-400">Đã Ghi Vết Quyết Định Điện Tử:</div>
+                  <div className="text-slate-300">Người ký: <strong>{selectedProposal.auditTrail.actionBy}</strong></div>
+                  <div className="text-slate-300">Thời gian: <strong>{selectedProposal.auditTrail.actionAt}</strong></div>
+                  <div className="text-slate-300">Lý do: &quot;{selectedProposal.auditTrail.decisionReason}&quot;</div>
+                  {selectedProposal.auditTrail.delegatedTo && (
+                    <div className="text-indigo-300">Giao nhiệm vụ cho: <strong>{selectedProposal.auditTrail.delegatedTo}</strong></div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-800 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setSelectedProposal(null)}
+                className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white"
+              >
+                Đóng
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleRequestMoreInfo(selectedProposal)}
+                  className="rounded-xl bg-slate-800 hover:bg-slate-700 px-3 py-2 text-xs font-bold text-amber-300 border border-amber-500/30 transition"
+                >
+                  Yêu Cầu Bổ Sung
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRejectProposal(selectedProposal)}
+                  className="rounded-xl bg-red-950/50 hover:bg-red-900 border border-red-500/40 px-3.5 py-2 text-xs font-bold text-red-300 transition"
+                >
+                  Từ Chối
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApproveProposal(selectedProposal)}
+                  className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-950/50 transition"
+                >
+                  <Check className="h-4 w-4" />
+                  <span>Ký Duyệt Quyết Định</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 2: DECISION AUDIT TRAIL LOGS (MGR-03)                    */}
+      {/* ============================================================== */}
+      {showAuditTrailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-700 bg-slate-900 p-6 space-y-5 shadow-2xl my-8">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-indigo-400" />
+                <h3 className="text-base font-bold text-white">Sổ Lưu Vết Quyết Định Ban Giám Đốc (Audit Trail)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAuditTrailModal(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {approvals.map((app) => (
+                <div key={app.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white">{app.title}</span>
+                    <span className={`px-2 py-0.5 rounded font-mono font-bold ${
+                      app.status === 'APPROVED' ? 'bg-emerald-500/20 text-emerald-300' :
+                      app.status === 'REJECTED' ? 'bg-red-500/20 text-red-300' :
+                      'bg-amber-500/20 text-amber-300'
+                    }`}>
+                      {app.status}
+                    </span>
+                  </div>
+                  {app.auditTrail ? (
+                    <div className="space-y-1 text-slate-300 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                      <div>Người ký: <strong className="text-white">{app.auditTrail.actionBy}</strong></div>
+                      <div>Thời điểm: <strong className="text-white">{app.auditTrail.actionAt}</strong></div>
+                      <div>Lý do: &quot;{app.auditTrail.decisionReason}&quot;</div>
+                      {app.auditTrail.delegatedTo && (
+                        <div>Người tiếp nhận xử lý: <strong className="text-indigo-400">{app.auditTrail.delegatedTo}</strong></div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-slate-500 italic">Đang chờ Giám đốc xem xét & quyết định.</div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAuditTrailModal(false)}
+                className="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-white"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

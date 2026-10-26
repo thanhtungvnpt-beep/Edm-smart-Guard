@@ -31,6 +31,11 @@ import {
   Phone,
   Filter,
   Star,
+  StickyNote,
+  Edit2,
+  Trash2,
+  Pin,
+  Plus,
 } from 'lucide-react';
 import { Device, Technician } from '../../types';
 import { soundManager } from '../../utils/audio';
@@ -47,7 +52,13 @@ export type TechSortOption =
   | 'TASKS_DESC'
   | 'AVAILABILITY';
 
-export type TechStatusFilter = 'ALL' | 'READY' | 'BUSY' | 'TOP_SKILL';
+export type TechStatusFilter = 'ALL' | 'READY' | 'BUSY' | 'TOP_SKILL' | 'HAS_NOTE';
+
+export interface TechQuickNote {
+  text: string;
+  updatedAt: string;
+  priority: 'NORMAL' | 'URGENT';
+}
 
 interface EqmLeaderViewProps {
   devices: Device[];
@@ -169,9 +180,80 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
     rank: number;
   } | null>(null);
 
+  // Quick Notes / Short-term Reminders for Technicians (persisted in localStorage)
+  const [techNotes, setTechNotes] = useState<Record<string, TechQuickNote>>(() => {
+    try {
+      const saved = localStorage.getItem('eqm_technician_quick_notes');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      'tech-03': {
+        text: 'Bàn giao chìa khóa tủ linh kiện và kiểm tra mức dầu EDM cho ca đêm trước 21h',
+        updatedAt: '19:30',
+        priority: 'NORMAL',
+      },
+      'tech-01': {
+        text: 'Ưu tiên kiểm tra bo xung máy Sodick ALC sau khi giải quyết ticket #102',
+        updatedAt: '19:15',
+        priority: 'URGENT',
+      },
+    };
+  });
+
+  const [editingNoteTechId, setEditingNoteTechId] = useState<string | null>(null);
+  const [noteDraftText, setNoteDraftText] = useState<string>('');
+  const [noteDraftPriority, setNoteDraftPriority] = useState<'NORMAL' | 'URGENT'>('NORMAL');
+
   const handleShowToast = (msg: string) => {
     setBroadcastToast(msg);
     setTimeout(() => setBroadcastToast(null), 4000);
+  };
+
+  const handleSaveNote = (techId: string, text: string, priority: 'NORMAL' | 'URGENT' = 'NORMAL') => {
+    if (!text.trim()) {
+      handleDeleteNote(techId);
+      return;
+    }
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const updated: Record<string, TechQuickNote> = {
+      ...techNotes,
+      [techId]: {
+        text: text.trim(),
+        updatedAt: `${timeStr} hôm nay`,
+        priority,
+      },
+    };
+    setTechNotes(updated);
+    try {
+      localStorage.setItem('eqm_technician_quick_notes', JSON.stringify(updated));
+    } catch {}
+    setEditingNoteTechId(null);
+    soundManager.playSuccessChime();
+    const tech = technicians.find((t) => t.id === techId);
+    handleShowToast(`📌 Đã lưu ghi chú cho KTV ${tech ? tech.name : techId}`);
+  };
+
+  const handleDeleteNote = (techId: string) => {
+    const updated = { ...techNotes };
+    delete updated[techId];
+    setTechNotes(updated);
+    try {
+      localStorage.setItem('eqm_technician_quick_notes', JSON.stringify(updated));
+    } catch {}
+    if (editingNoteTechId === techId) {
+      setEditingNoteTechId(null);
+    }
+    soundManager.playBeep();
+    const tech = technicians.find((t) => t.id === techId);
+    handleShowToast(`🗑️ Đã xóa ghi chú của KTV ${tech ? tech.name : techId}`);
+  };
+
+  const handleStartEditNote = (techId: string, currentNote?: TechQuickNote, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingNoteTechId(techId);
+    setNoteDraftText(currentNote ? currentNote.text : '');
+    setNoteDraftPriority(currentNote ? currentNote.priority : 'NORMAL');
   };
 
   // Handle Dispatch Assignment
@@ -329,8 +411,9 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
       if (techStatusFilter === 'READY' && t.activeTasks > 0) return false;
       if (techStatusFilter === 'BUSY' && t.activeTasks === 0) return false;
       if (techStatusFilter === 'TOP_SKILL' && t.performanceScore < 90) return false;
+      if (techStatusFilter === 'HAS_NOTE' && !techNotes[t.id]) return false;
 
-      // Search query filter (matches name, role, shift, phone, specialty, or status)
+      // Search query filter (matches name, role, shift, phone, specialty, status, or note)
       if (!query) return true;
       const matchName = t.name.toLowerCase().includes(query);
       const matchRole = t.role.toLowerCase().includes(query);
@@ -338,7 +421,8 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
       const matchPhone = t.phone.toLowerCase().includes(query);
       const matchSpecialty = t.specialty.toLowerCase().includes(query);
       const matchStatus = t.statusLabel.toLowerCase().includes(query);
-      return matchName || matchRole || matchShift || matchPhone || matchSpecialty || matchStatus;
+      const matchNote = (techNotes[t.id]?.text || '').toLowerCase().includes(query);
+      return matchName || matchRole || matchShift || matchPhone || matchSpecialty || matchStatus || matchNote;
     });
 
     return [...filtered].sort((a, b) => {
@@ -361,7 +445,7 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
           return b.performanceScore - a.performanceScore;
       }
     });
-  }, [enrichedTechWorkload, techSearchQuery, techSortOption, techStatusFilter]);
+  }, [enrichedTechWorkload, techSearchQuery, techSortOption, techStatusFilter, techNotes]);
 
   const readyCount = useMemo(
     () => enrichedTechWorkload.filter((t) => t.activeTasks === 0).length,
@@ -374,6 +458,10 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
   const topSkillCount = useMemo(
     () => enrichedTechWorkload.filter((t) => t.performanceScore >= 90).length,
     [enrichedTechWorkload]
+  );
+  const withNotesCount = useMemo(
+    () => enrichedTechWorkload.filter((t) => !!techNotes[t.id]).length,
+    [enrichedTechWorkload, techNotes]
   );
 
   const handleOpenTechnicianModal = (techId: string) => {
@@ -506,17 +594,25 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
               {/* Assigned Technician or 1-Tap Assign */}
               {tick.assignedTechName ? (
                 <div className="flex items-center justify-between rounded-xl bg-slate-950 p-2.5 text-xs border border-slate-800">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <img
                       src={tick.assignedTechAvatar}
                       alt={tick.assignedTechName}
-                      className="h-6 w-6 rounded-full object-cover"
+                      className="h-6 w-6 rounded-full object-cover shrink-0"
                     />
-                    <span className="text-slate-200 font-medium">
-                      KTV: <strong>{tick.assignedTechName}</strong>
-                    </span>
+                    <div className="min-w-0">
+                      <span className="text-slate-200 font-medium block">
+                        KTV: <strong>{tick.assignedTechName}</strong>
+                      </span>
+                      {tick.assignedTechId && techNotes[tick.assignedTechId] && (
+                        <span className="text-[10px] text-blue-300 flex items-center gap-0.5 truncate max-w-[200px]">
+                          <Pin className="h-2.5 w-2.5 text-blue-400 shrink-0" />
+                          {techNotes[tick.assignedTechId].text}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold shrink-0">
                     ĐANG XỬ LÝ
                   </span>
                 </div>
@@ -752,6 +848,17 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
                   >
                     👑 Top Kỹ Năng ({topSkillCount})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setTechStatusFilter('HAS_NOTE')}
+                    className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                      techStatusFilter === 'HAS_NOTE'
+                        ? 'bg-purple-600 text-white font-bold'
+                        : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    }`}
+                  >
+                    📝 Có lưu ý ({withNotesCount})
+                  </button>
                 </div>
               </div>
             </div>
@@ -836,6 +943,153 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
                       <div className="text-right">
                         Hiệu suất: <strong className="text-amber-300 font-mono">{t.performanceScore}đ</strong>
                       </div>
+                    </div>
+
+                    {/* Quick Note / Short-term Reminder Field */}
+                    <div
+                      className="mt-2 pt-2 border-t border-slate-800/80"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {editingNoteTechId === t.id ? (
+                        <div className="rounded-xl bg-slate-950 border border-blue-500/50 p-2.5 space-y-2 shadow-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-blue-300 flex items-center gap-1">
+                              <StickyNote className="h-3.5 w-3.5 text-blue-400" />
+                              <span>Ghi chú cho {t.name.split(' ').pop()}:</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setNoteDraftPriority((prev) => (prev === 'URGENT' ? 'NORMAL' : 'URGENT'))}
+                              className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition flex items-center gap-1 ${
+                                noteDraftPriority === 'URGENT'
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                              }`}
+                            >
+                              {noteDraftPriority === 'URGENT' ? '⚠️ Khẩn cấp' : 'Bình thường'}
+                            </button>
+                          </div>
+
+                          <input
+                            type="text"
+                            value={noteDraftText}
+                            onChange={(e) => setNoteDraftText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveNote(t.id, noteDraftText, noteDraftPriority);
+                              } else if (e.key === 'Escape') {
+                                setEditingNoteTechId(null);
+                              }
+                            }}
+                            placeholder="Nhập nhắc nhở nhanh (Enter để lưu)..."
+                            autoFocus
+                            className="w-full rounded-lg bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+
+                          {/* Quick Presets */}
+                          <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar text-[10px]">
+                            {[
+                              '🔑 Bàn giao chìa khóa tủ',
+                              '⚠️ Ưu tiên máy Makino U6',
+                              '💧 Kiểm tra bù dầu EDM',
+                              '⏱️ Báo cáo trước đổi ca',
+                            ].map((preset) => (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => setNoteDraftText(preset)}
+                                className="rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-1.5 py-0.5 shrink-0 transition"
+                              >
+                                {preset}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center justify-end gap-1.5 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setEditingNoteTechId(null)}
+                              className="rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-[11px] text-slate-300 transition"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveNote(t.id, noteDraftText, noteDraftPriority)}
+                              className="rounded-lg bg-blue-600 hover:bg-blue-500 px-3 py-1 text-[11px] font-bold text-white transition flex items-center gap-1 shadow-md shadow-blue-900/30"
+                            >
+                              <Check className="h-3 w-3" />
+                              <span>Lưu</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : techNotes[t.id] ? (
+                        <div
+                          className={`rounded-xl p-2 text-xs flex items-start justify-between gap-2 border transition ${
+                            techNotes[t.id].priority === 'URGENT'
+                              ? 'bg-amber-950/25 border-amber-500/40 text-amber-200'
+                              : 'bg-blue-950/20 border-blue-500/30 text-blue-200'
+                          }`}
+                        >
+                          <div className="flex items-start gap-1.5 min-w-0">
+                            <Pin
+                              className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${
+                                techNotes[t.id].priority === 'URGENT' ? 'text-amber-400' : 'text-blue-400'
+                              }`}
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-wider opacity-75">
+                                  Lưu ý Leader ({techNotes[t.id].updatedAt})
+                                </span>
+                                {techNotes[t.id].priority === 'URGENT' && (
+                                  <span className="text-[9px] bg-amber-500/30 text-amber-300 font-bold px-1 rounded">
+                                    Khẩn
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] font-medium leading-relaxed mt-0.5 break-words">
+                                "{techNotes[t.id].text}"
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={(e) => handleStartEditNote(t.id, techNotes[t.id], e)}
+                              title="Sửa ghi chú"
+                              className="p-1 rounded hover:bg-slate-800/80 text-slate-400 hover:text-white transition"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteNote(t.id);
+                              }}
+                              title="Xóa ghi chú"
+                              className="p-1 rounded hover:bg-red-950/40 text-slate-400 hover:text-red-400 transition"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between text-[11px]">
+                          <button
+                            type="button"
+                            onClick={(e) => handleStartEditNote(t.id, undefined, e)}
+                            className="inline-flex items-center gap-1 text-slate-400 hover:text-blue-400 font-medium transition py-0.5"
+                          >
+                            <StickyNote className="h-3 w-3" />
+                            <span>+ Thêm ghi chú nhắc việc</span>
+                          </button>
+                          <span className="text-[10px] text-slate-500">Chưa có lưu ý</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-900">
@@ -1019,6 +1273,14 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
                               </span>
                             </div>
                             <div className="text-[11px] text-slate-400">Đã nhận nhiệm vụ tại xưởng</div>
+                            {tick.assignedTechId && techNotes[tick.assignedTechId] && (
+                              <div className="mt-1 flex items-center gap-1 text-[10.5px] text-blue-300 bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-500/30">
+                                <Pin className="h-3 w-3 text-blue-400 shrink-0" />
+                                <span className="truncate max-w-[280px]">
+                                  Lưu ý Leader: {techNotes[tick.assignedTechId].text}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ) : (
@@ -1252,6 +1514,17 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
                 >
                   👑 Top Kỹ Năng ({topSkillCount})
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setTechStatusFilter('HAS_NOTE')}
+                  className={`rounded-lg px-2.5 py-1 transition shrink-0 font-medium ${
+                    techStatusFilter === 'HAS_NOTE'
+                      ? 'bg-purple-600 text-white font-bold shadow'
+                      : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white'
+                  }`}
+                >
+                  📝 Có lưu ý ({withNotesCount})
+                </button>
               </div>
             </div>
 
@@ -1335,6 +1608,153 @@ export const EqmLeaderView: React.FC<EqmLeaderViewProps> = ({
                       <div className="text-right">
                         Hiệu suất: <strong className="text-amber-300 font-mono">{t.performanceScore}đ</strong>
                       </div>
+                    </div>
+
+                    {/* Quick Note / Short-term Reminder Field */}
+                    <div
+                      className="mt-2 pt-2 border-t border-slate-900/80"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {editingNoteTechId === t.id ? (
+                        <div className="rounded-xl bg-slate-900 border border-blue-500/50 p-2.5 space-y-2 shadow-lg animate-fadeIn">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-blue-300 flex items-center gap-1">
+                              <StickyNote className="h-3.5 w-3.5 text-blue-400" />
+                              <span>Ghi chú cho {t.name.split(' ').pop()}:</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setNoteDraftPriority((prev) => (prev === 'URGENT' ? 'NORMAL' : 'URGENT'))}
+                              className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition flex items-center gap-1 ${
+                                noteDraftPriority === 'URGENT'
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                              }`}
+                            >
+                              {noteDraftPriority === 'URGENT' ? '⚠️ Khẩn cấp' : 'Bình thường'}
+                            </button>
+                          </div>
+
+                          <input
+                            type="text"
+                            value={noteDraftText}
+                            onChange={(e) => setNoteDraftText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveNote(t.id, noteDraftText, noteDraftPriority);
+                              } else if (e.key === 'Escape') {
+                                setEditingNoteTechId(null);
+                              }
+                            }}
+                            placeholder="Nhập nhắc nhở nhanh (Enter để lưu)..."
+                            autoFocus
+                            className="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+
+                          {/* Quick presets for 1-tap entry */}
+                          <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar text-[10px]">
+                            {[
+                              '🔑 Bàn giao chìa khóa tủ linh kiện',
+                              '⚠️ Ưu tiên xử lý sự cố máy U6',
+                              '💧 Kiểm tra bù dầu & áp lực nước',
+                              '⏱️ Báo cáo trước khi đổi ca',
+                            ].map((preset) => (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => setNoteDraftText(preset)}
+                                className="rounded bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 px-1.5 py-0.5 shrink-0 transition"
+                              >
+                                {preset}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center justify-end gap-1.5 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setEditingNoteTechId(null)}
+                              className="rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-[11px] text-slate-300 transition"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveNote(t.id, noteDraftText, noteDraftPriority)}
+                              className="rounded-lg bg-blue-600 hover:bg-blue-500 px-3 py-1 text-[11px] font-bold text-white transition flex items-center gap-1 shadow-md shadow-blue-900/30"
+                            >
+                              <Check className="h-3 w-3" />
+                              <span>Lưu</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : techNotes[t.id] ? (
+                        <div
+                          className={`rounded-xl p-2 text-xs flex items-start justify-between gap-2 border transition ${
+                            techNotes[t.id].priority === 'URGENT'
+                              ? 'bg-amber-950/25 border-amber-500/40 text-amber-200'
+                              : 'bg-blue-950/20 border-blue-500/30 text-blue-200'
+                          }`}
+                        >
+                          <div className="flex items-start gap-1.5 min-w-0">
+                            <Pin
+                              className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${
+                                techNotes[t.id].priority === 'URGENT' ? 'text-amber-400' : 'text-blue-400'
+                              }`}
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-wider opacity-75">
+                                  Lưu ý Leader ({techNotes[t.id].updatedAt})
+                                </span>
+                                {techNotes[t.id].priority === 'URGENT' && (
+                                  <span className="text-[9px] bg-amber-500/30 text-amber-300 font-bold px-1 rounded">
+                                    Khẩn
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] font-medium leading-relaxed mt-0.5 break-words">
+                                "{techNotes[t.id].text}"
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={(e) => handleStartEditNote(t.id, techNotes[t.id], e)}
+                              title="Sửa ghi chú"
+                              className="p-1 rounded hover:bg-slate-800/80 text-slate-400 hover:text-white transition"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteNote(t.id);
+                              }}
+                              title="Xóa ghi chú"
+                              className="p-1 rounded hover:bg-red-950/40 text-slate-400 hover:text-red-400 transition"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between text-[11px]">
+                          <button
+                            type="button"
+                            onClick={(e) => handleStartEditNote(t.id, undefined, e)}
+                            className="inline-flex items-center gap-1 text-slate-500 hover:text-blue-400 font-medium transition py-0.5 group/note"
+                          >
+                            <StickyNote className="h-3 w-3 group-hover/note:scale-110 transition-transform" />
+                            <span>+ Thêm ghi chú nhắc việc</span>
+                          </button>
+                          <span className="text-[10px] text-slate-600">Chưa có lưu ý</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between text-[10.5px] pt-1 border-t border-slate-900/80">

@@ -22,10 +22,12 @@ import {
   Package,
   Megaphone,
   Shield,
+  Gauge,
 } from 'lucide-react';
 import { FactoryStats } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 import { SystemDocumentationModal } from './SystemDocumentationModal';
+import { MainViewMode } from './roles/RoleNavigationHeader';
 
 interface HeaderProps {
   stats: FactoryStats | null;
@@ -51,8 +53,8 @@ interface HeaderProps {
   onToggleEmergencyBroadcast?: () => void;
   criticalCount?: number;
   isEmergencyBroadcastOpen?: boolean;
-  mainViewMode?: 'ROLE_VIEW' | 'FLEET_GRID';
-  onSelectMainViewMode?: (mode: 'ROLE_VIEW' | 'FLEET_GRID') => void;
+  mainViewMode?: MainViewMode;
+  onSelectMainViewMode?: (mode: MainViewMode) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -314,8 +316,59 @@ export const Header: React.FC<HeaderProps> = ({
             <Shield className="h-4 w-4 text-amber-400" />
             <span>Phân Quyền Vai Trò</span>
             <span className="rounded bg-gradient-to-r from-amber-500/30 to-emerald-500/30 px-1.5 py-0.2 text-[10px] font-bold text-amber-300 border border-amber-500/40">
-              3 Vị Trí
+              4 Vị Trí
             </span>
+          </button>
+
+          {/* AI Performance Control Tower Button (P2-01) */}
+          <button
+            onClick={() => {
+              onSelectMainViewMode?.('CONTROL_TOWER');
+            }}
+            title="Tháp Điều Hành Hiệu Suất AI (P2-01: Control Tower 4 Engines)"
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-bold transition shrink-0 ${
+              mainViewMode === 'CONTROL_TOWER'
+                ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white shadow-lg shadow-indigo-900/40 ring-1 ring-indigo-400/60'
+                : 'text-indigo-300 hover:bg-slate-900 hover:text-white'
+            }`}
+          >
+            <Gauge className="h-4 w-4 text-amber-300 animate-pulse" />
+            <span>Tháp Điều Hành AI (P2-01)</span>
+          </button>
+
+          {/* Phase 1: Data Trust Center (Mô-đun 2) */}
+          <button
+            onClick={() => {
+              onSelectMainViewMode?.('DATA_TRUST');
+            }}
+            title="Trung Tâm Quản Trị Dữ Liệu Đáng Tin Cậy (6 Chiều Chất Lượng & Phả Hệ Dữ Liệu)"
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-bold transition shrink-0 ${
+              mainViewMode === 'DATA_TRUST'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-900/40 ring-1 ring-cyan-400/60'
+                : 'text-cyan-300 hover:bg-slate-900 hover:text-white'
+            }`}
+          >
+            <HardDrive className="h-4 w-4 text-cyan-400" />
+            <span>Data Trust Center</span>
+            <span className="rounded bg-black/40 px-1.5 py-0.2 text-[10px] font-mono font-bold text-cyan-200 border border-cyan-400/30">
+              Giai Đoạn 1
+            </span>
+          </button>
+
+          {/* Phase 1: Audit & RBAC (Mô-đun 4 & 5) */}
+          <button
+            onClick={() => {
+              onSelectMainViewMode?.('AUDIT_RBAC');
+            }}
+            title="Nhật Ký Kiểm Toán Bất Biến & Ma Trận 8 Vai Trò RBAC"
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-bold transition shrink-0 ${
+              mainViewMode === 'AUDIT_RBAC'
+                ? 'bg-gradient-to-r from-purple-600 to-rose-600 text-white shadow-lg shadow-purple-900/40 ring-1 ring-purple-400/60'
+                : 'text-purple-300 hover:bg-slate-900 hover:text-white'
+            }`}
+          >
+            <Shield className="h-4 w-4 text-purple-400" />
+            <span>Audit Log & RBAC</span>
           </button>
 
           <button
