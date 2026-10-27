@@ -101,6 +101,7 @@ import { DataTrustCenter } from './components/trust/DataTrustCenter';
 import { AuditLogAndRbacCenter } from './components/trust/AuditLogAndRbacCenter';
 import { EnhancedAlertManagementCenter } from './components/trust/EnhancedAlertManagementCenter';
 import { HitlWorkflowManagementCenter } from './components/trust/HitlWorkflowManagementCenter';
+import { UnifiedReportsHub } from './components/UnifiedReportsHub';
 
 export default function App() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -1036,6 +1037,12 @@ export default function App() {
         isEmergencyBroadcastOpen={showEmergencyBroadcast}
         mainViewMode={mainViewMode}
         onSelectMainViewMode={(mode) => setMainViewMode(mode)}
+        onOpenQuickReport={() => setMainViewMode('REPORTS_HUB')}
+        devices={devices}
+        notifications={notifications}
+        onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+        onOpenMachineDetails={(d) => setDetailsDevice(d)}
+        onAcknowledgeIncident={(id) => handleAcknowledge(id)}
       />
 
       {/* Offline Connectivity Banner */}
@@ -1047,35 +1054,37 @@ export default function App() {
         onRefresh={fetchAllData}
       />
 
-      {/* Role Navigation Header & Viewport Switcher */}
-      <RoleNavigationHeader
-        currentRole={currentRole}
-        onSelectRole={(role) => {
-          setCurrentRole(role);
-          setMainViewMode('ROLE_VIEW');
-          soundManager.playBeep();
-        }}
-        viewportMode={viewportMode}
-        onSelectViewportMode={(mode) => {
-          setViewportMode(mode);
-          soundManager.playBeep();
-        }}
-        currentPlant={currentPlant}
-        onSelectPlant={(plant) => {
-          setCurrentPlant(plant);
-          soundManager.playBeep();
-          const pObj = PLANTS.find((p) => p.id === plant);
-          if (pObj) showToast(`Chuyển sang ${pObj.name}`);
-        }}
-        activeAlarmCount={criticalAlarmCount}
-        mainViewMode={mainViewMode}
-        onSelectMainViewMode={(mode) => {
-          setMainViewMode(mode);
-          soundManager.playBeep();
-        }}
-        phoneFramePreview={phoneFramePreview}
-        onTogglePhoneFramePreview={() => setPhoneFramePreview((prev) => !prev)}
-      />
+      {/* Role Navigation Header & Viewport Switcher (Shown contextually in Role & Control Tower views) */}
+      {(mainViewMode === 'ROLE_VIEW' || mainViewMode === 'CONTROL_TOWER') && (
+        <RoleNavigationHeader
+          currentRole={currentRole}
+          onSelectRole={(role) => {
+            setCurrentRole(role);
+            setMainViewMode('ROLE_VIEW');
+            soundManager.playBeep();
+          }}
+          viewportMode={viewportMode}
+          onSelectViewportMode={(mode) => {
+            setViewportMode(mode);
+            soundManager.playBeep();
+          }}
+          currentPlant={currentPlant}
+          onSelectPlant={(plant) => {
+            setCurrentPlant(plant);
+            soundManager.playBeep();
+            const pObj = PLANTS.find((p) => p.id === plant);
+            if (pObj) showToast(`Chuyển sang ${pObj.name}`);
+          }}
+          activeAlarmCount={criticalAlarmCount}
+          mainViewMode={mainViewMode}
+          onSelectMainViewMode={(mode) => {
+            setMainViewMode(mode);
+            soundManager.playBeep();
+          }}
+          phoneFramePreview={phoneFramePreview}
+          onTogglePhoneFramePreview={() => setPhoneFramePreview((prev) => !prev)}
+        />
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
@@ -1088,9 +1097,20 @@ export default function App() {
         )}
 
         {/* ============================================================== */}
-        {/* VIEW MODE 0: AI PERFORMANCE CONTROL TOWER (P2-01)            */}
+        {/* VIEW MODE: REPORTS & ANALYTICS HUB (DỄ BÁO CÁO)               */}
         {/* ============================================================== */}
-        {mainViewMode === 'CONTROL_TOWER' ? (
+        {mainViewMode === 'REPORTS_HUB' ? (
+          <UnifiedReportsHub
+            devices={devices}
+            technicians={technicians}
+            stats={stats}
+            currentPlant={currentPlant}
+            onOpenMachineDetails={(d) => setDetailsDevice(d)}
+            onOpenTelemetryHistory={(d) => setTelemetryHistoryDevice(d)}
+            onOpenWeeklyExecutiveReport={() => setShowWeeklyReportModal(true)}
+            onToast={(msg) => showToast(msg)}
+          />
+        ) : mainViewMode === 'CONTROL_TOWER' ? (
           viewportMode === 'MOBILE' && phoneFramePreview ? (
             /* Smartphone Frame Shell for Control Tower */
             <div className="flex flex-col items-center justify-center py-2 sm:py-4">

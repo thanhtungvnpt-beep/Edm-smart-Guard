@@ -26,6 +26,7 @@ export type ViewportMode = 'PC' | 'MOBILE';
 export type MainViewMode =
   | 'ROLE_VIEW'
   | 'FLEET_GRID'
+  | 'REPORTS_HUB'
   | 'CONTROL_TOWER'
   | 'DATA_TRUST'
   | 'HITL_WORKFLOW'
