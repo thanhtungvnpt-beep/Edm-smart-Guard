@@ -117,3 +117,35 @@ html.high-contrast,
 .animate-slideUp {
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Control Tower Pro Color Variables & Utility Accents */
+:root {
+  --tower-bg: #061522;
+  --tower-sidebar: #081B2B;
+  --tower-panel: #0A2032;
+  --tower-panel-elevated: #0D2940;
+  --tower-border: #15324C;
+  --tower-cyan: #00C8F0;
+  --tower-blue: #168BFF;
+  --tower-green: #16D9A0;
+  --tower-amber: #FFB547;
+  --tower-red: #FF5263;
+  --tower-text: #EAF5FF;
+  --tower-text-muted: #9CB4C8;
+}
+
+/* Custom crisp dark scrollbars for tables and panels */
+.custom-tower-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-tower-scrollbar::-webkit-scrollbar-track {
+  background: #081b2b;
+}
+.custom-tower-scrollbar::-webkit-scrollbar-thumb {
+  background: #1c4568;
+  border-radius: 4px;
+}
+.custom-tower-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #00c8f0;
+}

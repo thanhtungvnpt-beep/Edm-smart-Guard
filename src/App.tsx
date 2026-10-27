@@ -24,6 +24,7 @@ import {
   Smartphone,
   Building2,
   Users2,
+  Users,
   Wrench,
 } from 'lucide-react';
 import {
@@ -102,6 +103,9 @@ import { AuditLogAndRbacCenter } from './components/trust/AuditLogAndRbacCenter'
 import { EnhancedAlertManagementCenter } from './components/trust/EnhancedAlertManagementCenter';
 import { HitlWorkflowManagementCenter } from './components/trust/HitlWorkflowManagementCenter';
 import { UnifiedReportsHub } from './components/UnifiedReportsHub';
+import { IndustrialControlTowerPro } from './components/IndustrialControlTowerPro';
+import { ControlTowerLayout } from './components/ControlTowerLayout';
+import { TechnicianSkillsComparisonChart } from './components/TechnicianSkillsComparisonChart';
 
 export default function App() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -121,6 +125,7 @@ export default function App() {
   const [showWeeklyReportModal, setShowWeeklyReportModal] = useState<boolean>(false);
 
   // Navigation
+  const [activeNav, setActiveNav] = useState<string>('overview');
   const [activeTab, setActiveTab] = useState<
     'devices' | 'learnings' | 'documents' | 'notifications' | 'mobile-devices' | 'history' | 'root-cause-analysis' | 'spare-parts'
   >('devices');
@@ -998,106 +1003,287 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans transition-colors duration-200 ${isHighContrast ? 'high-contrast' : ''}`}>
-      {/* Top Navbar */}
-      <Header
-        stats={stats}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        isMuted={isMuted}
-        toggleMute={toggleMute}
-        pushPermission={pushPermission}
-        handleRequestPush={handleRequestPush}
-        onOpenSimulator={() => setShowSimulator(true)}
-        onOpenPhoneView={() => setPhoneDevice(devices[0] || null)}
-        onOpenTechStatus={() => setShowTechSidebar(true)}
-        onDutyTechCount={technicians.filter((t) => t.activeStatus === 'ON_DUTY').length}
-        isOnline={isOnline}
-        isSimulatedOffline={isSimulated}
-        onToggleSimulateOffline={toggleSimulateOffline}
-        onlineMobileCount={mobileDevices.filter((m) => m.status === 'ONLINE' && !m.isLocked).length}
-        onStartTour={() => {
-          setActiveTab('devices');
-          setShowOnboardingTour(true);
-        }}
-        onOpenShortcuts={() => setShowKeyboardShortcuts(true)}
-        shortcutUsageCount={shortcutTelemetry.totalCount}
-        isHighContrast={isHighContrast}
-        onToggleHighContrast={toggleHighContrast}
-        onToggleEmergencyBroadcast={() => {
-          if (activeTab !== 'devices') {
+    <div className={`min-h-screen bg-[#061522] text-[#EAF5FF] flex flex-col font-sans transition-colors duration-200 ${isHighContrast ? 'high-contrast' : ''}`}>
+      <ControlTowerLayout
+        activeNav={activeNav}
+        onSelectNav={(navId) => {
+          setActiveNav(navId);
+          if (navId === 'devices') {
             setActiveTab('devices');
-            setShowEmergencyBroadcast(true);
-          } else {
-            setShowEmergencyBroadcast((prev) => !prev);
+            setMainViewMode('FLEET_GRID');
+          } else if (navId === 'maintenance') {
+            setActiveTab('history');
+            setMainViewMode('FLEET_GRID');
+          } else if (navId === 'knowledge') {
+            setActiveTab('learnings');
+            setMainViewMode('FLEET_GRID');
+          } else if (navId === 'documents') {
+            setActiveTab('documents');
+            setMainViewMode('FLEET_GRID');
+          } else if (navId === 'ai-diagnosis') {
+            setActiveTab('root-cause-analysis');
+            setMainViewMode('FLEET_GRID');
+          } else if (navId === 'mobile') {
+            setActiveTab('mobile-devices');
+            setMainViewMode('FLEET_GRID');
+          } else if (navId === 'reports') {
+            setMainViewMode('REPORTS_HUB');
+          } else if (navId === 'notifications') {
+            setMainViewMode('ALERT_GOVERNANCE');
+          } else if (navId === 'data-trust') {
+            setMainViewMode('DATA_TRUST');
+          } else if (navId === 'hitl') {
+            setMainViewMode('HITL_WORKFLOW');
+          } else if (navId === 'audit') {
+            setMainViewMode('AUDIT_RBAC');
           }
-          showToast('⚡ Bảng Phát Thanh Khẩn Cấp Toàn Xưởng');
+          soundManager.playBeep();
         }}
-        criticalCount={criticalAlarmCount}
-        isEmergencyBroadcastOpen={showEmergencyBroadcast}
-        mainViewMode={mainViewMode}
-        onSelectMainViewMode={(mode) => setMainViewMode(mode)}
-        onOpenQuickReport={() => setMainViewMode('REPORTS_HUB')}
-        devices={devices}
-        notifications={notifications}
-        onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
-        onOpenMachineDetails={(d) => setDetailsDevice(d)}
-        onAcknowledgeIncident={(id) => handleAcknowledge(id)}
-      />
-
-      {/* Offline Connectivity Banner */}
-      <OfflineConnectivityBanner
-        isOnline={isOnline}
-        isSimulated={isSimulated}
-        cacheInfo={cacheInfo}
-        onToggleSimulate={toggleSimulateOffline}
-        onRefresh={fetchAllData}
-      />
-
-      {/* Role Navigation Header & Viewport Switcher (Shown contextually in Role & Control Tower views) */}
-      {(mainViewMode === 'ROLE_VIEW' || mainViewMode === 'CONTROL_TOWER') && (
-        <RoleNavigationHeader
-          currentRole={currentRole}
-          onSelectRole={(role) => {
-            setCurrentRole(role);
-            setMainViewMode('ROLE_VIEW');
-            soundManager.playBeep();
-          }}
-          viewportMode={viewportMode}
-          onSelectViewportMode={(mode) => {
-            setViewportMode(mode);
-            soundManager.playBeep();
-          }}
-          currentPlant={currentPlant}
-          onSelectPlant={(plant) => {
-            setCurrentPlant(plant);
-            soundManager.playBeep();
-            const pObj = PLANTS.find((p) => p.id === plant);
-            if (pObj) showToast(`Chuyển sang ${pObj.name}`);
-          }}
-          activeAlarmCount={criticalAlarmCount}
-          mainViewMode={mainViewMode}
-          onSelectMainViewMode={(mode) => {
-            setMainViewMode(mode);
-            soundManager.playBeep();
-          }}
-          phoneFramePreview={phoneFramePreview}
-          onTogglePhoneFramePreview={() => setPhoneFramePreview((prev) => !prev)}
+        currentPlant={currentPlant}
+        onSelectPlant={(plant) => {
+          setCurrentPlant(plant);
+          soundManager.playBeep();
+          const pObj = PLANTS.find((p) => p.id === plant);
+          if (pObj) showToast(`Chuyển sang ${pObj.name}`);
+        }}
+        onSearch={(term) => setSearchTerm(term)}
+        notificationCount={notifications.length || 12}
+        alertCount={criticalAlarmCount || 3}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+        onOpenSimulator={() => setShowSimulator(true)}
+        onOpenShortcuts={() => setShowKeyboardShortcuts(true)}
+        onOpenQuickReport={() => {
+          setActiveNav('reports');
+          setMainViewMode('REPORTS_HUB');
+          soundManager.playBeep();
+        }}
+      >
+        {/* Offline Connectivity Banner */}
+        <OfflineConnectivityBanner
+          isOnline={isOnline}
+          isSimulated={isSimulated}
+          cacheInfo={cacheInfo}
+          onToggleSimulate={toggleSimulateOffline}
+          onRefresh={fetchAllData}
         />
-      )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
         {/* TOAST POPUP */}
         {toastMessage && (
-          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-2xl shadow-emerald-950/80 animate-in slide-in-from-bottom-5">
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-[#16D9A0] px-5 py-3 text-sm font-bold text-[#061522] shadow-2xl shadow-[#16D9A0]/40 animate-in slide-in-from-bottom-5">
             <CheckCircle2 className="h-5 w-5" />
             <span>{toastMessage}</span>
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* VIEW MODE: REPORTS & ANALYTICS HUB (DỄ BÁO CÁO)               */}
+        {/* VIEW 1: OVERVIEW CONTROL TOWER PRO (PRIMARY DASHBOARD)         */}
+        {/* ============================================================== */}
+        {activeNav === 'overview' && (
+          <IndustrialControlTowerPro
+            devices={devices}
+            technicians={technicians}
+            stats={stats}
+            notifications={notifications}
+            currentPlant={currentPlant}
+            onOpenDiagnosis={(d) => setDiagnosisDevice(d)}
+            onOpenMachineDetails={(d) => setDetailsDevice(d)}
+            onOpenRepairReport={(d) => setRepairDevice(d)}
+            onOpenTelemetryHistory={(d) => setTelemetryHistoryDevice(d)}
+            onOpenPredictiveModal={(d) => setPredictiveDevice(d)}
+            onAcknowledgeIncident={(id) => handleAcknowledge(id)}
+            onOpenWeeklyReport={() => setShowWeeklyReportModal(true)}
+            onNavigateToTab={(tab) => {
+              setActiveNav(tab);
+              if (tab === 'devices') {
+                setActiveTab('devices');
+                setMainViewMode('FLEET_GRID');
+              } else if (tab === 'maintenance') {
+                setActiveTab('history');
+                setMainViewMode('FLEET_GRID');
+              } else if (tab === 'knowledge') {
+                setActiveTab('learnings');
+                setMainViewMode('FLEET_GRID');
+              } else if (tab === 'documents') {
+                setActiveTab('documents');
+                setMainViewMode('FLEET_GRID');
+              } else if (tab === 'ai-diagnosis') {
+                setActiveTab('root-cause-analysis');
+                setMainViewMode('FLEET_GRID');
+              } else if (tab === 'reports') {
+                setMainViewMode('REPORTS_HUB');
+              } else if (tab === 'notifications') {
+                setMainViewMode('ALERT_GOVERNANCE');
+              } else if (tab === 'technician-eval') {
+                setActiveNav('technician-eval');
+              }
+              soundManager.playBeep();
+            }}
+            onToast={(msg) => showToast(msg)}
+          />
+        )}
+
+        {/* VIEW 2: TECHNICIAN EVALUATION */}
+        {activeNav === 'technician-eval' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#15324C]">
+              <h1 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#16D9A0]" />
+                Đánh Giá Năng Lực & Ma Trận Kỹ Năng Kỹ Thuật Viên
+              </h1>
+              <button
+                onClick={() => setActiveNav('overview')}
+                className="px-3 py-1 text-xs rounded bg-[#0D2940] hover:text-[#00C8F0] border border-[#15324C]"
+              >
+                ← Về Tổng Quan
+              </button>
+            </div>
+            <div className="bg-[#0A2032] border border-[#15324C] rounded-xl p-4 shadow-xl">
+              <TechnicianSkillsComparisonChart
+                technicians={technicians}
+                learnings={learnings}
+                devices={devices}
+                onOpenMachineDetails={(d) => setDetailsDevice(d)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 3: COMMUNITY KNOWLEDGE */}
+        {activeNav === 'community' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#15324C]">
+              <h1 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-2">
+                <Users2 className="w-4 h-4 text-[#168BFF]" />
+                Diễn Đàn & SOP Tri Thức Kỹ Thuật Liên Xưởng
+              </h1>
+              <button
+                onClick={() => setActiveNav('overview')}
+                className="px-3 py-1 text-xs rounded bg-[#0D2940] hover:text-[#00C8F0] border border-[#15324C]"
+              >
+                ← Về Tổng Quan
+              </button>
+            </div>
+            <div className="bg-[#0A2032] border border-[#15324C] rounded-xl p-4 shadow-xl">
+              <CrossFactoryCommunityView
+                currentPlant={currentPlant}
+                viewportMode={viewportMode}
+                onApplyKnowledgeToRepair={(post) => {
+                  const matched = devices.find((d) => d.model.toLowerCase().includes(post.targetModel.toLowerCase().split(' ')[0])) || devices[0];
+                  if (matched) {
+                    setRepairDevice(matched);
+                    showToast(`Đã áp dụng SOP "${post.title}" vào ca sửa máy ${matched.code}!`);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 4: SETTINGS */}
+        {activeNav === 'settings' && (
+          <div className="space-y-4 max-w-4xl">
+            <div className="flex items-center justify-between pb-2 border-b border-[#15324C]">
+              <h1 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-[#00C8F0]" />
+                Cấu Hình & Thiết Lập Hệ Thống
+              </h1>
+              <button
+                onClick={() => setActiveNav('overview')}
+                className="px-3 py-1 text-xs rounded bg-[#0D2940] hover:text-[#00C8F0] border border-[#15324C]"
+              >
+                ← Về Tổng Quan
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-[#0A2032] border border-[#15324C] rounded-xl p-4 space-y-3">
+                <h3 className="text-xs font-bold text-[#00C8F0] uppercase tracking-wider">Tùy Chọn Hiển Thị & Âm Thanh</h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between py-2 border-b border-[#15324C]/60">
+                    <span>Chế độ tương phản cao (High-Contrast)</span>
+                    <button
+                      onClick={toggleHighContrast}
+                      className={`px-2.5 py-1 rounded font-bold ${isHighContrast ? 'bg-[#FFB547] text-black' : 'bg-[#0D2940] text-[#9CB4C8]'}`}
+                    >
+                      {isHighContrast ? 'BẬT' : 'TẮT'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-[#15324C]/60">
+                    <span>Âm thanh cảnh báo (Audio Siren & Beeps)</span>
+                    <button
+                      onClick={toggleMute}
+                      className={`px-2.5 py-1 rounded font-bold ${!isMuted ? 'bg-[#16D9A0] text-black' : 'bg-[#FF5263] text-white'}`}
+                    >
+                      {!isMuted ? 'BẬT' : 'TẮT'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span>Phím tắt công nghiệp (Keyboard Shortcuts)</span>
+                    <button
+                      onClick={() => setShowKeyboardShortcuts(true)}
+                      className="px-2.5 py-1 rounded bg-[#168BFF] text-white font-bold"
+                    >
+                      Mở bảng phím tắt
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#0A2032] border border-[#15324C] rounded-xl p-4 space-y-3">
+                <h3 className="text-xs font-bold text-[#00C8F0] uppercase tracking-wider">Chế Độ Vai Trò & Mô Phỏng</h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between py-2 border-b border-[#15324C]/60">
+                    <span>Chuyển sang góc nhìn phân quyền (Director / EQM / Tech)</span>
+                    <button
+                      onClick={() => {
+                        setMainViewMode('ROLE_VIEW');
+                        setActiveNav('role-view');
+                      }}
+                      className="px-2.5 py-1 rounded bg-[#0D2940] hover:bg-[#168BFF] text-[#EAF5FF] font-semibold border border-[#15324C]"
+                    >
+                      Mở Role View
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-[#15324C]/60">
+                    <span>Mô phỏng điện thoại kỹ thuật viên (Phone View)</span>
+                    <button
+                      onClick={() => setPhoneDevice(devices[0] || null)}
+                      className="px-2.5 py-1 rounded bg-[#0D2940] hover:bg-[#168BFF] text-[#EAF5FF] font-semibold border border-[#15324C]"
+                    >
+                      Mở Phone Simulator
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span>Mô phỏng sự cố EDM (Incident Injector)</span>
+                    <button
+                      onClick={() => setShowSimulator(true)}
+                      className="px-2.5 py-1 rounded bg-[#FF5263]/20 text-[#FF5263] border border-[#FF5263]/40 font-bold"
+                    >
+                      Bộ kích hoạt sự cố
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 5: OTHER NAVIGATION SCREENS WHEN NOT OVERVIEW/TECH/COMMUNITY/SETTINGS */}
+        {activeNav !== 'overview' && activeNav !== 'technician-eval' && activeNav !== 'community' && activeNav !== 'settings' && (
+          <div className="space-y-6">
+            {/* Context Back button */}
+            <div className="flex items-center justify-between pb-2 border-b border-[#15324C]">
+              <span className="text-xs font-mono text-[#00C8F0]">
+                EDM SMARTGUARD AI • {activeNav.toUpperCase()}
+              </span>
+              <button
+                onClick={() => setActiveNav('overview')}
+                className="px-3 py-1 text-xs rounded bg-[#0D2940] hover:text-[#00C8F0] border border-[#15324C]"
+              >
+                ← Về Tổng Quan
+              </button>
+            </div>
         {/* ============================================================== */}
         {mainViewMode === 'REPORTS_HUB' ? (
           <UnifiedReportsHub
@@ -1820,7 +2006,9 @@ export default function App() {
         )}
           </>
         )}
-      </main>
+          </div>
+        )}
+      </ControlTowerLayout>
 
       {/* --- POPUP MODALS --- */}
 
