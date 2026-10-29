@@ -50,6 +50,12 @@ import {
 } from 'recharts';
 import { Device, Technician, NotificationLog, FactoryStats } from '../types';
 import { AIVibrationFailurePredictionModal } from './AIVibrationFailurePredictionModal';
+import {
+  EmptyState,
+  LoadingState,
+  StatusBadge,
+  ConfirmationDialog
+} from './ui/IndustrialClarityDesignSystem';
 
 interface IndustrialControlTowerProProps {
   devices: Device[];
@@ -1116,83 +1122,101 @@ export const IndustrialControlTowerPro: React.FC<IndustrialControlTowerProProps>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F1F5F9]">
-                  {filteredDevices.slice(0, 8).map((device) => {
-                    const isAlarm = device.status === 'ALARM_STOPPED';
-                    const isRunning = device.status === 'RUNNING';
-                    const isMaintenance = device.status === 'MAINTENANCE' || device.status === 'MAINTENANCE_SCHEDULED';
+                  {filteredDevices.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-6 text-center">
+                        <EmptyState
+                          title="Không tìm thấy thiết bị phù hợp"
+                          description="Thử thay đổi từ khóa tìm kiếm hoặc bỏ chọn các bộ lọc trạng thái và loại máy."
+                          actionText="Xóa bộ lọc"
+                          onAction={() => {
+                            setDeviceSearchTerm('');
+                            setSelectedTypeFilter('ALL');
+                            setSelectedStatusFilter('ALL');
+                          }}
+                          height="min-h-[140px]"
+                        />
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDevices.slice(0, 8).map((device) => {
+                      const isAlarm = device.status === 'ALARM_STOPPED';
+                      const isRunning = device.status === 'RUNNING';
+                      const isMaintenance = device.status === 'MAINTENANCE' || device.status === 'MAINTENANCE_SCHEDULED';
 
-                    return (
-                      <tr
-                        key={device.id}
-                        className="hover:bg-[#F8FAFC] transition-colors cursor-pointer"
-                        onClick={() => onOpenMachineDetails(device)}
-                      >
-                        <td className="py-2 px-2 font-bold font-mono text-[#1677D2]">{device.code}</td>
-                        <td className="py-2 px-2 font-medium text-[#19324D]">{device.name}</td>
-                        <td className="py-2 px-2 text-[#64748B]">{getDeviceWorkshop(device)}</td>
-                        <td className="py-2 px-2 text-[#19324D]">{device.code.startsWith('EDM') ? 'EDM' : 'CNC'}</td>
-                        <td className="py-2 px-2">
-                          {isRunning ? (
-                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]">
-                              Đang chạy
-                            </span>
-                          ) : isMaintenance ? (
-                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]">
-                              Bảo trì
-                            </span>
-                          ) : isAlarm ? (
-                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]">
-                              Lỗi
-                            </span>
-                          ) : (
-                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]">
-                              Cảnh báo
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 px-2 font-mono text-[#19324D]">
-                          {device.telemetry?.dielectricTemp || 42}°C
-                        </td>
-                        <td className="py-2 px-2 font-mono text-[#19324D]">
-                          {device.telemetry?.peakCurrent || 12.4} A
-                        </td>
-                        <td className="py-2 px-2 font-mono font-bold text-[#16A36A]">
-                          {device.telemetry?.oee || 82}%
-                        </td>
-                        <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-center gap-1 text-[#64748B]">
-                            <button
-                              onClick={() => {
-                                if (onOpenFailurePrediction) {
-                                  onOpenFailurePrediction(device);
-                                } else {
-                                  setSelectedD3Device(device);
-                                }
-                              }}
-                              className="p-1 hover:text-[#1677D2] hover:bg-[#F1F5F9] rounded"
-                              title="Dự báo bảo trì AI (D3.js)"
-                            >
-                              <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" />
-                            </button>
-                            <button
-                              onClick={() => onOpenTelemetryHistory(device)}
-                              className="p-1 hover:text-[#1677D2] hover:bg-[#F1F5F9] rounded"
-                              title="Lịch sử dữ liệu"
-                            >
-                              <LineChartIcon className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => onOpenRepairReport(device)}
-                              className="p-1 hover:text-[#1677D2] hover:bg-[#F1F5F9] rounded"
-                              title="Lệnh bảo trì"
-                            >
-                              <Wrench className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                      return (
+                        <tr
+                          key={device.id}
+                          className="hover:bg-[#F8FAFC] transition-colors cursor-pointer"
+                          onClick={() => onOpenMachineDetails(device)}
+                        >
+                          <td className="py-2 px-2 font-bold font-mono text-[#1677D2]">{device.code}</td>
+                          <td className="py-2 px-2 font-medium text-[#19324D]">{device.name}</td>
+                          <td className="py-2 px-2 text-[#64748B]">{getDeviceWorkshop(device)}</td>
+                          <td className="py-2 px-2 text-[#19324D]">{device.code.startsWith('EDM') ? 'EDM' : 'CNC'}</td>
+                          <td className="py-2 px-2">
+                            {isRunning ? (
+                              <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]">
+                                Đang chạy
+                              </span>
+                            ) : isMaintenance ? (
+                              <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]">
+                                Bảo trì
+                              </span>
+                            ) : isAlarm ? (
+                              <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]">
+                                Lỗi
+                              </span>
+                            ) : (
+                              <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]">
+                                Cảnh báo
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 font-mono text-[#19324D]">
+                            {device.telemetry?.dielectricTemp || 42}°C
+                          </td>
+                          <td className="py-2 px-2 font-mono text-[#19324D]">
+                            {device.telemetry?.peakCurrent || 12.4} A
+                          </td>
+                          <td className="py-2 px-2 font-mono font-bold text-[#16A36A]">
+                            {device.telemetry?.oee || 82}%
+                          </td>
+                          <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-1 text-[#64748B]">
+                              <button
+                                onClick={() => {
+                                  if (onOpenFailurePrediction) {
+                                    onOpenFailurePrediction(device);
+                                  } else {
+                                    setSelectedD3Device(device);
+                                  }
+                                }}
+                                className="p-1 hover:text-[#1677D2] hover:bg-[#F1F5F9] rounded"
+                                title="Dự báo bảo trì AI (D3.js)"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" />
+                              </button>
+                              <button
+                                onClick={() => onOpenTelemetryHistory(device)}
+                                className="p-1 hover:text-[#1677D2] hover:bg-[#F1F5F9] rounded"
+                                title="Lịch sử dữ liệu"
+                              >
+                                <LineChartIcon className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => onOpenRepairReport(device)}
+                                className="p-1 hover:text-[#1677D2] hover:bg-[#F1F5F9] rounded"
+                                title="Lệnh bảo trì"
+                              >
+                                <Wrench className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
