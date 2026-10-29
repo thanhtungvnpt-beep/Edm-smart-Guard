@@ -152,7 +152,7 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
         </div>
 
         {/* Center: Global Search Bar */}
-        <div className="hidden lg:flex items-center flex-1 max-w-md mx-4">
+        <div className="hidden lg:flex items-center flex-1 max-w-lg mx-6">
           <div className="relative w-full">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -162,14 +162,9 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
                 setLocalSearch(e.target.value);
                 onSearch?.(e.target.value);
               }}
-              placeholder="Tìm thiết bị, mã sự cố, lệnh bảo trì, tài liệu..."
-              className="w-full pl-9 pr-14 py-1.5 text-xs bg-[#082038] border border-[#14426E] rounded-lg text-white placeholder-slate-400 focus:border-[#00C8F0] focus:ring-1 focus:ring-[#00C8F0] focus:outline-none transition-all"
+              placeholder="Tìm thiết bị, mã máy, cảnh báo, lệnh bảo trì, tài liệu..."
+              className="w-full pl-9 pr-4 py-2 text-xs bg-[#082038] border border-[#14426E] rounded-md text-white placeholder-slate-400 focus:border-[#00C8F0] focus:ring-1 focus:ring-[#00C8F0] focus:outline-none transition-all"
             />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-              <kbd className="px-1.5 py-0.5 text-[9px] font-mono text-slate-400 bg-[#0A2B4C] border border-[#14426E] rounded">
-                Ctrl K
-              </kbd>
-            </div>
           </div>
         </div>
 
@@ -270,7 +265,7 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* DESKTOP SIDEBAR */}
         <aside
-          className={`hidden md:flex flex-col bg-[#081B2B] border-r border-[#15324C] transition-all duration-300 select-none z-30 ${
+          className={`hidden md:flex flex-col bg-[#082A4A] border-r border-[#0D3863] transition-all duration-300 select-none z-30 ${
             sidebarCollapsed ? 'w-16' : 'w-56'
           }`}
         >
@@ -287,8 +282,8 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
                   title={sidebarCollapsed ? item.label : undefined}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                     isActive
-                      ? 'bg-[#168BFF] text-white font-bold shadow-[0_0_12px_rgba(22,139,255,0.4)]'
-                      : 'text-[#9CB4C8] hover:text-[#EAF5FF] hover:bg-[#0D2940]'
+                      ? 'bg-[#1677D2] text-white font-bold shadow-sm'
+                      : 'text-[#9CB4C8] hover:text-white hover:bg-[#0B355D]'
                   }`}
                 >
                   <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-[#9CB4C8]'}`} />
@@ -296,7 +291,7 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
                     <span className="truncate flex-1 text-left">{item.label}</span>
                   )}
                   {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
-                    <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-[#FF5263] text-white">
+                    <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-[#E5484D] text-white">
                       {item.badge}
                     </span>
                   )}
@@ -307,26 +302,22 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
 
           {/* Bottom Machine Graphic Card (Pixel-accurate matching reference image) */}
           {!sidebarCollapsed && (
-            <div className="p-3 border-t border-[#15324C]">
-              <div className="relative rounded-xl overflow-hidden border border-[#15324C] bg-gradient-to-b from-[#0D2940] to-[#081B2B] p-2.5 shadow-lg group">
-                <div className="h-20 w-full rounded-lg bg-cover bg-center overflow-hidden flex items-end p-2 relative">
-                  {/* Background Reference Asset */}
+            <div className="p-3 border-t border-[#0D3863]">
+              <div className="relative rounded-xl overflow-hidden border border-[#0D3863] bg-[#0A2B4C] shadow-lg group">
+                <div className="h-24 w-full rounded-lg bg-cover bg-center overflow-hidden flex items-end p-2.5 relative">
+                  {/* Generated EDM Sparks Asset */}
                   <img
-                    src="/assets/aistudio/file_00000000e58c8211bd931eb3f46ef565_9cffacfc.png"
+                    src="/src/assets/images/edm_machine_sparks_1793242776368.jpg"
                     alt="EDM SmartGuard AI Machine"
-                    className="absolute inset-0 w-full h-full object-cover object-bottom opacity-70 group-hover:scale-105 transition-transform duration-500"
-                    onError={(e) => {
-                      // Fallback gradient if image fails
-                      (e.currentTarget as HTMLElement).style.display = 'none';
-                    }}
+                    className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#061522] via-[#061522]/50 to-transparent"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#061522] via-[#061522]/40 to-transparent"></div>
                   
                   <div className="relative z-10 w-full">
-                    <div className="text-[11px] font-bold text-[#EAF5FF] leading-tight">
+                    <div className="text-[11px] font-bold text-white leading-tight drop-shadow-sm">
                       EDM SMARTGUARD AI
                     </div>
-                    <div className="text-[10px] font-mono font-extrabold text-[#00C8F0] tracking-wider">
+                    <div className="text-[10px] font-mono font-extrabold text-[#00C8F0] tracking-wider drop-shadow-sm">
                       V2.0 PRO
                     </div>
                   </div>

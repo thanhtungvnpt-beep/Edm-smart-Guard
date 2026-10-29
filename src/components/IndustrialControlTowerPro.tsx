@@ -670,17 +670,14 @@ export const IndustrialControlTowerPro: React.FC<IndustrialControlTowerProProps>
             </div>
 
             {/* 3D Perspective Graphic with Pinned Machine Markers */}
-            <div className="relative mt-2.5 rounded-lg border border-[#E2E8F0] overflow-hidden bg-[#0A192F] min-h-[220px] flex items-center justify-center">
+            <div className="relative mt-2.5 rounded-lg border border-[#E2E8F0] overflow-hidden bg-[#0A192F] min-h-[240px] flex items-center justify-center">
               {/* Background Factory Isometric Render / Artwork */}
               <img
-                src="/assets/aistudio/file_00000000e58c8211bd931eb3f46ef565_9cffacfc.png"
+                src="/src/assets/images/factory_campus_3d_1793242754257.jpg"
                 alt="Factory Isometric Layout"
-                className="absolute inset-0 w-full h-full object-cover opacity-80"
-                onError={(e) => {
-                  (e.currentTarget as HTMLElement).style.display = 'none';
-                }}
+                className="absolute inset-0 w-full h-full object-cover opacity-95"
               />
-              <div className="absolute inset-0 bg-[#081B2B]/40"></div>
+              <div className="absolute inset-0 bg-[#081B2B]/20"></div>
 
               {/* Pinned Machines Markers on the factory floor */}
               {/* Marker 1: EDM-01 (Đang chạy - green) */}
