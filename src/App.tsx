@@ -107,6 +107,7 @@ import { IndustrialControlTowerPro } from './components/IndustrialControlTowerPr
 import { ControlTowerLayout } from './components/ControlTowerLayout';
 import { TechnicianSkillsComparisonChart } from './components/TechnicianSkillsComparisonChart';
 import { AIVibrationFailurePredictionModal } from './components/AIVibrationFailurePredictionModal';
+import { PageHeader } from './components/ui/IndustrialClarityDesignSystem';
 
 export default function App() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -1129,19 +1130,20 @@ export default function App() {
         {/* VIEW 2: TECHNICIAN EVALUATION */}
         {activeNav === 'technician-eval' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[#15324C]">
-              <h1 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-2">
-                <Users className="w-4 h-4 text-[#16D9A0]" />
-                Đánh Giá Năng Lực & Ma Trận Kỹ Năng Kỹ Thuật Viên
-              </h1>
-              <button
-                onClick={() => setActiveNav('overview')}
-                className="px-3 py-1 text-xs rounded bg-[#0D2940] hover:text-[#00C8F0] border border-[#15324C]"
-              >
-                ← Về Tổng Quan
-              </button>
-            </div>
-            <div className="bg-[#0A2032] border border-[#15324C] rounded-xl p-4 shadow-xl">
+            <PageHeader
+              title="Đánh Giá Năng Lực & Ma Trận Kỹ Năng Kỹ Thuật Viên"
+              subtitle="Phân tích tỷ lệ hoàn thành sửa chữa, thời gian xử lý MTTR và ma trận chuyên môn theo 5 dòng máy"
+              breadcrumbs={['Trang chủ', 'Kỹ thuật viên', 'Đánh giá năng lực']}
+              actions={
+                <button
+                  onClick={() => setActiveNav('overview')}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md bg-white hover:bg-[#F8FAFC] text-[#19324D] border border-[#CBD5E1] shadow-sm flex items-center gap-1.5 transition-colors"
+                >
+                  ← Về Tổng Quan
+                </button>
+              }
+            />
+            <div className="bg-white border border-[#D9E3ED] rounded-lg p-4 shadow-sm">
               <TechnicianSkillsComparisonChart
                 technicians={technicians}
                 learnings={learnings}
@@ -1155,19 +1157,20 @@ export default function App() {
         {/* VIEW 3: COMMUNITY KNOWLEDGE */}
         {activeNav === 'community' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[#15324C]">
-              <h1 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-2">
-                <Users2 className="w-4 h-4 text-[#168BFF]" />
-                Diễn Đàn & SOP Tri Thức Kỹ Thuật Liên Xưởng
-              </h1>
-              <button
-                onClick={() => setActiveNav('overview')}
-                className="px-3 py-1 text-xs rounded bg-[#0D2940] hover:text-[#00C8F0] border border-[#15324C]"
-              >
-                ← Về Tổng Quan
-              </button>
-            </div>
-            <div className="bg-[#0A2032] border border-[#15324C] rounded-xl p-4 shadow-xl">
+            <PageHeader
+              title="Diễn Đàn & SOP Tri Thức Kỹ Thuật Liên Xưởng"
+              subtitle="Kho lưu trữ quy trình thao tác chuẩn (SOP), bài học sự cố và trao đổi kinh nghiệm kỹ thuật viên"
+              breadcrumbs={['Trang chủ', 'Cộng đồng', 'SOP Tri thức']}
+              actions={
+                <button
+                  onClick={() => setActiveNav('overview')}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md bg-white hover:bg-[#F8FAFC] text-[#19324D] border border-[#CBD5E1] shadow-sm flex items-center gap-1.5 transition-colors"
+                >
+                  ← Về Tổng Quan
+                </button>
+              }
+            />
+            <div className="bg-white border border-[#D9E3ED] rounded-lg p-4 shadow-sm">
               <CrossFactoryCommunityView
                 currentPlant={currentPlant}
                 viewportMode={viewportMode}
@@ -1186,46 +1189,47 @@ export default function App() {
         {/* VIEW 4: SETTINGS */}
         {activeNav === 'settings' && (
           <div className="space-y-4 max-w-4xl">
-            <div className="flex items-center justify-between pb-2 border-b border-[#15324C]">
-              <h1 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4 text-[#00C8F0]" />
-                Cấu Hình & Thiết Lập Hệ Thống
-              </h1>
-              <button
-                onClick={() => setActiveNav('overview')}
-                className="px-3 py-1 text-xs rounded bg-[#0D2940] hover:text-[#00C8F0] border border-[#15324C]"
-              >
-                ← Về Tổng Quan
-              </button>
-            </div>
+            <PageHeader
+              title="Cấu Hình & Thiết Lập Hệ Thống"
+              subtitle="Quản lý tùy chọn hiển thị, âm thanh cảnh báo, mô phỏng thiết bị và ma trận phân quyền"
+              breadcrumbs={['Trang chủ', 'Hệ thống', 'Cài đặt']}
+              actions={
+                <button
+                  onClick={() => setActiveNav('overview')}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md bg-white hover:bg-[#F8FAFC] text-[#19324D] border border-[#CBD5E1] shadow-sm flex items-center gap-1.5 transition-colors"
+                >
+                  ← Về Tổng Quan
+                </button>
+              }
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-[#0A2032] border border-[#15324C] rounded-xl p-4 space-y-3">
-                <h3 className="text-xs font-bold text-[#00C8F0] uppercase tracking-wider">Tùy Chọn Hiển Thị & Âm Thanh</h3>
+              <div className="bg-white border border-[#D9E3ED] rounded-lg p-4 space-y-3 shadow-sm">
+                <h3 className="text-xs font-bold text-[#1677D2] uppercase tracking-wider">Tùy Chọn Hiển Thị & Âm Thanh</h3>
                 <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between py-2 border-b border-[#15324C]/60">
-                    <span>Chế độ tương phản cao (High-Contrast)</span>
+                  <div className="flex items-center justify-between py-2 border-b border-[#F1F5F9]">
+                    <span className="font-medium text-[#19324D]">Chế độ tương phản cao (High-Contrast)</span>
                     <button
                       onClick={toggleHighContrast}
-                      className={`px-2.5 py-1 rounded font-bold ${isHighContrast ? 'bg-[#FFB547] text-black' : 'bg-[#0D2940] text-[#9CB4C8]'}`}
+                      className={`px-3 py-1 rounded text-xs font-bold transition ${isHighContrast ? 'bg-[#D97706] text-white' : 'bg-[#F1F5F9] text-[#64748B] hover:text-[#19324D]'}`}
                     >
-                      {isHighContrast ? 'BẬT' : 'TẮT'}
+                      {isHighContrast ? 'ĐANG BẬT' : 'TẮT'}
                     </button>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-[#15324C]/60">
-                    <span>Âm thanh cảnh báo (Audio Siren & Beeps)</span>
+                  <div className="flex items-center justify-between py-2 border-b border-[#F1F5F9]">
+                    <span className="font-medium text-[#19324D]">Âm thanh cảnh báo (Audio Siren & Beeps)</span>
                     <button
                       onClick={toggleMute}
-                      className={`px-2.5 py-1 rounded font-bold ${!isMuted ? 'bg-[#16D9A0] text-black' : 'bg-[#FF5263] text-white'}`}
+                      className={`px-3 py-1 rounded text-xs font-bold transition ${!isMuted ? 'bg-[#16A34A] text-white' : 'bg-[#DC2626] text-white'}`}
                     >
-                      {!isMuted ? 'BẬT' : 'TẮT'}
+                      {!isMuted ? 'ĐANG BẬT' : 'TẮT CÒI'}
                     </button>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span>Phím tắt công nghiệp (Keyboard Shortcuts)</span>
+                    <span className="font-medium text-[#19324D]">Phím tắt công nghiệp (Keyboard Shortcuts)</span>
                     <button
                       onClick={() => setShowKeyboardShortcuts(true)}
-                      className="px-2.5 py-1 rounded bg-[#168BFF] text-white font-bold"
+                      className="px-3 py-1 rounded bg-[#1677D2] hover:bg-[#135ea8] text-white font-bold transition"
                     >
                       Mở bảng phím tắt
                     </button>
@@ -1233,35 +1237,35 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-[#0A2032] border border-[#15324C] rounded-xl p-4 space-y-3">
-                <h3 className="text-xs font-bold text-[#00C8F0] uppercase tracking-wider">Chế Độ Vai Trò & Mô Phỏng</h3>
+              <div className="bg-white border border-[#D9E3ED] rounded-lg p-4 space-y-3 shadow-sm">
+                <h3 className="text-xs font-bold text-[#1677D2] uppercase tracking-wider">Chế Độ Vai Trò & Mô Phỏng</h3>
                 <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between py-2 border-b border-[#15324C]/60">
-                    <span>Chuyển sang góc nhìn phân quyền (Director / EQM / Tech)</span>
+                  <div className="flex items-center justify-between py-2 border-b border-[#F1F5F9]">
+                    <span className="font-medium text-[#19324D]">Chuyển sang góc nhìn phân quyền (Director / EQM / Tech)</span>
                     <button
                       onClick={() => {
                         setMainViewMode('ROLE_VIEW');
                         setActiveNav('role-view');
                       }}
-                      className="px-2.5 py-1 rounded bg-[#0D2940] hover:bg-[#168BFF] text-[#EAF5FF] font-semibold border border-[#15324C]"
+                      className="px-3 py-1 rounded bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#1677D2] font-semibold border border-[#CBD5E1] transition"
                     >
                       Mở Role View
                     </button>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-[#15324C]/60">
-                    <span>Mô phỏng điện thoại kỹ thuật viên (Phone View)</span>
+                  <div className="flex items-center justify-between py-2 border-b border-[#F1F5F9]">
+                    <span className="font-medium text-[#19324D]">Mô phỏng điện thoại kỹ thuật viên (Phone View)</span>
                     <button
                       onClick={() => setPhoneDevice(devices[0] || null)}
-                      className="px-2.5 py-1 rounded bg-[#0D2940] hover:bg-[#168BFF] text-[#EAF5FF] font-semibold border border-[#15324C]"
+                      className="px-3 py-1 rounded bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#1677D2] font-semibold border border-[#CBD5E1] transition"
                     >
                       Mở Phone Simulator
                     </button>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span>Mô phỏng sự cố EDM (Incident Injector)</span>
+                    <span className="font-medium text-[#19324D]">Mô phỏng sự cố EDM (Incident Injector)</span>
                     <button
                       onClick={() => setShowSimulator(true)}
-                      className="px-2.5 py-1 rounded bg-[#FF5263]/20 text-[#FF5263] border border-[#FF5263]/40 font-bold"
+                      className="px-3 py-1 rounded bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA] font-bold hover:bg-[#FECACA] transition"
                     >
                       Bộ kích hoạt sự cố
                     </button>
@@ -1274,19 +1278,42 @@ export default function App() {
 
         {/* VIEW 5: OTHER NAVIGATION SCREENS WHEN NOT OVERVIEW/TECH/COMMUNITY/SETTINGS */}
         {activeNav !== 'overview' && activeNav !== 'technician-eval' && activeNav !== 'community' && activeNav !== 'settings' && (
-          <div className="space-y-6">
-            {/* Context Back button */}
-            <div className="flex items-center justify-between pb-2 border-b border-[#15324C]">
-              <span className="text-xs font-mono text-[#00C8F0]">
-                EDM SMARTGUARD AI • {activeNav.toUpperCase()}
-              </span>
-              <button
-                onClick={() => setActiveNav('overview')}
-                className="px-3 py-1 text-xs rounded bg-[#0D2940] hover:text-[#00C8F0] border border-[#15324C]"
-              >
-                ← Về Tổng Quan
-              </button>
-            </div>
+          <div className="space-y-4">
+            <PageHeader
+              title={
+                activeNav === 'devices'
+                  ? 'Giám Sát Thiết Bị (Fleet Grid)'
+                  : activeNav === 'reports'
+                  ? 'Trung Tâm Báo Cáo & Phân Tích'
+                  : activeNav === 'notifications'
+                  ? 'Trung Tâm Quản Trị Cảnh Báo & Thông Báo'
+                  : activeNav === 'maintenance'
+                  ? 'Nhật Ký & Lệnh Bảo Trì Sửa Chữa'
+                  : activeNav === 'knowledge'
+                  ? 'Kho Tri Thức & Bài Học Sự Cố AI'
+                  : activeNav === 'documents'
+                  ? 'Thư Viện Tài Liệu Kỹ Thuật & Sơ Đồ Máy'
+                  : activeNav === 'ai-diagnosis'
+                  ? 'Trợ Lý AI Phân Tích Nguyên Nhân Gốc Rễ (RCA)'
+                  : activeNav === 'data-trust'
+                  ? 'Data Trust Center — Tính Toàn Vẹn Dữ Liệu'
+                  : activeNav === 'hitl'
+                  ? 'Human-in-the-Loop — Phê Duyệt Khuyến Nghị AI'
+                  : activeNav === 'audit'
+                  ? 'Audit Log & Phân Quyền 8 Vai Trò'
+                  : `Phân Hệ Quản Trị • ${activeNav.toUpperCase()}`
+              }
+              subtitle="Hệ thống điều hành và giám sát thiết bị công nghiệp EDM SMARTGUARD AI"
+              breadcrumbs={['Trang chủ', activeNav]}
+              actions={
+                <button
+                  onClick={() => setActiveNav('overview')}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md bg-white hover:bg-[#F8FAFC] text-[#19324D] border border-[#CBD5E1] shadow-sm flex items-center gap-1.5 transition-colors"
+                >
+                  ← Về Tổng Quan
+                </button>
+              }
+            />
         {/* ============================================================== */}
         {mainViewMode === 'REPORTS_HUB' ? (
           <UnifiedReportsHub
@@ -1578,7 +1605,7 @@ export default function App() {
             />
 
             {/* Filter and Search Bar with Voice-to-Text Microphone Integration */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl bg-slate-900/60 border border-slate-800 p-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-lg bg-white border border-[#D9E3ED] p-3 shadow-sm">
               <VoiceSearchBar
                 value={searchTerm}
                 onChange={(val) => setSearchTerm(val)}
@@ -1604,7 +1631,7 @@ export default function App() {
                 <button
                   id="tour-qr-scanner"
                   onClick={() => setShowQRScanner(true)}
-                  className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 px-3 py-1 text-xs font-bold text-slate-950 shadow-md shadow-amber-500/20 transition active:scale-95 shrink-0"
+                  className="flex items-center gap-1.5 rounded-lg bg-[#1677D2] hover:bg-[#135ea8] px-3 py-1 text-xs font-bold text-white shadow-sm transition active:scale-95 shrink-0"
                   title="Quét mã QR dán trên thân máy để mở ngay chi tiết & chẩn đoán"
                 >
                   <QrCode className="h-3.5 w-3.5" />
@@ -1615,8 +1642,8 @@ export default function App() {
                   onClick={() => setDeviceFilter('ALL')}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                     deviceFilter === 'ALL'
-                      ? 'bg-slate-800 text-amber-400 font-bold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-[#1677D2] text-white font-bold shadow-sm'
+                      : 'bg-[#F1F5F9] text-[#64748B] hover:text-[#19324D]'
                   }`}
                 >
                   Tất cả ({devices.length})
@@ -1625,8 +1652,8 @@ export default function App() {
                   onClick={() => setDeviceFilter('ALARM')}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                     deviceFilter === 'ALARM'
-                      ? 'bg-red-600 text-white font-bold'
-                      : 'text-red-400 hover:bg-red-500/10'
+                      ? 'bg-[#DC2626] text-white font-bold shadow-sm'
+                      : 'bg-[#FEE2E2] text-[#DC2626] hover:bg-[#FECACA]'
                   }`}
                 >
                   Sự Cố Dừng ({devices.filter((d) => d.status === 'ALARM_STOPPED').length})
@@ -1635,8 +1662,8 @@ export default function App() {
                   onClick={() => setDeviceFilter('MAINTENANCE')}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                     deviceFilter === 'MAINTENANCE'
-                      ? 'bg-blue-600 text-white font-bold'
-                      : 'text-blue-400 hover:bg-blue-500/10'
+                      ? 'bg-[#0284C7] text-white font-bold shadow-sm'
+                      : 'bg-[#E0F2FE] text-[#0284C7] hover:bg-[#BAE6FD]'
                   }`}
                 >
                   Bảo Trì ({devices.filter((d) => d.status === 'MAINTENANCE').length})
@@ -1645,8 +1672,8 @@ export default function App() {
                   onClick={() => setDeviceFilter('MAINTENANCE_SCHEDULED')}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                     deviceFilter === 'MAINTENANCE_SCHEDULED'
-                      ? 'bg-indigo-600 text-white font-bold'
-                      : 'text-indigo-400 hover:bg-indigo-500/10'
+                      ? 'bg-[#7C3AED] text-white font-bold shadow-sm'
+                      : 'bg-[#F3E8FF] text-[#7C3AED] hover:bg-[#E9D5FF]'
                   }`}
                 >
                   Lịch Hẹn ({devices.filter((d) => d.status === 'MAINTENANCE_SCHEDULED').length})
@@ -1655,8 +1682,8 @@ export default function App() {
                   onClick={() => setDeviceFilter('RUNNING')}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                     deviceFilter === 'RUNNING'
-                      ? 'bg-emerald-600 text-white font-bold'
-                      : 'text-emerald-400 hover:bg-emerald-500/10'
+                      ? 'bg-[#16A34A] text-white font-bold shadow-sm'
+                      : 'bg-[#DCFCE7] text-[#16A34A] hover:bg-[#BBF7D0]'
                   }`}
                 >
                   Đang Chạy ({devices.filter((d) => d.status === 'RUNNING').length})
@@ -1665,8 +1692,8 @@ export default function App() {
                   onClick={() => setDeviceFilter('WIRE_EDM')}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                     deviceFilter === 'WIRE_EDM'
-                      ? 'bg-slate-800 text-amber-400 font-bold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-[#1677D2] text-white font-bold shadow-sm'
+                      : 'bg-[#F1F5F9] text-[#64748B] hover:text-[#19324D]'
                   }`}
                 >
                   Cắt Dây Wire-cut
@@ -1675,8 +1702,8 @@ export default function App() {
                   onClick={() => setDeviceFilter('SINKER_EDM')}
                   className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                     deviceFilter === 'SINKER_EDM'
-                      ? 'bg-slate-800 text-amber-400 font-bold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-[#1677D2] text-white font-bold shadow-sm'
+                      : 'bg-[#F1F5F9] text-[#64748B] hover:text-[#19324D]'
                   }`}
                 >
                   Xung Sinker

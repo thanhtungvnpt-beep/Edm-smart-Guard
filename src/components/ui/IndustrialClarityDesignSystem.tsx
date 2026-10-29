@@ -82,13 +82,26 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 export interface PageHeaderProps {
   title: string;
   subtitle?: string;
+  breadcrumbs?: string[];
   actions?: React.ReactNode;
 }
 
-export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions }) => {
+export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, breadcrumbs, actions }) => {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2">
       <div>
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <div className="flex items-center gap-1.5 text-[11px] text-[#64748B] mb-1 font-medium">
+            {breadcrumbs.map((crumb, idx) => (
+              <React.Fragment key={idx}>
+                {idx > 0 && <span className="text-[#94A3B8]">/</span>}
+                <span className={idx === breadcrumbs.length - 1 ? 'text-[#1677D2] font-semibold' : ''}>
+                  {crumb}
+                </span>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
         <h1 className="text-xl sm:text-2xl font-bold text-[#19324D] tracking-tight">
           {title}
         </h1>

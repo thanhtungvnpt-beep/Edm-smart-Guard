@@ -383,7 +383,7 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
         )}
 
         {/* MAIN WORKSPACE CONTENT */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-5 custom-tower-scrollbar">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-5 custom-tower-scrollbar clarity-workspace">
           {children}
         </main>
       </div>

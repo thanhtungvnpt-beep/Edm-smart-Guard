@@ -120,32 +120,202 @@ html.high-contrast,
 
 /* Control Tower Pro Color Variables & Utility Accents */
 :root {
-  --tower-bg: #061522;
-  --tower-sidebar: #081B2B;
-  --tower-panel: #0A2032;
-  --tower-panel-elevated: #0D2940;
-  --tower-border: #15324C;
-  --tower-cyan: #00C8F0;
-  --tower-blue: #168BFF;
-  --tower-green: #16D9A0;
-  --tower-amber: #FFB547;
-  --tower-red: #FF5263;
-  --tower-text: #EAF5FF;
-  --tower-text-muted: #9CB4C8;
+  --clarity-bg: #F3F7FB;
+  --clarity-card: #FFFFFF;
+  --clarity-border: #D9E3ED;
+  --clarity-text: #19324D;
+  --clarity-muted: #64748B;
+  --clarity-navy: #0A2B4C;
+  --clarity-sidebar: #082A4A;
+  --clarity-primary: #1677D2;
 }
 
-/* Custom crisp dark scrollbars for tables and panels */
+/* Custom crisp scrollbars for tables and panels */
 .custom-tower-scrollbar::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 .custom-tower-scrollbar::-webkit-scrollbar-track {
-  background: #081b2b;
+  background: #EEF2F6;
 }
 .custom-tower-scrollbar::-webkit-scrollbar-thumb {
-  background: #1c4568;
+  background: #CBD5E1;
   border-radius: 4px;
 }
 .custom-tower-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #00c8f0;
+  background: #94A3B8;
+}
+
+/* ========================================================================== */
+/* INDUSTRIAL CLARITY PRO — WORKSPACE THEME HARMONIZATION                    */
+/* Solves multi-screen color inconsistency across all tabs and subcomponents  */
+/* ========================================================================== */
+.clarity-workspace {
+  background-color: #F3F7FB;
+  color: #19324D;
+}
+
+/* Card & Container Harmonization: Convert legacy dark containers into clean white enterprise cards */
+html:not(.high-contrast) .clarity-workspace .bg-slate-900,
+html:not(.high-contrast) .clarity-workspace .bg-slate-950,
+html:not(.high-contrast) .clarity-workspace .bg-\[\#0A2032\],
+html:not(.high-contrast) .clarity-workspace .bg-\[\#0D2940\],
+html:not(.high-contrast) .clarity-workspace .bg-\[\#061522\],
+html:not(.high-contrast) .clarity-workspace .bg-\[\#081B2B\],
+html:not(.high-contrast) .clarity-workspace .bg-slate-900\/90,
+html:not(.high-contrast) .clarity-workspace .bg-slate-900\/80,
+html:not(.high-contrast) .clarity-workspace .bg-slate-900\/70,
+html:not(.high-contrast) .clarity-workspace .bg-slate-900\/60,
+html:not(.high-contrast) .clarity-workspace .bg-slate-900\/50,
+html:not(.high-contrast) .clarity-workspace .bg-slate-900\/40,
+html:not(.high-contrast) .clarity-workspace .bg-slate-950\/90,
+html:not(.high-contrast) .clarity-workspace .bg-slate-950\/80,
+html:not(.high-contrast) .clarity-workspace .bg-slate-950\/70,
+html:not(.high-contrast) .clarity-workspace .bg-slate-950\/60,
+html:not(.high-contrast) .clarity-workspace .bg-slate-950\/40,
+html:not(.high-contrast) .clarity-workspace .bg-gray-900,
+html:not(.high-contrast) .clarity-workspace .bg-gray-950 {
+  background-color: #FFFFFF !important;
+  color: #19324D !important;
+}
+
+/* Neutralize legacy dark gradients on panels, banners, and headers */
+html:not(.high-contrast) .clarity-workspace .bg-gradient-to-r:not(.keep-gradient),
+html:not(.high-contrast) .clarity-workspace .bg-gradient-to-br:not(.keep-gradient) {
+  background-image: none !important;
+  background-color: #FFFFFF !important;
+}
+
+/* Crisp Industrial Borders */
+html:not(.high-contrast) .clarity-workspace .border-slate-800,
+html:not(.high-contrast) .clarity-workspace .border-slate-700,
+html:not(.high-contrast) .clarity-workspace .border-slate-800\/80,
+html:not(.high-contrast) .clarity-workspace .border-slate-800\/60,
+html:not(.high-contrast) .clarity-workspace .border-slate-800\/50,
+html:not(.high-contrast) .clarity-workspace .border-slate-800\/40,
+html:not(.high-contrast) .clarity-workspace .border-\[\#15324C\],
+html:not(.high-contrast) .clarity-workspace .border-\[\#15324C\]\/60 {
+  border-color: #D9E3ED !important;
+}
+
+/* Typography Uniformity */
+html:not(.high-contrast) .clarity-workspace .text-white:not(.keep-white),
+html:not(.high-contrast) .clarity-workspace .text-slate-100,
+html:not(.high-contrast) .clarity-workspace .text-slate-200,
+html:not(.high-contrast) .clarity-workspace .text-\[\#EAF5FF\] {
+  color: #19324D !important;
+}
+
+html:not(.high-contrast) .clarity-workspace .text-slate-400,
+html:not(.high-contrast) .clarity-workspace .text-slate-500,
+html:not(.high-contrast) .clarity-workspace .text-slate-300,
+html:not(.high-contrast) .clarity-workspace .text-\[\#9CB4C8\] {
+  color: #64748B !important;
+}
+
+/* Clean Form Controls */
+html:not(.high-contrast) .clarity-workspace input:not([type="checkbox"]):not([type="radio"]),
+html:not(.high-contrast) .clarity-workspace select,
+html:not(.high-contrast) .clarity-workspace textarea {
+  background-color: #F8FAFC !important;
+  border-color: #CBD5E1 !important;
+  color: #19324D !important;
+}
+
+html:not(.high-contrast) .clarity-workspace input::placeholder,
+html:not(.high-contrast) .clarity-workspace textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* Tables and Headers */
+html:not(.high-contrast) .clarity-workspace thead {
+  background-color: #F8FAFC !important;
+}
+html:not(.high-contrast) .clarity-workspace th {
+  color: #64748B !important;
+  border-color: #E2E8F0 !important;
+}
+html:not(.high-contrast) .clarity-workspace tbody tr:hover {
+  background-color: #F8FAFC !important;
+}
+html:not(.high-contrast) .clarity-workspace td {
+  border-color: #F1F5F9 !important;
+}
+
+/* Interactive Hover States */
+html:not(.high-contrast) .clarity-workspace .hover\:bg-slate-800:hover,
+html:not(.high-contrast) .clarity-workspace .hover\:bg-slate-700:hover,
+html:not(.high-contrast) .clarity-workspace .hover\:bg-slate-900:hover {
+  background-color: #F1F5F9 !important;
+  color: #19324D !important;
+}
+
+/* Recharts Tooltips and Popups */
+html:not(.high-contrast) .clarity-workspace .recharts-default-tooltip {
+  background-color: #FFFFFF !important;
+  border: 1px solid #D9E3ED !important;
+  color: #19324D !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  border-radius: 6px !important;
+}
+
+/* Status Badges: Preserving clean readable status colors */
+html:not(.high-contrast) .clarity-workspace .bg-emerald-500\/10,
+html:not(.high-contrast) .clarity-workspace .bg-emerald-500\/15,
+html:not(.high-contrast) .clarity-workspace .bg-emerald-500\/20,
+html:not(.high-contrast) .clarity-workspace .bg-emerald-950\/20,
+html:not(.high-contrast) .clarity-workspace .bg-emerald-950\/40 {
+  background-color: #DCFCE7 !important;
+  color: #16A34A !important;
+  border-color: #BBF7D0 !important;
+}
+
+html:not(.high-contrast) .clarity-workspace .bg-red-500\/10,
+html:not(.high-contrast) .clarity-workspace .bg-red-500\/15,
+html:not(.high-contrast) .clarity-workspace .bg-red-500\/20,
+html:not(.high-contrast) .clarity-workspace .bg-red-950\/20,
+html:not(.high-contrast) .clarity-workspace .bg-red-950\/40,
+html:not(.high-contrast) .clarity-workspace .bg-rose-500\/15,
+html:not(.high-contrast) .clarity-workspace .bg-rose-500\/20 {
+  background-color: #FEE2E2 !important;
+  color: #DC2626 !important;
+  border-color: #FECACA !important;
+}
+
+html:not(.high-contrast) .clarity-workspace .bg-amber-500\/10,
+html:not(.high-contrast) .clarity-workspace .bg-amber-500\/15,
+html:not(.high-contrast) .clarity-workspace .bg-amber-500\/20,
+html:not(.high-contrast) .clarity-workspace .bg-amber-950\/20,
+html:not(.high-contrast) .clarity-workspace .bg-amber-950\/40,
+html:not(.high-contrast) .clarity-workspace .bg-yellow-500\/10,
+html:not(.high-contrast) .clarity-workspace .bg-yellow-500\/20 {
+  background-color: #FEF3C7 !important;
+  color: #D97706 !important;
+  border-color: #FDE68A !important;
+}
+
+html:not(.high-contrast) .clarity-workspace .bg-blue-500\/10,
+html:not(.high-contrast) .clarity-workspace .bg-blue-500\/15,
+html:not(.high-contrast) .clarity-workspace .bg-blue-500\/20,
+html:not(.high-contrast) .clarity-workspace .bg-blue-950\/20,
+html:not(.high-contrast) .clarity-workspace .bg-blue-950\/40,
+html:not(.high-contrast) .clarity-workspace .bg-cyan-500\/10,
+html:not(.high-contrast) .clarity-workspace .bg-cyan-500\/15,
+html:not(.high-contrast) .clarity-workspace .bg-cyan-500\/20 {
+  background-color: #E0F2FE !important;
+  color: #0284C7 !important;
+  border-color: #BAE6FD !important;
+}
+
+html:not(.high-contrast) .clarity-workspace .bg-indigo-500\/10,
+html:not(.high-contrast) .clarity-workspace .bg-indigo-500\/20,
+html:not(.high-contrast) .clarity-workspace .bg-indigo-950\/20,
+html:not(.high-contrast) .clarity-workspace .bg-indigo-950\/25,
+html:not(.high-contrast) .clarity-workspace .bg-indigo-950\/40,
+html:not(.high-contrast) .clarity-workspace .bg-purple-500\/10,
+html:not(.high-contrast) .clarity-workspace .bg-purple-500\/15,
+html:not(.high-contrast) .clarity-workspace .bg-purple-500\/20 {
+  background-color: #F3E8FF !important;
+  color: #7C3AED !important;
+  border-color: #E9D5FF !important;
 }
