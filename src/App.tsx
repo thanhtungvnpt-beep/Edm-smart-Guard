@@ -106,6 +106,7 @@ import { UnifiedReportsHub } from './components/UnifiedReportsHub';
 import { IndustrialControlTowerPro } from './components/IndustrialControlTowerPro';
 import { ControlTowerLayout } from './components/ControlTowerLayout';
 import { TechnicianSkillsComparisonChart } from './components/TechnicianSkillsComparisonChart';
+import { AIVibrationFailurePredictionModal } from './components/AIVibrationFailurePredictionModal';
 
 export default function App() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -151,6 +152,7 @@ export default function App() {
   const [detailsDevice, setDetailsDevice] = useState<Device | null>(null);
   const [predictiveDevice, setPredictiveDevice] = useState<Device | null>(null);
   const [telemetryHistoryDevice, setTelemetryHistoryDevice] = useState<Device | null>(null);
+  const [d3FailureDevice, setD3FailureDevice] = useState<Device | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
   const [showTechSidebar, setShowTechSidebar] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -1003,7 +1005,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen bg-[#061522] text-[#EAF5FF] flex flex-col font-sans transition-colors duration-200 ${isHighContrast ? 'high-contrast' : ''}`}>
+    <div className={`min-h-screen bg-[#F3F7FB] text-[#19324D] flex flex-col font-sans transition-colors duration-200 ${isHighContrast ? 'high-contrast' : ''}`}>
       <ControlTowerLayout
         activeNav={activeNav}
         onSelectNav={(navId) => {
@@ -1091,6 +1093,7 @@ export default function App() {
             onOpenRepairReport={(d) => setRepairDevice(d)}
             onOpenTelemetryHistory={(d) => setTelemetryHistoryDevice(d)}
             onOpenPredictiveModal={(d) => setPredictiveDevice(d)}
+            onOpenFailurePrediction={(d) => setD3FailureDevice(d)}
             onAcknowledgeIncident={(id) => handleAcknowledge(id)}
             onOpenWeeklyReport={() => setShowWeeklyReportModal(true)}
             onNavigateToTab={(tab) => {
@@ -1899,6 +1902,7 @@ export default function App() {
                     onQuickSyncDirect={(id) => handleQuickSyncDirect(id)}
                     onOpenPredictiveDetails={(d) => setPredictiveDevice(d)}
                     onOpenTelemetryHistory={(d) => setTelemetryHistoryDevice(d)}
+                    onOpenFailurePrediction={(d) => setD3FailureDevice(d)}
                   />
                 </div>
               ))}
@@ -2171,6 +2175,26 @@ export default function App() {
             setTelemetryHistoryDevice(null);
             showToast(
               `⚡ Đã chuyển máy ${d.code} (${d.name}) sang chế độ Bảo Trì: ${reason || 'Suy thoái nhiệt & công suất'}`
+            );
+          }}
+        />
+      )}
+
+      {/* 14. D3.js AI Vibration Failure Probability 7-Day Trend Modal */}
+      {d3FailureDevice && (
+        <AIVibrationFailurePredictionModal
+          device={d3FailureDevice}
+          isOpen={Boolean(d3FailureDevice)}
+          onClose={() => setD3FailureDevice(null)}
+          onScheduleMaintenance={(d, reason) => {
+            handleSetDeviceStatus(
+              d.id,
+              'MAINTENANCE',
+              reason || 'Khắc phục cảnh báo xác suất hỏng hóc độ rung D3.js'
+            );
+            setD3FailureDevice(null);
+            showToast(
+              `⚡ Đã chuyển máy ${d.code} (${d.name}) sang chế độ Bảo Trì: ${reason || 'Dự báo rung chấn D3.js'}`
             );
           }}
         />

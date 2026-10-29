@@ -27,6 +27,7 @@ import { calculateAIVibrationCurrentSchedule } from '../utils/aiPredictiveMainte
 import { MachineHealthArcGauge } from './MachineHealthArcGauge';
 import { DeviceQuickActionsMenu } from './DeviceQuickActionsMenu';
 import { DeviceQuickActionsModal, QuickActionMode } from './DeviceQuickActionsModal';
+import { AIVibrationFailurePredictionModal } from './AIVibrationFailurePredictionModal';
 
 interface DeviceCardProps {
   device: Device;
@@ -42,6 +43,7 @@ interface DeviceCardProps {
   onQuickSyncDirect?: (deviceId: string) => Promise<void>;
   onOpenPredictiveDetails?: (device: Device) => void;
   onOpenTelemetryHistory?: (device: Device) => void;
+  onOpenFailurePrediction?: (device: Device) => void;
 }
 
 // Small circular OEE gauge indicator with color-coded system
@@ -137,8 +139,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   onQuickSyncDirect,
   onOpenPredictiveDetails,
   onOpenTelemetryHistory,
+  onOpenFailurePrediction,
 }) => {
   const [quickActionMode, setQuickActionMode] = useState<QuickActionMode>(null);
+  const [showD3FailureModal, setShowD3FailureModal] = useState(false);
   const isAlarm = device.status === 'ALARM_STOPPED';
   const isRunning = device.status === 'RUNNING';
   const isIdle = device.status === 'IDLE';
@@ -253,6 +257,24 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               Đang Chạy
             </span>
           )}
+          {/* Blinking Warning Icon for Continuous Running > 48h (Periodic Maintenance Reminder) */}
+          {opMetrics.isContinuousOver48h && (
+            <div
+              className="relative flex items-center gap-1.5 rounded-full bg-amber-500/20 border border-amber-500/50 px-2.5 py-0.5 text-xs font-semibold text-amber-300 shadow-sm shadow-amber-500/20 cursor-pointer"
+              title={`Cảnh báo định kỳ: Máy đã chạy liên tục ${opMetrics.continuousUptimeHours.toFixed(1)}h (> 48 giờ)! Nhắc nhở kỹ thuật viên thực hiện kiểm tra định kỳ ngay.`}
+              onClick={() => onOpenMachineDetails && onOpenMachineDetails(device)}
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-400 animate-pulse shrink-0" />
+              <span className="font-mono text-[10px] font-bold text-amber-300">
+                &gt;48h ({Math.round(opMetrics.continuousUptimeHours)}h)
+              </span>
+            </div>
+          )}
+
           {isIdle && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 text-xs font-semibold text-amber-400">
               Chờ Phôi
@@ -690,6 +712,23 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 </button>
               )}
 
+              {/* AI Failure Prediction Modal Button (D3.js) */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenFailurePrediction) {
+                    onOpenFailurePrediction(device);
+                  } else {
+                    setShowD3FailureModal(true);
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-cyan-500/40 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 py-2.5 px-2.5 text-xs font-bold text-cyan-300 shadow-sm transition active:scale-95"
+                title="Dự báo bảo trì AI: Biểu đồ D3.js phân tích xác suất hỏng hóc 7 ngày dựa trên độ rung"
+              >
+                <Sparkles className="h-4 w-4 text-cyan-400" />
+                <span className="hidden sm:inline">Dự Báo AI</span>
+              </button>
+
               {/* Quick Actions Menu Trigger */}
               <button
                 type="button"
@@ -712,6 +751,23 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 <span>Chẩn Đoán AI</span>
               </button>
 
+              {/* AI Failure Prediction Modal Button (D3.js) */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenFailurePrediction) {
+                    onOpenFailurePrediction(device);
+                  } else {
+                    setShowD3FailureModal(true);
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-cyan-500/40 bg-gradient-to-r from-cyan-500/15 to-blue-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 py-2 px-3 text-xs font-bold text-cyan-300 shadow-sm transition active:scale-95"
+                title="Dự báo bảo trì AI: Biểu đồ D3.js phân tích xác suất hỏng hóc 7 ngày dựa trên độ rung"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+                <span>Dự Báo Bảo Trì AI</span>
+              </button>
+
               {/* Maintenance History Button */}
               {onOpenMachineDetails && (
                 <button
@@ -720,7 +776,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   title="Xem lịch sử các đợt bảo dưỡng và hồ sơ chi tiết thiết bị"
                 >
                   <History className="h-3.5 w-3.5" />
-                  <span>Lịch Sử Bảo Dưỡng</span>
+                  <span>Lịch Sử</span>
                 </button>
               )}
 
@@ -733,7 +789,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   title="Xem biểu đồ Recharts 7 ngày: Công suất điện & Nhiệt độ phát hiện mô hình suy thoái"
                 >
                   <TrendingUp className="h-3.5 w-3.5 text-indigo-400" />
-                  <span>Xu Hướng 7 Ngày</span>
+                  <span>Xu Hướng 7N</span>
                 </button>
               )}
 
@@ -770,6 +826,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         onSuccess={(updatedDevice, message) => {
           if (onQuickActionSuccess) {
             onQuickActionSuccess(updatedDevice, message);
+          }
+        }}
+      />
+
+      {/* D3.JS AI FAILURE PROBABILITY PREDICTION MODAL */}
+      <AIVibrationFailurePredictionModal
+        device={device}
+        isOpen={showD3FailureModal}
+        onClose={() => setShowD3FailureModal(false)}
+        onScheduleMaintenance={(d, reason) => {
+          if (onQuickActionSuccess) {
+            onQuickActionSuccess(d, reason);
           }
         }}
       />

@@ -95,37 +95,37 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
     { id: 'devices', label: 'Giám sát thiết bị', icon: Activity },
     { id: 'ai-diagnosis', label: 'AI chẩn đoán', icon: Cpu },
     { id: 'maintenance', label: 'Bảo trì & sửa chữa', icon: Wrench },
+    { id: 'work-orders', label: 'Lệnh công việc', icon: FileCheck },
     { id: 'knowledge', label: 'Kho tri thức', icon: BookOpen },
     { id: 'documents', label: 'Tài liệu kỹ thuật', icon: FileText },
-    { id: 'community', label: 'Cộng đồng kỹ thuật', icon: Users },
+    { id: 'technicians', label: 'Kỹ thuật viên', icon: Users },
+    { id: 'technical-meetings', label: 'Họp kỹ thuật', icon: MessageSquare },
     { id: 'reports', label: 'Báo cáo & phân tích', icon: BarChart3 },
-    { id: 'technician-eval', label: 'Đánh giá kỹ thuật viên', icon: Award },
-    { id: 'mobile', label: 'Quản lý thiết bị di động', icon: Smartphone },
-    { id: 'notifications', label: 'Thông báo & Cảnh báo', icon: Bell, badge: notificationCount },
+    { id: 'notifications', label: 'Cảnh báo & thông báo', icon: Bell, badge: notificationCount },
     { id: 'data-trust', label: 'Data Trust Center', icon: ShieldCheck },
     { id: 'hitl', label: 'Human-in-the-Loop', icon: Sparkles },
     { id: 'audit', label: 'Audit Log & RBAC', icon: Lock },
-    { id: 'settings', label: 'Cài đặt', icon: Settings },
+    { id: 'settings', label: 'Quản trị hệ thống', icon: Settings },
   ];
 
   return (
-    <div className="min-h-screen bg-[#061522] text-[#EAF5FF] flex flex-col font-sans selection:bg-[#00C8F0] selection:text-[#061522]">
+    <div className="min-h-screen bg-[#F3F7FB] text-[#19324D] flex flex-col font-sans selection:bg-[#1677D2] selection:text-white">
       {/* ============================================================== */}
       {/* GLOBAL HEADER                                                  */}
       {/* ============================================================== */}
-      <header className="sticky top-0 z-40 bg-[#081B2B] border-b border-[#15324C] px-3 sm:px-4 py-2.5 flex items-center justify-between gap-3 shadow-md">
+      <header className="sticky top-0 z-40 bg-[#0A2B4C] border-b border-[#0D3863] px-3 sm:px-4 py-2.5 flex items-center justify-between gap-3 shadow-md text-white">
         {/* Left: Brand Identity */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarCollapsed((prev) => !prev)}
-            className="hidden md:flex p-1.5 rounded-lg text-[#9CB4C8] hover:text-[#00C8F0] hover:bg-[#0D2940] transition-colors"
+            className="hidden md:flex p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#0D3863] transition-colors"
             title="Đóng / mở sidebar"
           >
             <Menu className="w-5 h-5" />
           </button>
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="md:hidden p-1.5 rounded-lg text-[#9CB4C8] hover:text-[#00C8F0] hover:bg-[#0D2940]"
+            className="md:hidden p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#0D3863]"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -134,18 +134,18 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
             onClick={() => onSelectNav('overview')}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
-            {/* High-tech hexagonal cyan brand icon */}
-            <div className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-[#00C8F0] to-[#168BFF] p-0.5 shadow-[0_0_12px_rgba(0,200,240,0.5)] flex items-center justify-center">
-              <div className="w-full h-full bg-[#081B2B] rounded-[6px] flex items-center justify-center">
+            {/* Hexagonal blue brand icon */}
+            <div className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-[#00C8F0] to-[#168BFF] p-0.5 shadow-md flex items-center justify-center">
+              <div className="w-full h-full bg-[#0A2B4C] rounded-[6px] flex items-center justify-center">
                 <Cpu className="w-4 h-4 text-[#00C8F0]" />
               </div>
             </div>
             <div>
-              <div className="text-sm font-extrabold tracking-wide text-[#EAF5FF] group-hover:text-[#00C8F0] transition-colors flex items-center gap-1.5">
+              <div className="text-sm font-extrabold tracking-wide text-white group-hover:text-[#00C8F0] transition-colors flex items-center gap-1.5">
                 EDM SMARTGUARD AI
               </div>
-              <div className="text-[9px] font-mono font-bold tracking-widest text-[#00C8F0] uppercase">
-                INDUSTRIAL AI CONTROL TOWER
+              <div className="text-[9px] font-mono font-bold tracking-widest text-slate-300 uppercase">
+                INDUSTRIAL EQUIPMENT MAINTENANCE
               </div>
             </div>
           </div>
@@ -154,7 +154,7 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
         {/* Center: Global Search Bar */}
         <div className="hidden lg:flex items-center flex-1 max-w-md mx-4">
           <div className="relative w-full">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#9CB4C8]" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={localSearch}
@@ -163,10 +163,10 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
                 onSearch?.(e.target.value);
               }}
               placeholder="Tìm thiết bị, mã sự cố, lệnh bảo trì, tài liệu..."
-              className="w-full pl-9 pr-14 py-1.5 text-xs bg-[#061522] border border-[#15324C] rounded-lg text-[#EAF5FF] placeholder-[#9CB4C8] focus:border-[#00C8F0] focus:ring-1 focus:ring-[#00C8F0] focus:outline-none transition-all"
+              className="w-full pl-9 pr-14 py-1.5 text-xs bg-[#082038] border border-[#14426E] rounded-lg text-white placeholder-slate-400 focus:border-[#00C8F0] focus:ring-1 focus:ring-[#00C8F0] focus:outline-none transition-all"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-              <kbd className="px-1.5 py-0.5 text-[9px] font-mono text-[#9CB4C8] bg-[#0A2032] border border-[#15324C] rounded">
+              <kbd className="px-1.5 py-0.5 text-[9px] font-mono text-slate-400 bg-[#0A2B4C] border border-[#14426E] rounded">
                 Ctrl K
               </kbd>
             </div>
@@ -175,13 +175,12 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
 
         {/* Right: Controls & User Profile */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Factory Selector */}
-          <div className="hidden xl:flex items-center gap-1.5 text-xs text-[#9CB4C8]">
-            <span>Nhà máy</span>
+          {/* Plant Selector */}
+          <div className="hidden xl:flex items-center text-xs">
             <select
               value={currentPlant}
               onChange={(e) => onSelectPlant(e.target.value)}
-              className="py-1 px-2 text-xs bg-[#061522] border border-[#15324C] rounded text-[#00C8F0] font-semibold focus:outline-none cursor-pointer"
+              className="py-1 px-2.5 text-xs bg-[#082038] border border-[#14426E] rounded-md text-white font-medium focus:outline-none cursor-pointer"
             >
               <option value="plant-01">Nhà máy A ⌄</option>
               <option value="plant-02">Nhà máy B ⌄</option>
@@ -189,75 +188,77 @@ export const ControlTowerLayout: React.FC<ControlTowerLayoutProps> = ({
             </select>
           </div>
 
-          {/* Time Range Selector */}
-          <div className="hidden 2xl:flex items-center gap-1.5 text-xs text-[#9CB4C8]">
-            <span>Thời gian</span>
+          {/* Workshop Selector */}
+          <div className="hidden xl:flex items-center text-xs">
             <select
-              value={selectedTimeRange}
-              onChange={(e) => setSelectedTimeRange(e.target.value)}
-              className="py-1 px-2 text-xs bg-[#061522] border border-[#15324C] rounded text-[#EAF5FF] font-medium focus:outline-none cursor-pointer"
+              defaultValue="all"
+              className="py-1 px-2.5 text-xs bg-[#082038] border border-[#14426E] rounded-md text-white font-medium focus:outline-none cursor-pointer"
             >
-              <option value="Hôm nay">Hôm nay ⌄</option>
-              <option value="7 ngày qua">7 ngày qua</option>
-              <option value="Tháng này">Tháng này</option>
+              <option value="all">Tất cả xưởng ⌄</option>
+              <option value="ws-1">Xưởng 1 EDM</option>
+              <option value="ws-2">Xưởng 2 CNC</option>
+              <option value="ws-3">Xưởng 3 Khác</option>
+              <option value="ws-4">Xưởng 4 Lắp ráp</option>
             </select>
           </div>
 
-          {/* Real-time Clock */}
-          <div className="hidden md:flex items-center gap-1.5 text-xs font-mono text-[#9CB4C8] px-2 py-1 bg-[#061522] border border-[#15324C] rounded">
+          {/* Date Range Selector */}
+          <div className="hidden 2xl:flex items-center gap-1.5 text-xs font-mono text-slate-200 px-2.5 py-1 bg-[#082038] border border-[#14426E] rounded-md">
             <Calendar className="w-3.5 h-3.5 text-[#00C8F0]" />
-            <span>{currentTime}</span>
+            <span>20/04/2025 - 26/04/2025</span>
+          </div>
+
+          {/* Live Status Dots */}
+          <div className="hidden md:flex flex-col text-left text-[10px] leading-tight text-slate-300 border-l border-[#14426E] pl-2.5">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#16D9A0] animate-pulse"></span>
+              <span>Cập nhật: 20/04/2025 14:32</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-2 h-2 rounded-full bg-[#16D9A0]"></span>
+              <span>Kết nối: <strong className="text-[#16D9A0]">Bình thường</strong></span>
+            </div>
           </div>
 
           {/* Audio Mute Toggle */}
           {onToggleMute && (
             <button
               onClick={onToggleMute}
-              className="p-1.5 rounded-lg text-[#9CB4C8] hover:text-[#00C8F0] hover:bg-[#0D2940] transition-colors"
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#0D3863] transition-colors"
               title={isMuted ? 'Bật âm thanh cảnh báo' : 'Tắt âm thanh'}
             >
               {isMuted ? <VolumeX className="w-4 h-4 text-[#FF5263]" /> : <Volume2 className="w-4 h-4 text-[#16D9A0]" />}
             </button>
           )}
 
-          {/* Diagnostics tuning action with badge 3 */}
-          <button
-            onClick={() => onSelectNav('ai-diagnosis')}
-            className="relative p-1.5 rounded-lg text-[#9CB4C8] hover:text-[#00C8F0] hover:bg-[#0D2940] transition-colors"
-            title="Chẩn đoán AI (3 khuyến nghị)"
-          >
-            <Sliders className="w-4 h-4" />
-            {alertCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF5263] text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                {alertCount}
-              </span>
-            )}
-          </button>
-
           {/* Notification Bell with badge 12 */}
           <button
             onClick={() => onSelectNav('notifications')}
-            className="relative p-1.5 rounded-lg text-[#9CB4C8] hover:text-[#00C8F0] hover:bg-[#0D2940] transition-colors"
-            title="Thông báo & cảnh báo"
+            className="relative p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#0D3863] transition-colors"
+            title="Cảnh báo & thông báo"
           >
             <Bell className="w-4 h-4" />
             {notificationCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF5263] text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF5263] text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-sm">
                 {notificationCount}
               </span>
             )}
           </button>
 
           {/* User Profile */}
-          <div className="flex items-center gap-2 pl-2 border-l border-[#15324C]">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#168BFF] to-[#00C8F0] p-0.5 flex items-center justify-center">
-              <div className="w-full h-full bg-[#081B2B] rounded-full flex items-center justify-center text-xs font-bold text-[#00C8F0]">
-                A
-              </div>
-            </div>
+          <div className="flex items-center gap-2 pl-2 border-l border-[#14426E]">
+            <img
+              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80"
+              alt="Nguyễn Văn A"
+              className="w-8 h-8 rounded-full object-cover border border-[#00C8F0]/40"
+              onError={(e) => {
+                // Fallback avatar
+                (e.currentTarget as HTMLElement).style.display = 'none';
+              }}
+            />
             <div className="hidden sm:block text-left">
-              <div className="text-xs font-bold text-[#EAF5FF] leading-tight">Nguyễn Văn A</div>
-              <div className="text-[10px] text-[#9CB4C8] leading-tight">Quản lý</div>
+              <div className="text-xs font-bold text-white leading-tight">Nguyễn Văn A</div>
+              <div className="text-[10px] text-slate-300 leading-tight">Quản lý</div>
             </div>
           </div>
         </div>

@@ -17,6 +17,7 @@ export interface DeviceOperationalMetrics {
   continuousUptimeHours: number; // Hours continuously running in current cycle (e.g. 14.5 hrs)
   totalOperatingHours: number; // Cumulative runtime odometer from machine controller (e.g. 4235 hrs)
   isLongRunWarning: boolean; // Continuous runtime > 18 hours or > 24 hours without cool-down
+  isContinuousOver48h: boolean; // Continuous runtime > 48 hours requiring periodic technician inspection
   
   // Urgent Maintenance Score (0 - 100)
   urgencyScore: number;
@@ -99,9 +100,9 @@ export function getDeviceOperationalMetrics(device: Device): DeviceOperationalMe
     const baseHourOffsets: Record<string, number> = {
       'dev-01': 28.5, // > 24h continuous operation
       'dev-02': 14.8,
-      'dev-03': 33.2, // > 30h continuous
+      'dev-03': 52.4, // > 48h continuous operation (requires inspection!)
       'dev-04': 5.2,
-      'dev-05': 19.6, // > 18h continuous
+      'dev-05': 49.6, // > 48h continuous operation (requires inspection!)
       'dev-06': 8.4,
     };
     continuousUptimeHours = baseHourOffsets[device.id] ?? ((charCodeSum % 25) + 6.5);
@@ -129,10 +130,16 @@ export function getDeviceOperationalMetrics(device: Device): DeviceOperationalMe
   const totalOperatingHours = totalOperatingHoursBase[device.id] ?? (3000 + (charCodeSum % 2000));
 
   const isLongRunWarning = continuousUptimeHours >= 20;
+  const isContinuousOver48h = continuousUptimeHours >= 48;
 
   // 4. Urgency Score & Reasons for Prioritizing Urgent Maintenance
   const urgencyReasons: string[] = [];
   let urgencyScore = 0;
+
+  if (isContinuousOver48h) {
+    urgencyScore += 30;
+    urgencyReasons.push(`Cảnh báo: Máy đã chạy liên tục ${continuousUptimeHours.toFixed(1)}h (> 48h) - Kỹ thuật viên cần kiểm tra định kỳ ngay`);
+  }
 
   if (device.status === 'ALARM_STOPPED') {
     urgencyScore += 60;
@@ -227,6 +234,7 @@ export function getDeviceOperationalMetrics(device: Device): DeviceOperationalMe
     continuousUptimeHours,
     totalOperatingHours,
     isLongRunWarning,
+    isContinuousOver48h,
     urgencyScore: Math.min(100, urgencyScore),
     urgencyReasons,
     isUrgentMaintenanceNeeded,

@@ -9,11 +9,10 @@ import {
   ChevronDown,
   Clock,
   Cpu,
-  Eye,
+  FileCheck,
   FileText,
   Filter,
   Flame,
-  Headphones,
   Layers,
   LineChart as LineChartIcon,
   Maximize2,
@@ -22,18 +21,18 @@ import {
   Search,
   Server,
   Sparkles,
-  Thermometer,
   User,
   Users,
   Wrench,
   Zap,
   ZoomIn,
   ZoomOut,
-  ExternalLink,
   ChevronRight,
-  ShieldAlert,
   BarChart2,
-  Smartphone
+  Info,
+  Check,
+  TrendingUp,
+  Settings
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -50,6 +49,7 @@ import {
   Cell
 } from 'recharts';
 import { Device, Technician, NotificationLog, FactoryStats } from '../types';
+import { AIVibrationFailurePredictionModal } from './AIVibrationFailurePredictionModal';
 
 interface IndustrialControlTowerProProps {
   devices: Device[];
@@ -62,6 +62,7 @@ interface IndustrialControlTowerProProps {
   onOpenRepairReport: (device: Device) => void;
   onOpenTelemetryHistory: (device: Device) => void;
   onOpenPredictiveModal?: (device: Device) => void;
+  onOpenFailurePrediction?: (device: Device) => void;
   onAcknowledgeIncident?: (incidentId: string) => void;
   onOpenWeeklyReport?: () => void;
   onNavigateToTab?: (tab: string) => void;
@@ -79,6 +80,7 @@ export const IndustrialControlTowerPro: React.FC<IndustrialControlTowerProProps>
   onOpenRepairReport,
   onOpenTelemetryHistory,
   onOpenPredictiveModal,
+  onOpenFailurePrediction,
   onAcknowledgeIncident,
   onOpenWeeklyReport,
   onNavigateToTab,
@@ -86,36 +88,20 @@ export const IndustrialControlTowerPro: React.FC<IndustrialControlTowerProProps>
 }) => {
   // Filters & State
   const [deviceSearchTerm, setDeviceSearchTerm] = useState('');
-  const [selectedWorkshopFilter, setSelectedWorkshopFilter] = useState<'ALL' | 'Xưởng 1 EDM' | 'Xưởng 2 CNC' | 'Xưởng 3 Khác' | 'Xưởng 4 Lắp ráp'>('ALL');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'ALL' | 'RUNNING' | 'ALARM_STOPPED' | 'IDLE' | 'MAINTENANCE'>('ALL');
-  const [techSearchTerm, setTechSearchTerm] = useState('');
-  
-  // Work Order Active Tab
-  const [workOrderTab, setWorkOrderTab] = useState<'IN_PROGRESS' | 'PENDING_APPROVAL' | 'COMPLETED'>('IN_PROGRESS');
-  
-  // Trend Chart Metric
-  const [trendMetric, setTrendMetric] = useState<'temp' | 'current' | 'vibration' | 'oee'>('temp');
-  const [trendTimeRange, setTrendTimeRange] = useState('24h');
-  
-  // Map View Mode (2D / 3D) & Map filter
+  const [selectedD3Device, setSelectedD3Device] = useState<Device | null>(null);
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('ALL');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
   const [mapMode, setMapMode] = useState<'2D' | '3D'>('3D');
-  const [selectedMapNode, setSelectedMapNode] = useState<string>('factory-a');
-  const [mapZoom, setMapZoom] = useState(1);
-  const [activeCampusTab, setActiveCampusTab] = useState<'overview' | 'factory' | 'workshop' | 'device-type'>('overview');
-
-  // Computed Device metrics
-  const totalDeviceCount = devices.length || 18;
-  const runningCount = devices.filter((d) => d.status === 'RUNNING').length || 14;
-  const plannedStopCount = devices.filter((d) => d.status === 'IDLE' || d.status === 'MAINTENANCE_SCHEDULED').length || 3;
-  const alarmStopCount = devices.filter((d) => d.status === 'ALARM_STOPPED').length || 1;
+  const [selectedMapFilter, setSelectedMapFilter] = useState<string>('all');
+  const [activeCampusTab, setActiveCampusTab] = useState<'overview' | 'plantA' | 'plantB' | 'ws1' | 'ws2'>('overview');
+  const [trendDays, setTrendDays] = useState<'7' | '14' | '30'>('7');
 
   // Helper to determine workshop from device location or code
   const getDeviceWorkshop = (d: Device): string => {
-    if (d.location?.includes('Xưởng 1') || d.code.startsWith('EDM-0')) return 'Xưởng 1 EDM';
-    if (d.location?.includes('Xưởng 2') || d.code.startsWith('CNC')) return 'Xưởng 2 CNC';
-    if (d.location?.includes('Xưởng 3') || d.code.includes('S0') || d.code.startsWith('HP')) return 'Xưởng 3 Khác';
-    if (d.location?.includes('Xưởng 4') || d.code.startsWith('ASY') || d.code.startsWith('QC') || d.code.startsWith('CMM')) return 'Xưởng 4 Lắp ráp';
-    return d.location || 'Xưởng 1 EDM';
+    if (d.location?.includes('Xưởng 1') || d.code.startsWith('EDM-01') || d.code.startsWith('EDM-02')) return 'Xưởng 1';
+    if (d.location?.includes('Xưởng 2') || d.code.startsWith('EDM-03') || d.code.startsWith('CNC-01')) return 'Xưởng 2';
+    if (d.location?.includes('Xưởng 3') || d.code.startsWith('CNC-02') || d.code.includes('S0')) return 'Xưởng 3';
+    return d.location || 'Xưởng 1';
   };
 
   // Filtered devices for Panel 5
@@ -125,28 +111,23 @@ export const IndustrialControlTowerPro: React.FC<IndustrialControlTowerProProps>
         d.code.toLowerCase().includes(deviceSearchTerm.toLowerCase()) ||
         d.name.toLowerCase().includes(deviceSearchTerm.toLowerCase()) ||
         d.model.toLowerCase().includes(deviceSearchTerm.toLowerCase());
-      
-      const workshop = getDeviceWorkshop(d);
-      const matchWorkshop =
-        selectedWorkshopFilter === 'ALL' ||
-        workshop.toLowerCase().includes(selectedWorkshopFilter.toLowerCase().replace('xưởng ', ''));
-      
+
+      const matchType =
+        selectedTypeFilter === 'ALL' ||
+        (selectedTypeFilter === 'EDM' && (d.type.includes('EDM') || d.code.startsWith('EDM'))) ||
+        (selectedTypeFilter === 'CNC' && (d.type.includes('CNC') || d.code.startsWith('CNC')));
+
       const matchStatus =
-        selectedStatusFilter === 'ALL' || d.status === selectedStatusFilter;
+        selectedStatusFilter === 'ALL' ||
+        (selectedStatusFilter === 'RUNNING' && d.status === 'RUNNING') ||
+        (selectedStatusFilter === 'MAINTENANCE' && (d.status === 'MAINTENANCE' || d.status === 'MAINTENANCE_SCHEDULED')) ||
+        (selectedStatusFilter === 'ALARM' && (d.status === 'ALARM_STOPPED' || d.status === 'WARNING'));
 
-      return matchSearch && matchWorkshop && matchStatus;
+      return matchSearch && matchType && matchStatus;
     });
-  }, [devices, deviceSearchTerm, selectedWorkshopFilter, selectedStatusFilter]);
+  }, [devices, deviceSearchTerm, selectedTypeFilter, selectedStatusFilter]);
 
-  // Technicians filtered for Panel 7
-  const filteredTechs = useMemo(() => {
-    return technicians.filter((t) =>
-      t.name.toLowerCase().includes(techSearchTerm.toLowerCase()) ||
-      t.id.toLowerCase().includes(techSearchTerm.toLowerCase())
-    );
-  }, [technicians, techSearchTerm]);
-
-  // Workshop OEE data for Panel 2 (BarChart)
+  // Workshop OEE data for Panel 2 (Clustered Bar Chart)
   const workshopPerformanceData = [
     { workshop: 'Xưởng 1', oee: 82, runtime: 85, plannedStop: 10, unplannedStop: 5 },
     { workshop: 'Xưởng 2', oee: 76, runtime: 78, plannedStop: 16, unplannedStop: 6 },
@@ -154,188 +135,286 @@ export const IndustrialControlTowerPro: React.FC<IndustrialControlTowerProProps>
     { workshop: 'Xưởng 4', oee: 74, runtime: 76, plannedStop: 18, unplannedStop: 6 },
   ];
 
-  // Operational Trend 24h data for Panel 8 (LineChart)
-  const trendData = [
-    { time: '00:00', 'EDM-01': 38, 'EDM-02': 36, 'CNC-02': 42, 'CNC-01': 34 },
-    { time: '04:00', 'EDM-01': 39, 'EDM-02': 37, 'CNC-02': 44, 'CNC-01': 35 },
-    { time: '08:00', 'EDM-01': 42, 'EDM-02': 38, 'CNC-02': 52, 'CNC-01': 36 },
-    { time: '12:00', 'EDM-01': 44, 'EDM-02': 39, 'CNC-02': 50, 'CNC-01': 37 },
-    { time: '16:00', 'EDM-01': 43, 'EDM-02': 38, 'CNC-02': 48, 'CNC-01': 36 },
-    { time: '20:00', 'EDM-01': 41, 'EDM-02': 37, 'CNC-02': 46, 'CNC-01': 35 },
+  // 7-day multi-metric trend data for Panel 8
+  const trendData7Days = [
+    { date: '20/04', temp: 42, current: 12.4, vibration: 0.6 },
+    { date: '21/04', temp: 44, current: 13.1, vibration: 0.7 },
+    { date: '22/04', temp: 43, current: 12.8, vibration: 0.65 },
+    { date: '23/04', temp: 41, current: 11.9, vibration: 0.58 },
+    { date: '24/04', temp: 42, current: 12.2, vibration: 0.62 },
+    { date: '25/04', temp: 45, current: 14.0, vibration: 0.75 },
+    { date: '26/04', temp: 43, current: 12.4, vibration: 0.6 },
   ];
 
-  // Equipment Status Distribution for Panel 9 (PieChart Donut)
+  // Equipment Status Distribution for Panel 9
   const statusDistributionData = [
-    { name: 'Đang chạy', value: runningCount, color: '#16D9A0', percentage: '78%' },
-    { name: 'Dừng kế hoạch', value: plannedStopCount, color: '#168BFF', percentage: '17%' },
-    { name: 'Dừng sự cố', value: alarmStopCount, color: '#FF5263', percentage: '5%' },
-    { name: 'Bảo trì', value: 0, color: '#FFB547', percentage: '0%' },
-    { name: 'Ngoại tuyến', value: 0, color: '#64748B', percentage: '0%' },
+    { name: 'Đang chạy', value: 32, percentage: '66.7%', color: '#16A36A' },
+    { name: 'Dừng máy', value: 10, percentage: '20.8%', color: '#64748B' },
+    { name: 'Lỗi', value: 6, percentage: '12.5%', color: '#E5484D' },
+    { name: 'Bảo trì', value: 4, percentage: '8.3%', color: '#1677D2' },
+    { name: 'Ngoại tuyến', value: 2, percentage: '4.2%', color: '#F2A51A' },
   ];
 
-  // Work Orders List for Panel 6
-  const workOrders = [
+  // Recent Alerts for Panel 3
+  const recentAlerts = [
     {
-      id: 'WO-101',
-      priority: 'HIGH',
-      priorityLabel: 'Cao',
-      priorityColor: 'bg-[#FF5263]/20 text-[#FF5263] border-[#FF5263]/40',
+      time: '14:25',
       deviceCode: 'EDM-03',
-      title: 'Kiểm tra trục chính',
-      technician: 'Nguyễn Văn B',
-      deadline: '16/01/2025',
-      status: 'IN_PROGRESS',
-      statusLabel: 'Đang xử lý',
-      statusColor: 'bg-[#FFB547]/20 text-[#FFB547] border-[#FFB547]/40'
+      message: 'Nhiệt độ trục chính tăng cao',
+      level: 'Cao',
+      levelColor: 'bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]'
     },
     {
-      id: 'WO-102',
-      priority: 'MEDIUM',
-      priorityLabel: 'Trung bình',
-      priorityColor: 'bg-[#FFB547]/20 text-[#FFB547] border-[#FFB547]/40',
+      time: '11:08',
       deviceCode: 'CNC-02',
-      title: 'Kiểm tra thủy lực',
-      technician: 'Trần Văn A',
-      deadline: '15/01/2025',
-      status: 'PENDING_APPROVAL',
-      statusLabel: 'Chờ duyệt',
-      statusColor: 'bg-[#168BFF]/20 text-[#168BFF] border-[#168BFF]/40'
+      message: 'Rò rỉ thủy lực',
+      level: 'Trung bình',
+      levelColor: 'bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]'
     },
     {
-      id: 'WO-103',
-      priority: 'MEDIUM',
-      priorityLabel: 'Trung bình',
-      priorityColor: 'bg-[#FFB547]/20 text-[#FFB547] border-[#FFB547]/40',
+      time: '09:42',
       deviceCode: 'EDM-01',
-      title: 'Thay lọc nước',
-      technician: 'Lê Văn C',
-      deadline: '20/01/2025',
-      status: 'IN_PROGRESS',
-      statusLabel: 'Đang xử lý',
-      statusColor: 'bg-[#FFB547]/20 text-[#FFB547] border-[#FFB547]/40'
+      message: 'Áp suất nước thấp',
+      level: 'Trung bình',
+      levelColor: 'bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]'
     },
     {
-      id: 'WO-104',
-      priority: 'LOW',
-      priorityLabel: 'Thấp',
-      priorityColor: 'bg-[#00C8F0]/20 text-[#00C8F0] border-[#00C8F0]/40',
-      deviceCode: 'CNC-03',
-      title: 'Kiểm tra cảm biến',
-      technician: 'Phạm Văn D',
-      deadline: '21/01/2025',
-      status: 'PENDING_APPROVAL',
-      statusLabel: 'Chờ duyệt',
-      statusColor: 'bg-[#168BFF]/20 text-[#168BFF] border-[#168BFF]/40'
+      time: '08:18',
+      deviceCode: 'CNC-01',
+      message: 'Quá tải dòng điện',
+      level: 'Cao',
+      levelColor: 'bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]'
     },
     {
-      id: 'WO-105',
-      priority: 'LOW',
-      priorityLabel: 'Thấp',
-      priorityColor: 'bg-[#00C8F0]/20 text-[#00C8F0] border-[#00C8F0]/40',
+      time: '07:55',
       deviceCode: 'EDM-02',
+      message: 'Bảo trì định kỳ đến hạn',
+      level: 'Thông tin',
+      levelColor: 'bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]'
+    },
+  ];
+
+  // AI Diagnostic Recommendations for Panel 4
+  const aiRecommendations = [
+    {
+      deviceCode: 'EDM-03',
+      symptom: 'Nhiệt độ tăng',
+      rootCause: 'Lỗi bơm làm mát',
+      confidence: '85%',
+      status: 'Chờ xác nhận',
+      statusColor: 'bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]'
+    },
+    {
+      deviceCode: 'CNC-02',
+      symptom: 'Rò rỉ dầu',
+      rootCause: 'Hở phớt thủy lực',
+      confidence: '72%',
+      status: 'Đang xử lý',
+      statusColor: 'bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]'
+    },
+    {
+      deviceCode: 'EDM-01',
+      symptom: 'Dao động dòng',
+      rootCause: 'Kết nối lỏng',
+      confidence: '64%',
+      status: 'Chờ xác nhận',
+      statusColor: 'bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]'
+    },
+  ];
+
+  // Work Orders for Panel 6
+  const workOrdersList = [
+    {
+      id: 'WO-125',
+      deviceCode: 'EDM-02',
+      title: 'Bảo trì định kỳ',
+      priority: 'Trung bình',
+      priorityColor: 'text-[#D97706]',
+      deadline: '20/04/2025',
+      status: 'Đang xử lý',
+      statusColor: 'bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]'
+    },
+    {
+      id: 'WO-124',
+      deviceCode: 'EDM-03',
+      title: 'Kiểm tra bơm...',
+      priority: 'Cao',
+      priorityColor: 'text-[#DC2626] font-bold',
+      deadline: '21/04/2025',
+      status: 'Chờ duyệt',
+      statusColor: 'bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]'
+    },
+    {
+      id: 'WO-123',
+      deviceCode: 'CNC-02',
+      title: 'Thay phớt thủy lực',
+      priority: 'Cao',
+      priorityColor: 'text-[#DC2626] font-bold',
+      deadline: '20/04/2025',
+      status: 'Quá hạn',
+      statusColor: 'bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]'
+    },
+    {
+      id: 'WO-122',
+      deviceCode: 'EDM-01',
+      title: 'Kiểm tra nguồn',
+      priority: 'Trung bình',
+      priorityColor: 'text-[#D97706]',
+      deadline: '22/04/2025',
+      status: 'Đang xử lý',
+      statusColor: 'bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]'
+    },
+    {
+      id: 'WO-121',
+      deviceCode: 'CNC-01',
       title: 'Vệ sinh hệ thống',
-      technician: 'Nguyễn Văn E',
-      deadline: '22/01/2025',
-      status: 'PENDING_APPROVAL',
-      statusLabel: 'Chờ duyệt',
-      statusColor: 'bg-[#168BFF]/20 text-[#168BFF] border-[#168BFF]/40'
+      priority: 'Thấp',
+      priorityColor: 'text-[#64748B]',
+      deadline: '24/04/2025',
+      status: 'Hoàn thành',
+      statusColor: 'bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]'
     },
-    {
-      id: 'WO-106',
-      priority: 'LOW',
-      priorityLabel: 'Thấp',
-      priorityColor: 'bg-[#00C8F0]/20 text-[#00C8F0] border-[#00C8F0]/40',
-      deviceCode: 'EDM-05',
-      title: 'Hiệu chuẩn thước quang',
-      technician: 'Hoàng Minh T',
-      deadline: '14/01/2025',
-      status: 'COMPLETED',
-      statusLabel: 'Hoàn thành',
-      statusColor: 'bg-[#16D9A0]/20 text-[#16D9A0] border-[#16D9A0]/40'
-    },
-    {
-      id: 'WO-107',
-      priority: 'MEDIUM',
-      priorityLabel: 'Trung bình',
-      priorityColor: 'bg-[#FFB547]/20 text-[#FFB547] border-[#FFB547]/40',
-      deviceCode: 'CNC-04',
-      title: 'Thay dầu trục chính',
-      technician: 'Vũ Quốc H',
-      deadline: '13/01/2025',
-      status: 'COMPLETED',
-      statusLabel: 'Hoàn thành',
-      statusColor: 'bg-[#16D9A0]/20 text-[#16D9A0] border-[#16D9A0]/40'
-    },
-    {
-      id: 'WO-108',
-      priority: 'LOW',
-      priorityLabel: 'Thấp',
-      priorityColor: 'bg-[#00C8F0]/20 text-[#00C8F0] border-[#00C8F0]/40',
-      deviceCode: 'ASY-01',
-      title: 'Kiểm tra van khí nén',
-      technician: 'Đỗ Tuấn K',
-      deadline: '12/01/2025',
-      status: 'COMPLETED',
-      statusLabel: 'Hoàn thành',
-      statusColor: 'bg-[#16D9A0]/20 text-[#16D9A0] border-[#16D9A0]/40'
-    }
   ];
 
-  const filteredWorkOrders = useMemo(() => {
-    return workOrders.filter((wo) => wo.status === workOrderTab);
-  }, [workOrders, workOrderTab]);
-
-  // System Notifications for Panel 11
-  const systemNotifications = [
-    { time: '10:24', message: 'Nhiệt độ trục chính EDM-03 vượt ngưỡng 48°C', level: 'Cao', levelColor: 'bg-[#FF5263]/20 text-[#FF5263] border-[#FF5263]/40' },
-    { time: '09:18', message: 'Phát hiện rò rỉ áp lực thủy lực CNC-02', level: 'Trung bình', levelColor: 'bg-[#FFB547]/20 text-[#FFB547] border-[#FFB547]/40' },
-    { time: '08:45', message: 'Áp suất nước làm mát thấp EDM-01 (0.8 MPa)', level: 'Trung bình', levelColor: 'bg-[#FFB547]/20 text-[#FFB547] border-[#FFB547]/40' },
-    { time: '07:30', message: 'Hệ thống AI hoàn tất cập nhật mô hình học máy', level: 'Thông tin', levelColor: 'bg-[#00C8F0]/20 text-[#00C8F0] border-[#00C8F0]/40' },
-    { time: '06:12', message: 'Sao lưu dữ liệu telemetry 24h thành công', level: 'Thông tin', levelColor: 'bg-[#00C8F0]/20 text-[#00C8F0] border-[#00C8F0]/40' },
+  // Technicians on-duty for Panel 7
+  const techniciansList = [
+    {
+      name: 'Nguyễn Văn B',
+      skill: 'EDM',
+      status: 'Đang làm việc',
+      statusColor: 'bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]',
+      jobsCount: 2,
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=60&h=60&q=80'
+    },
+    {
+      name: 'Trần Văn A',
+      skill: 'CNC',
+      status: 'Đang làm việc',
+      statusColor: 'bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]',
+      jobsCount: 3,
+      avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=60&h=60&q=80'
+    },
+    {
+      name: 'Lê Văn C',
+      skill: 'EDM/CNC',
+      status: 'Sẵn sàng',
+      statusColor: 'bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]',
+      jobsCount: 0,
+      avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=60&h=60&q=80'
+    },
+    {
+      name: 'Phạm Văn D',
+      skill: 'Điện',
+      status: 'Đang nghỉ',
+      statusColor: 'bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]',
+      jobsCount: 0,
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=60&h=60&q=80'
+    },
+    {
+      name: 'Nguyễn Văn E',
+      skill: 'Cơ khí',
+      status: 'Sẵn sàng',
+      statusColor: 'bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]',
+      jobsCount: 1,
+      avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=60&h=60&q=80'
+    },
   ];
 
-  // Top 5 frequent faults for Panel 10
-  const frequentFaults = [
-    { title: 'Nhiệt độ trục chính cao', count: 8, max: 10 },
-    { title: 'Rò rỉ thủy lực', count: 6, max: 10 },
-    { title: 'Áp suất nước thấp', count: 4, max: 10 },
-    { title: 'Lỗi servo', count: 3, max: 10 },
-    { title: 'Dòng điện vượt ngưỡng', count: 3, max: 10 },
+  // Top 5 Frequent Faults for Panel 10
+  const topFrequentFaults = [
+    { name: 'Nhiệt độ trục chính cao', count: 12, max: 15 },
+    { name: 'Rò rỉ thủy lực', count: 9, max: 15 },
+    { name: 'Quá tải dòng điện', count: 7, max: 15 },
+    { name: 'Áp suất nước thấp', count: 6, max: 15 },
+    { name: 'Lỗi servo', count: 5, max: 15 },
+  ];
+
+  // Data & System Status for Panel 11
+  const systemStatusItems = [
+    {
+      name: 'Kết nối máy móc',
+      status: 'Bình thường',
+      statusBadge: 'bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]',
+      note: 'Cập nhật: 14:32'
+    },
+    {
+      name: 'Dịch vụ AI',
+      status: 'Hoạt động',
+      statusBadge: 'bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]',
+      note: 'Cập nhật: 14:28'
+    },
+    {
+      name: 'Cơ sở dữ liệu',
+      status: 'Hoạt động',
+      statusBadge: 'bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]',
+      note: 'Cập nhật: 14:30'
+    },
+    {
+      name: 'Chất lượng dữ liệu',
+      status: 'Tốt',
+      statusBadge: 'bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]',
+      note: '98% bản ghi đầy đủ'
+    },
+    {
+      name: 'Đồng bộ dữ liệu',
+      status: 'Bình thường',
+      statusBadge: 'bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]',
+      note: 'Lần cuối: 14:25'
+    },
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-[#19324D] font-sans pb-8">
       {/* ============================================================== */}
-      {/* 6 TOP KPI SUMMARY CARDS                                        */}
+      {/* PAGE TITLE & SUBTITLE                                          */}
+      {/* ============================================================== */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-1">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#19324D] tracking-tight">
+            Tổng quan hệ thống
+          </h1>
+          <p className="text-xs sm:text-sm text-[#64748B]">
+            Giám sát thiết bị EDM/CNC, cảnh báo, bảo trì và hiệu suất vận hành
+          </p>
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* 6 TOP WHITE KPI CARDS                                          */}
       {/* ============================================================== */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* KPI 1: Tổng thiết bị */}
         <div
           onClick={() => onNavigateToTab?.('devices')}
-          className="bg-[#0A2032] border border-[#15324C] hover:border-[#00C8F0]/50 rounded-xl p-3 flex flex-col justify-between transition-all cursor-pointer group shadow-lg"
+          className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm hover:shadow transition-shadow cursor-pointer flex flex-col justify-between"
         >
           <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-lg bg-[#00C8F0]/10 border border-[#00C8F0]/30 flex items-center justify-center text-[#00C8F0]">
+            <div className="w-8 h-8 rounded-md bg-[#E0F2FE] text-[#1677D2] flex items-center justify-center">
               <Server className="w-4 h-4" />
             </div>
-            <span className="text-[10px] text-[#9CB4C8] hover:text-[#00C8F0]">✕</span>
+            <ChevronRight className="w-4 h-4 text-[#94A3B8]" />
           </div>
-          <div className="mt-2">
-            <div className="text-xs text-[#9CB4C8] font-medium">Tổng thiết bị</div>
-            <div className="text-2xl font-bold text-[#EAF5FF] font-mono tracking-tight">{totalDeviceCount}</div>
+          <div className="mt-2.5">
+            <div className="text-xs text-[#64748B] font-medium">Tổng thiết bị</div>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-2xl font-bold text-[#19324D] font-mono">48</span>
+              <span className="text-xs font-semibold text-[#16A36A] flex items-center">
+                ↑ 5%
+              </span>
+            </div>
           </div>
-          <div className="mt-2 pt-2 border-t border-[#15324C]/60 flex items-center justify-between text-[11px]">
-            <span className="flex items-center gap-1 text-[#16D9A0]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16D9A0]"></span>
-              {runningCount}
+          <div className="mt-2 pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-[11px] text-[#64748B]">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#16A36A]"></span>
+              Đang chạy: <strong className="text-[#19324D]">32</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#168BFF]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#168BFF]"></span>
-              {plannedStopCount}
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#64748B]"></span>
+              Dừng máy: <strong className="text-[#19324D]">10</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#FF5263]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#FF5263]"></span>
-              {alarmStopCount}
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#E5484D]"></span>
+              Lỗi: <strong className="text-[#19324D]">6</strong>
             </span>
           </div>
         </div>
@@ -343,60 +422,66 @@ export const IndustrialControlTowerPro: React.FC<IndustrialControlTowerProProps>
         {/* KPI 2: Hiệu suất OEE */}
         <div
           onClick={() => onNavigateToTab?.('reports')}
-          className="bg-[#0A2032] border border-[#15324C] hover:border-[#00C8F0]/50 rounded-xl p-3 flex flex-col justify-between transition-all cursor-pointer group shadow-lg"
+          className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm hover:shadow transition-shadow cursor-pointer flex flex-col justify-between"
         >
           <div className="flex items-center justify-between">
-            <div className="relative w-8 h-8 rounded-full border-2 border-[#00C8F0] flex items-center justify-center text-[10px] font-bold text-[#00C8F0] font-mono">
-              76%
+            {/* Circular Gauge */}
+            <div className="relative w-8 h-8 rounded-full border-2 border-[#00C8F0] flex items-center justify-center font-mono text-[10px] font-bold text-[#1677D2]">
+              78%
             </div>
-            <span className="text-[10px] text-[#9CB4C8]">✕</span>
+            <ChevronRight className="w-4 h-4 text-[#94A3B8]" />
           </div>
-          <div className="mt-2">
-            <div className="text-xs text-[#9CB4C8] font-medium">Hiệu suất OEE</div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-[#EAF5FF] font-mono">76%</span>
-              <span className="text-xs font-semibold text-[#16D9A0] flex items-center">
-                + 6%
+          <div className="mt-2.5">
+            <div className="text-xs text-[#64748B] font-medium">Hiệu suất OEE</div>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-2xl font-bold text-[#19324D] font-mono">78%</span>
+              <span className="text-xs font-semibold text-[#16A36A] flex items-center">
+                ↑ 6%
               </span>
             </div>
           </div>
-          {/* Mini Cyan Spark Bars */}
-          <div className="mt-2 pt-2 border-t border-[#15324C]/60 flex items-end gap-1 h-4">
-            <div className="w-1.5 h-2 bg-[#00C8F0]/40 rounded-t-sm"></div>
-            <div className="w-1.5 h-2.5 bg-[#00C8F0]/60 rounded-t-sm"></div>
-            <div className="w-1.5 h-3 bg-[#00C8F0]/70 rounded-t-sm"></div>
-            <div className="w-1.5 h-3.5 bg-[#00C8F0]/90 rounded-t-sm"></div>
-            <div className="w-1.5 h-4 bg-[#00C8F0] rounded-t-sm shadow-[0_0_8px_#00C8F0]"></div>
+          {/* Mini Spark Bars */}
+          <div className="mt-2 pt-2 border-t border-[#F1F5F9] flex items-end gap-1 h-3.5">
+            <div className="w-1.5 h-2 bg-[#93C5FD] rounded-t-sm"></div>
+            <div className="w-1.5 h-2.5 bg-[#60A5FA] rounded-t-sm"></div>
+            <div className="w-1.5 h-3 bg-[#3B82F6] rounded-t-sm"></div>
+            <div className="w-1.5 h-3.5 bg-[#2563EB] rounded-t-sm"></div>
+            <div className="w-1.5 h-3.5 bg-[#1D4ED8] rounded-t-sm"></div>
           </div>
         </div>
 
-        {/* KPI 3: Cảnh báo hiện tại */}
+        {/* KPI 3: Cảnh báo đang mở */}
         <div
           onClick={() => onNavigateToTab?.('notifications')}
-          className="bg-[#0A2032] border border-[#15324C] hover:border-[#FF5263]/50 rounded-xl p-3 flex flex-col justify-between transition-all cursor-pointer group shadow-lg"
+          className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm hover:shadow transition-shadow cursor-pointer flex flex-col justify-between"
         >
           <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-lg bg-[#FF5263]/10 border border-[#FF5263]/30 flex items-center justify-center text-[#FF5263]">
+            <div className="w-8 h-8 rounded-md bg-[#FEE2E2] text-[#DC2626] flex items-center justify-center">
               <AlertTriangle className="w-4 h-4" />
             </div>
-            <span className="text-[10px] text-[#9CB4C8]">✕</span>
+            <ChevronRight className="w-4 h-4 text-[#94A3B8]" />
           </div>
-          <div className="mt-2">
-            <div className="text-xs text-[#9CB4C8] font-medium">Cảnh báo hiện tại</div>
-            <div className="text-2xl font-bold text-[#FF5263] font-mono tracking-tight">3</div>
+          <div className="mt-2.5">
+            <div className="text-xs text-[#64748B] font-medium">Cảnh báo đang mở</div>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-2xl font-bold text-[#E5484D] font-mono">14</span>
+              <span className="text-xs font-semibold text-[#E5484D] flex items-center">
+                ↑ 27%
+              </span>
+            </div>
           </div>
-          <div className="mt-2 pt-2 border-t border-[#15324C]/60 flex items-center justify-between text-[11px]">
-            <span className="flex items-center gap-1 text-[#FF5263]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#FF5263]"></span>
-              1
+          <div className="mt-2 pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-[11px] text-[#64748B]">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#E5484D]"></span>
+              Nghiêm trọng: <strong className="text-[#19324D]">4</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#FFB547]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#FFB547]"></span>
-              2
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#F2A51A]"></span>
+              Cảnh báo: <strong className="text-[#19324D]">6</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#00C8F0]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00C8F0]"></span>
-              0
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#2196D2]"></span>
+              Thông tin: <strong className="text-[#19324D]">4</strong>
             </span>
           </div>
         </div>
@@ -404,61 +489,71 @@ export const IndustrialControlTowerPro: React.FC<IndustrialControlTowerProProps>
         {/* KPI 4: Lệnh bảo trì */}
         <div
           onClick={() => onNavigateToTab?.('maintenance')}
-          className="bg-[#0A2032] border border-[#15324C] hover:border-[#00C8F0]/50 rounded-xl p-3 flex flex-col justify-between transition-all cursor-pointer group shadow-lg"
+          className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm hover:shadow transition-shadow cursor-pointer flex flex-col justify-between"
         >
           <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-lg bg-[#168BFF]/10 border border-[#168BFF]/30 flex items-center justify-center text-[#168BFF]">
+            <div className="w-8 h-8 rounded-md bg-[#E0F2FE] text-[#0284C7] flex items-center justify-center">
               <Calendar className="w-4 h-4" />
             </div>
-            <span className="text-[10px] text-[#9CB4C8]">✕</span>
+            <ChevronRight className="w-4 h-4 text-[#94A3B8]" />
           </div>
-          <div className="mt-2">
-            <div className="text-xs text-[#9CB4C8] font-medium">Lệnh bảo trì</div>
-            <div className="text-2xl font-bold text-[#EAF5FF] font-mono tracking-tight">12</div>
+          <div className="mt-2.5">
+            <div className="text-xs text-[#64748B] font-medium">Lệnh bảo trì</div>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-2xl font-bold text-[#19324D] font-mono">28</span>
+              <span className="text-xs font-semibold text-[#16A36A] flex items-center">
+                ↑ 12%
+              </span>
+            </div>
           </div>
-          <div className="mt-2 pt-2 border-t border-[#15324C]/60 flex items-center justify-between text-[11px]">
-            <span className="flex items-center gap-1 text-[#00C8F0]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00C8F0]"></span>
-              5
+          <div className="mt-2 pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-[11px] text-[#64748B]">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#1677D2]"></span>
+              Đang xử lý: <strong className="text-[#19324D]">16</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#168BFF]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#168BFF]"></span>
-              4
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#2196D2]"></span>
+              Chờ duyệt: <strong className="text-[#19324D]">8</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#16D9A0]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16D9A0]"></span>
-              3
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#E5484D]"></span>
+              Quá hạn: <strong className="text-[#19324D]">4</strong>
             </span>
           </div>
         </div>
 
-        {/* KPI 5: Yêu cầu hỗ trợ */}
+        {/* KPI 5: Đề xuất AI */}
         <div
-          onClick={() => onNavigateToTab?.('community')}
-          className="bg-[#0A2032] border border-[#15324C] hover:border-[#00C8F0]/50 rounded-xl p-3 flex flex-col justify-between transition-all cursor-pointer group shadow-lg"
+          onClick={() => onNavigateToTab?.('ai-diagnosis')}
+          className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm hover:shadow transition-shadow cursor-pointer flex flex-col justify-between"
         >
           <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-lg bg-[#A855F7]/10 border border-[#A855F7]/30 flex items-center justify-center text-[#A855F7]">
-              <Headphones className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-md bg-[#F3E8FF] text-[#7C3AED] flex items-center justify-center">
+              <Brain className="w-4 h-4" />
             </div>
-            <span className="text-[10px] text-[#9CB4C8]">✕</span>
+            <ChevronRight className="w-4 h-4 text-[#94A3B8]" />
           </div>
-          <div className="mt-2">
-            <div className="text-xs text-[#9CB4C8] font-medium">Yêu cầu hỗ trợ</div>
-            <div className="text-2xl font-bold text-[#EAF5FF] font-mono tracking-tight">6</div>
+          <div className="mt-2.5">
+            <div className="text-xs text-[#64748B] font-medium">Đề xuất AI</div>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-2xl font-bold text-[#19324D] font-mono">9</span>
+              <span className="text-xs font-semibold text-[#16A36A] flex items-center">
+                ↑ 50%
+              </span>
+            </div>
           </div>
-          <div className="mt-2 pt-2 border-t border-[#15324C]/60 flex items-center justify-between text-[11px]">
-            <span className="flex items-center gap-1 text-[#FF5263]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#FF5263]"></span>
-              3
+          <div className="mt-2 pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-[11px] text-[#64748B]">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#7C3AED]"></span>
+              Chờ xác nhận: <strong className="text-[#19324D]">5</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#A855F7]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#A855F7]"></span>
-              2
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#2196D2]"></span>
+              Đã xác nhận: <strong className="text-[#19324D]">3</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#00C8F0]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00C8F0]"></span>
-              1
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#1677D2]"></span>
+              Đang xử lý: <strong className="text-[#19324D]">1</strong>
             </span>
           </div>
         </div>
@@ -466,1310 +561,956 @@ export const IndustrialControlTowerPro: React.FC<IndustrialControlTowerProProps>
         {/* KPI 6: Kỹ thuật viên */}
         <div
           onClick={() => onNavigateToTab?.('technician-eval')}
-          className="bg-[#0A2032] border border-[#15324C] hover:border-[#16D9A0]/50 rounded-xl p-3 flex flex-col justify-between transition-all cursor-pointer group shadow-lg"
+          className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm hover:shadow transition-shadow cursor-pointer flex flex-col justify-between"
         >
           <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-lg bg-[#16D9A0]/10 border border-[#16D9A0]/30 flex items-center justify-center text-[#16D9A0]">
-              <User className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-md bg-[#DCFCE7] text-[#16A34A] flex items-center justify-center">
+              <Users className="w-4 h-4" />
             </div>
-            <span className="text-[10px] text-[#9CB4C8]">✕</span>
+            <ChevronRight className="w-4 h-4 text-[#94A3B8]" />
           </div>
-          <div className="mt-2">
-            <div className="text-xs text-[#9CB4C8] font-medium">Kỹ thuật viên</div>
-            <div className="text-2xl font-bold text-[#EAF5FF] font-mono tracking-tight">{technicians.length || 8}</div>
+          <div className="mt-2.5">
+            <div className="text-xs text-[#64748B] font-medium">Kỹ thuật viên</div>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-2xl font-bold text-[#19324D] font-mono">12</span>
+            </div>
           </div>
-          <div className="mt-2 pt-2 border-t border-[#15324C]/60 flex items-center justify-between text-[11px]">
-            <span className="flex items-center gap-1 text-[#16D9A0]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16D9A0]"></span>
-              6
+          <div className="mt-2 pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-[11px] text-[#64748B]">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#16A36A]"></span>
+              Đang làm việc: <strong className="text-[#19324D]">8</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#00C8F0]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00C8F0]"></span>
-              2
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#2196D2]"></span>
+              Sẵn sàng: <strong className="text-[#19324D]">3</strong>
             </span>
-            <span className="flex items-center gap-1 text-[#FFB547]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#FFB547]"></span>
-              0
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#F2A51A]"></span>
+              Đang nghỉ: <strong className="text-[#19324D]">1</strong>
             </span>
           </div>
         </div>
       </div>
 
       {/* ============================================================== */}
-      {/* ROW 1: CAMPUS MAP (PANEL 1), WORKSHOP OEE (PANEL 2), ALERTS (PANEL 3) & AI DIAGNOSIS (PANEL 4) */}
+      {/* ROW 2: CAMPUS MAP (PANEL 1), WORKSHOP OEE (PANEL 2), ALERTS (PANEL 3) & AI DIAGNOSIS (PANEL 4) */}
       {/* ============================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        {/* PANEL 1: SƠ ĐỒ NHÀ MÁY VÀ TRẠNG THÁI THIẾT BỊ (7 COLS) */}
-        <div className="lg:col-span-7 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#15324C]/80 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#00C8F0] shadow-[0_0_8px_#00C8F0]"></span>
-              <h2 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-[#00C8F0]" />
+        {/* PANEL 1: SƠ ĐỒ NHÀ MÁY VÀ TRẠNG THÁI THIẾT BỊ (6 COLS) */}
+        <div className="lg:col-span-6 bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm flex flex-col justify-between">
+          <div>
+            {/* Header */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] pb-2.5">
+              <h2 className="text-sm font-bold text-[#19324D] flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-[#1677D2]" />
                 Sơ đồ nhà máy và trạng thái thiết bị
               </h2>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onToast?.('Chế độ toàn màn hình sơ đồ')}
+                  className="text-xs text-[#1677D2] hover:underline font-medium flex items-center gap-1"
+                >
+                  Xem toàn màn hình <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* Sub-tabs */}
-            <div className="flex items-center gap-1 bg-[#061522] p-1 rounded-lg border border-[#15324C]/60">
+            <div className="flex items-center gap-1 mt-2.5">
               <button
                 onClick={() => setActiveCampusTab('overview')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
                   activeCampusTab === 'overview'
-                    ? 'bg-[#168BFF] text-white shadow-sm'
-                    : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
+                    ? 'bg-[#1677D2] text-white'
+                    : 'bg-[#F1F5F9] text-[#64748B] hover:text-[#19324D]'
                 }`}
               >
                 Tổng quan
               </button>
               <button
-                onClick={() => setActiveCampusTab('factory')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${
-                  activeCampusTab === 'factory'
-                    ? 'bg-[#168BFF] text-white shadow-sm'
-                    : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
+                onClick={() => setActiveCampusTab('plantA')}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                  activeCampusTab === 'plantA'
+                    ? 'bg-[#1677D2] text-white'
+                    : 'bg-[#F1F5F9] text-[#64748B] hover:text-[#19324D]'
                 }`}
               >
-                Nhà máy
-              </button>
-              <button
-                onClick={() => setActiveCampusTab('workshop')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${
-                  activeCampusTab === 'workshop'
-                    ? 'bg-[#168BFF] text-white shadow-sm'
-                    : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
-                }`}
-              >
-                Xưởng
-              </button>
-              <button
-                onClick={() => setActiveCampusTab('device-type')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${
-                  activeCampusTab === 'device-type'
-                    ? 'bg-[#168BFF] text-white shadow-sm'
-                    : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
-                }`}
-              >
-                Loại thiết bị
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1 text-[#9CB4C8]">
-              <button
-                onClick={() => onToast?.('Chế độ toàn màn hình sơ đồ')}
-                className="p-1 hover:text-[#00C8F0] rounded"
-                title="Mở rộng"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => onToast?.('Thu nhỏ sơ đồ')}
-                className="p-1 hover:text-[#00C8F0] rounded"
-                title="Thu nhỏ"
-              >
-                <Minimize2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Interactive Campus / 2.5D Schematic Area */}
-          <div className="relative my-3 min-h-[300px] rounded-lg bg-gradient-to-b from-[#081B2B] to-[#061522] border border-[#15324C]/80 overflow-hidden flex items-center justify-center p-4">
-            {/* Background Grid Lines */}
-            <div
-              className="absolute inset-0 opacity-20 pointer-events-none"
-              style={{
-                backgroundImage:
-                  'radial-gradient(circle, #00C8F0 1px, transparent 1px), linear-gradient(to right, #15324C 1px, transparent 1px), linear-gradient(to bottom, #15324C 1px, transparent 1px)',
-                backgroundSize: '20px 20px, 40px 40px, 40px 40px'
-              }}
-            ></div>
-
-            {/* Overlay Radios on Right */}
-            <div className="absolute top-3 right-3 z-10 bg-[#0A2032]/90 backdrop-blur-md border border-[#15324C] rounded-lg p-2 flex flex-col gap-1.5 text-xs text-[#9CB4C8] shadow-lg">
-              <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#EAF5FF]">
-                <input
-                  type="radio"
-                  name="campusNode"
-                  checked={selectedMapNode === 'all'}
-                  onChange={() => setSelectedMapNode('all')}
-                  className="accent-[#00C8F0]"
-                />
-                Toàn bộ
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer text-[#00C8F0] font-semibold">
-                <input
-                  type="radio"
-                  name="campusNode"
-                  checked={selectedMapNode === 'factory-a'}
-                  onChange={() => setSelectedMapNode('factory-a')}
-                  className="accent-[#00C8F0]"
-                />
                 Nhà máy A
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#EAF5FF]">
-                <input
-                  type="radio"
-                  name="campusNode"
-                  checked={selectedMapNode === 'factory-b'}
-                  onChange={() => setSelectedMapNode('factory-b')}
-                  className="accent-[#00C8F0]"
-                />
+              </button>
+              <button
+                onClick={() => setActiveCampusTab('plantB')}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                  activeCampusTab === 'plantB'
+                    ? 'bg-[#1677D2] text-white'
+                    : 'bg-[#F1F5F9] text-[#64748B] hover:text-[#19324D]'
+                }`}
+              >
                 Nhà máy B
-              </label>
-              <div className="h-px bg-[#15324C] my-0.5"></div>
-              <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#EAF5FF]">
-                <input
-                  type="radio"
-                  name="campusNode"
-                  checked={selectedMapNode === 'workshop-1'}
-                  onChange={() => setSelectedMapNode('workshop-1')}
-                  className="accent-[#00C8F0]"
-                />
+              </button>
+              <button
+                onClick={() => setActiveCampusTab('ws1')}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                  activeCampusTab === 'ws1'
+                    ? 'bg-[#1677D2] text-white'
+                    : 'bg-[#F1F5F9] text-[#64748B] hover:text-[#19324D]'
+                }`}
+              >
                 Xưởng 1
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#EAF5FF]">
-                <input
-                  type="radio"
-                  name="campusNode"
-                  checked={selectedMapNode === 'workshop-2'}
-                  onChange={() => setSelectedMapNode('workshop-2')}
-                  className="accent-[#00C8F0]"
-                />
+              </button>
+              <button
+                onClick={() => setActiveCampusTab('ws2')}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                  activeCampusTab === 'ws2'
+                    ? 'bg-[#1677D2] text-white'
+                    : 'bg-[#F1F5F9] text-[#64748B] hover:text-[#19324D]'
+                }`}
+              >
                 Xưởng 2
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#EAF5FF]">
-                <input
-                  type="radio"
-                  name="campusNode"
-                  checked={selectedMapNode === 'workshop-3'}
-                  onChange={() => setSelectedMapNode('workshop-3')}
-                  className="accent-[#00C8F0]"
-                />
-                Xưởng 3
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#EAF5FF]">
-                <input
-                  type="radio"
-                  name="campusNode"
-                  checked={selectedMapNode === 'workshop-4'}
-                  onChange={() => setSelectedMapNode('workshop-4')}
-                  className="accent-[#00C8F0]"
-                />
-                Xưởng 4
-              </label>
+              </button>
+            </div>
 
-              {/* 2D / 3D Switch */}
-              <div className="flex items-center gap-1 mt-1 pt-1 border-t border-[#15324C]">
+            {/* 3D Perspective Graphic with Pinned Machine Markers */}
+            <div className="relative mt-2.5 rounded-lg border border-[#E2E8F0] overflow-hidden bg-[#0A192F] min-h-[220px] flex items-center justify-center">
+              {/* Background Factory Isometric Render / Artwork */}
+              <img
+                src="/assets/aistudio/file_00000000e58c8211bd931eb3f46ef565_9cffacfc.png"
+                alt="Factory Isometric Layout"
+                className="absolute inset-0 w-full h-full object-cover opacity-80"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                }}
+              />
+              <div className="absolute inset-0 bg-[#081B2B]/40"></div>
+
+              {/* Pinned Machines Markers on the factory floor */}
+              {/* Marker 1: EDM-01 (Đang chạy - green) */}
+              <div
+                onClick={() => {
+                  const dev = devices.find((d) => d.code === 'EDM-01') || devices[0];
+                  if (dev) onOpenMachineDetails(dev);
+                }}
+                className="absolute top-[28%] left-[24%] z-10 cursor-pointer transform -translate-x-1/2 -translate-y-1/2 hover:scale-105 transition-transform"
+              >
+                <div className="bg-[#082A4A] border-2 border-[#16A36A] rounded-lg px-2 py-1 text-center shadow-lg">
+                  <div className="text-[10px] font-bold text-white font-mono flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A] animate-ping"></span>
+                    EDM-01
+                  </div>
+                  <div className="text-[9px] font-semibold text-[#16D9A0]">Đang chạy</div>
+                </div>
+              </div>
+
+              {/* Marker 2: CNC-02 (Cảnh báo - amber) */}
+              <div
+                onClick={() => {
+                  const dev = devices.find((d) => d.code === 'CNC-02') || devices[1];
+                  if (dev) onOpenDiagnosis(dev);
+                }}
+                className="absolute top-[38%] left-[54%] z-10 cursor-pointer transform -translate-x-1/2 -translate-y-1/2 hover:scale-105 transition-transform"
+              >
+                <div className="bg-[#082A4A] border-2 border-[#F2A51A] rounded-lg px-2 py-1 text-center shadow-lg">
+                  <div className="text-[10px] font-bold text-white font-mono flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 text-[#F2A51A]" />
+                    CNC-02
+                  </div>
+                  <div className="text-[9px] font-semibold text-[#F2A51A]">Cảnh báo</div>
+                </div>
+              </div>
+
+              {/* Marker 3: EDM-03 (Lỗi - red) */}
+              <div
+                onClick={() => {
+                  const dev = devices.find((d) => d.code === 'EDM-03') || devices[2];
+                  if (dev) onOpenDiagnosis(dev);
+                }}
+                className="absolute top-[22%] right-[22%] z-10 cursor-pointer transform translate-x-1/2 -translate-y-1/2 hover:scale-105 transition-transform"
+              >
+                <div className="bg-[#082A4A] border-2 border-[#E5484D] rounded-lg px-2 py-1 text-center shadow-lg animate-bounce">
+                  <div className="text-[10px] font-bold text-white font-mono flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#E5484D]"></span>
+                    EDM-03
+                  </div>
+                  <div className="text-[9px] font-semibold text-[#FF5263]">Lỗi</div>
+                </div>
+              </div>
+
+              {/* Marker 4: CNC-01 (Đang chạy - green) */}
+              <div
+                onClick={() => {
+                  const dev = devices.find((d) => d.code === 'CNC-01') || devices[3];
+                  if (dev) onOpenMachineDetails(dev);
+                }}
+                className="absolute bottom-[24%] left-[42%] z-10 cursor-pointer transform -translate-x-1/2 translate-y-1/2 hover:scale-105 transition-transform"
+              >
+                <div className="bg-[#082A4A] border-2 border-[#16A36A] rounded-lg px-2 py-1 text-center shadow-lg">
+                  <div className="text-[10px] font-bold text-white font-mono flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]"></span>
+                    CNC-01
+                  </div>
+                  <div className="text-[9px] font-semibold text-[#16D9A0]">Đang chạy</div>
+                </div>
+              </div>
+
+              {/* Marker 5: EDM-02 (Bảo trì - blue) */}
+              <div
+                onClick={() => {
+                  const dev = devices.find((d) => d.code === 'EDM-02') || devices[1];
+                  if (dev) onOpenRepairReport(dev);
+                }}
+                className="absolute bottom-[28%] right-[26%] z-10 cursor-pointer transform translate-x-1/2 translate-y-1/2 hover:scale-105 transition-transform"
+              >
+                <div className="bg-[#082A4A] border-2 border-[#1677D2] rounded-lg px-2 py-1 text-center shadow-lg">
+                  <div className="text-[10px] font-bold text-white font-mono flex items-center gap-1">
+                    <Wrench className="w-3 h-3 text-[#60A5FA]" />
+                    EDM-02
+                  </div>
+                  <div className="text-[9px] font-semibold text-[#60A5FA]">Bảo trì</div>
+                </div>
+              </div>
+
+              {/* Right overlay filters list inside map container */}
+              <div className="absolute top-2.5 right-2.5 z-20 bg-white/90 backdrop-blur-sm border border-[#D9E3ED] rounded-md p-1.5 flex flex-col gap-1 text-[11px] text-[#19324D] shadow">
+                <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#1677D2]">
+                  <input
+                    type="radio"
+                    name="mapFilter"
+                    checked={selectedMapFilter === 'all'}
+                    onChange={() => setSelectedMapFilter('all')}
+                    className="accent-[#1677D2] w-3 h-3"
+                  />
+                  <span>Tất cả thiết bị</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#1677D2]">
+                  <input
+                    type="radio"
+                    name="mapFilter"
+                    checked={selectedMapFilter === 'edm'}
+                    onChange={() => setSelectedMapFilter('edm')}
+                    className="accent-[#1677D2] w-3 h-3"
+                  />
+                  <span>EDM</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#1677D2]">
+                  <input
+                    type="radio"
+                    name="mapFilter"
+                    checked={selectedMapFilter === 'cnc'}
+                    onChange={() => setSelectedMapFilter('cnc')}
+                    className="accent-[#1677D2] w-3 h-3"
+                  />
+                  <span>CNC</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#1677D2]">
+                  <input
+                    type="radio"
+                    name="mapFilter"
+                    checked={selectedMapFilter === 'ws1'}
+                    onChange={() => setSelectedMapFilter('ws1')}
+                    className="accent-[#1677D2] w-3 h-3"
+                  />
+                  <span>Xưởng 1</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#1677D2]">
+                  <input
+                    type="radio"
+                    name="mapFilter"
+                    checked={selectedMapFilter === 'ws2'}
+                    onChange={() => setSelectedMapFilter('ws2')}
+                    className="accent-[#1677D2] w-3 h-3"
+                  />
+                  <span>Xưởng 2</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#1677D2]">
+                  <input
+                    type="radio"
+                    name="mapFilter"
+                    checked={selectedMapFilter === 'ws3'}
+                    onChange={() => setSelectedMapFilter('ws3')}
+                    className="accent-[#1677D2] w-3 h-3"
+                  />
+                  <span>Xưởng 3</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer hover:text-[#1677D2]">
+                  <input
+                    type="radio"
+                    name="mapFilter"
+                    checked={selectedMapFilter === 'ws4'}
+                    onChange={() => setSelectedMapFilter('ws4')}
+                    className="accent-[#1677D2] w-3 h-3"
+                  />
+                  <span>Xưởng 4</span>
+                </label>
+              </div>
+
+              {/* 2D / 3D Toggle Buttons at bottom right */}
+              <div className="absolute bottom-2.5 right-2.5 z-20 flex items-center bg-[#082038] border border-[#14426E] rounded p-0.5 text-[10px] font-bold text-white shadow">
                 <button
                   onClick={() => setMapMode('2D')}
-                  className={`flex-1 py-0.5 text-[10px] font-bold rounded ${mapMode === '2D' ? 'bg-[#00C8F0] text-[#061522]' : 'bg-[#0D2940] text-[#9CB4C8]'}`}
+                  className={`px-2 py-0.5 rounded ${mapMode === '2D' ? 'bg-[#1677D2] text-white' : 'text-slate-300'}`}
                 >
                   2D
                 </button>
                 <button
                   onClick={() => setMapMode('3D')}
-                  className={`flex-1 py-0.5 text-[10px] font-bold rounded ${mapMode === '3D' ? 'bg-[#00C8F0] text-[#061522]' : 'bg-[#0D2940] text-[#9CB4C8]'}`}
+                  className={`px-2 py-0.5 rounded ${mapMode === '3D' ? 'bg-[#1677D2] text-white' : 'text-slate-300'}`}
                 >
                   3D
                 </button>
               </div>
-
-              {/* Zoom Controls */}
-              <div className="flex items-center justify-between gap-1 pt-1">
-                <button
-                  onClick={() => setMapZoom((prev) => Math.min(prev + 0.1, 1.5))}
-                  className="p-1 rounded bg-[#0D2940] hover:text-[#00C8F0] hover:bg-[#15324C]"
-                  title="Phóng to"
-                >
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setMapZoom((prev) => Math.max(prev - 0.1, 0.7))}
-                  className="p-1 rounded bg-[#0D2940] hover:text-[#00C8F0] hover:bg-[#15324C]"
-                  title="Thu nhỏ"
-                >
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Campus SVG Graphic Representation matching reference image layout */}
-            <div
-              className="relative w-full max-w-[620px] h-[260px] transition-transform duration-300"
-              style={{ transform: `scale(${mapZoom})` }}
-            >
-              {/* Central Factory Campus Graphic */}
-              <svg className="w-full h-full" viewBox="0 0 600 260" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* Isometric Base Grid Platform */}
-                <polygon points="300,10 570,120 300,240 30,120" fill="#0A2032" stroke="#15324C" strokeWidth="2" opacity="0.8" />
-                <polygon points="300,240 570,120 570,140 300,260 30,140 30,120" fill="#061522" stroke="#15324C" strokeWidth="1" />
-
-                {/* Internal Pathways */}
-                <path d="M 160 120 L 300 180 L 440 120 L 300 60 Z" fill="#0D2940" stroke="#00C8F0" strokeWidth="1" strokeDasharray="4 4" opacity="0.5" />
-              </svg>
-
-              {/* Workshop Node 1: XƯỞNG 1 EDM (Green Status 5/6) */}
-              <div
-                onClick={() => {
-                  setSelectedWorkshopFilter('Xưởng 1 EDM');
-                  onToast?.('Đang lọc Xưởng 1 EDM');
-                }}
-                className="absolute top-[40px] left-[70px] bg-[#0A2032]/95 border-2 border-[#16D9A0] hover:border-[#00C8F0] rounded-xl p-2 shadow-xl shadow-[#16D9A0]/20 cursor-pointer transform hover:-translate-y-1 transition-all group z-10 w-36"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-[#16D9A0]/20 flex items-center justify-center text-[#16D9A0]">
-                    <Cpu className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold text-[#EAF5FF] group-hover:text-[#00C8F0]">Xưởng 1</div>
-                    <div className="text-[9px] text-[#9CB4C8] uppercase tracking-wider font-semibold">EDM</div>
-                  </div>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono">
-                  <span className="flex items-center gap-1 text-[#16D9A0] font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#16D9A0] animate-pulse"></span>
-                    5/6
-                  </span>
-                  <span className="text-[9px] text-[#9CB4C8]">82% OEE</span>
-                </div>
-              </div>
-
-              {/* Workshop Node 2: XƯỞNG 2 CNC (Amber Status 3/4) */}
-              <div
-                onClick={() => {
-                  setSelectedWorkshopFilter('Xưởng 2 CNC');
-                  onToast?.('Đang lọc Xưởng 2 CNC');
-                }}
-                className="absolute top-[130px] left-[150px] bg-[#0A2032]/95 border-2 border-[#FFB547] hover:border-[#00C8F0] rounded-xl p-2 shadow-xl shadow-[#FFB547]/20 cursor-pointer transform hover:-translate-y-1 transition-all group z-10 w-36"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-[#FFB547]/20 flex items-center justify-center text-[#FFB547]">
-                    <Server className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold text-[#EAF5FF] group-hover:text-[#00C8F0]">Xưởng 2</div>
-                    <div className="text-[9px] text-[#9CB4C8] uppercase tracking-wider font-semibold">CNC</div>
-                  </div>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono">
-                  <span className="flex items-center gap-1 text-[#FFB547] font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#FFB547]"></span>
-                    3/4
-                  </span>
-                  <span className="text-[9px] text-[#9CB4C8]">76% OEE</span>
-                </div>
-              </div>
-
-              {/* Workshop Node 3: XƯỞNG 3 KHÁC (Red/Amber Status 3/4) */}
-              <div
-                onClick={() => {
-                  setSelectedWorkshopFilter('Xưởng 3 Khác');
-                  onToast?.('Đang lọc Xưởng 3 Khác');
-                }}
-                className="absolute top-[40px] right-[110px] bg-[#0A2032]/95 border-2 border-[#FF5263] hover:border-[#00C8F0] rounded-xl p-2 shadow-xl shadow-[#FF5263]/20 cursor-pointer transform hover:-translate-y-1 transition-all group z-10 w-36"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-[#FF5263]/20 flex items-center justify-center text-[#FF5263]">
-                    <Zap className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold text-[#EAF5FF] group-hover:text-[#00C8F0]">Xưởng 3</div>
-                    <div className="text-[9px] text-[#9CB4C8] uppercase tracking-wider font-semibold">Khác</div>
-                  </div>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono">
-                  <span className="flex items-center gap-1 text-[#FF5263] font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#FF5263]"></span>
-                    3/4
-                  </span>
-                  <span className="text-[9px] text-[#9CB4C8]">68% OEE</span>
-                </div>
-              </div>
-
-              {/* Workshop Node 4: XƯỞNG 4 LẮP RÁP (Red/Amber Status 2/4) */}
-              <div
-                onClick={() => {
-                  setSelectedWorkshopFilter('Xưởng 4 Lắp ráp');
-                  onToast?.('Đang lọc Xưởng 4 Lắp ráp');
-                }}
-                className="absolute top-[135px] right-[180px] bg-[#0A2032]/95 border-2 border-[#FF5263] hover:border-[#00C8F0] rounded-xl p-2 shadow-xl shadow-[#FF5263]/20 cursor-pointer transform hover:-translate-y-1 transition-all group z-10 w-36"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-[#FF5263]/20 flex items-center justify-center text-[#FF5263]">
-                    <Wrench className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold text-[#EAF5FF] group-hover:text-[#00C8F0]">Xưởng 4</div>
-                    <div className="text-[9px] text-[#9CB4C8] uppercase tracking-wider font-semibold">Lắp ráp</div>
-                  </div>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono">
-                  <span className="flex items-center gap-1 text-[#FF5263] font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#FF5263]"></span>
-                    2/4
-                  </span>
-                  <span className="text-[9px] text-[#9CB4C8]">74% OEE</span>
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Footer Legend */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#15324C]/60 text-xs">
-            <div className="flex items-center gap-4 flex-wrap">
-              <span className="flex items-center gap-1.5 text-[#16D9A0]">
-                <span className="w-2 h-2 rounded-full bg-[#16D9A0]"></span>
+          {/* Bottom Legend */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 mt-2 border-t border-[#E2E8F0] text-xs">
+            <div className="flex items-center gap-3.5 flex-wrap text-[11px] text-[#64748B]">
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#16A36A]"></span>
                 Đang chạy
               </span>
-              <span className="flex items-center gap-1.5 text-[#168BFF]">
-                <span className="w-2 h-2 rounded-full bg-[#168BFF]"></span>
-                Dừng kế hoạch
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#64748B]"></span>
+                Dừng máy
               </span>
-              <span className="flex items-center gap-1.5 text-[#FF5263]">
-                <span className="w-2 h-2 rounded-full bg-[#FF5263]"></span>
-                Dừng sự cố
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#E5484D]"></span>
+                Lỗi
               </span>
-              <span className="flex items-center gap-1.5 text-[#FFB547]">
-                <span className="w-2 h-2 rounded-full bg-[#FFB547]"></span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#1677D2]"></span>
                 Bảo trì
               </span>
-              <span className="flex items-center gap-1.5 text-[#9CB4C8]">
-                <span className="w-2 h-2 rounded-full bg-[#64748B]"></span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#F2A51A]"></span>
                 Ngoại tuyến
               </span>
             </div>
-            <button
-              onClick={() => onNavigateToTab?.('devices')}
-              className="text-[#00C8F0] hover:underline text-xs font-semibold flex items-center gap-1"
-            >
-              Xem chi tiết thiết bị <ChevronRight className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
 
-        {/* PANEL 2: HIỆU SUẤT THEO XƯỞNG (OEE) (5 COLS) */}
-        <div className="lg:col-span-5 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-[#15324C]/80 pb-3">
-            <h2 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-1.5">
-              <BarChart2 className="w-4 h-4 text-[#00C8F0]" />
-              Hiệu suất theo xưởng (OEE)
-            </h2>
-            <button className="text-[10px] text-[#9CB4C8]">✕</button>
+        {/* PANEL 2: HIỆU SUẤT THEO XƯỞNG (OEE) (3 COLS) */}
+        <div className="lg:col-span-3 bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2.5">
+              <h2 className="text-sm font-bold text-[#19324D] flex items-center gap-1.5">
+                <BarChart2 className="w-4 h-4 text-[#1677D2]" />
+                Hiệu suất thiết bị theo xưởng (OEE)
+              </h2>
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-2.5 text-[10px] my-2 text-[#64748B] flex-wrap">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-[#1677D2]"></span>
+                OEE
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-[#16A36A]"></span>
+                Thời gian chạy
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-[#F2A51A]"></span>
+                Dừng máy
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-[#E5484D]"></span>
+                Lỗi
+              </span>
+            </div>
+
+            {/* Clustered BarChart */}
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={workshopPerformanceData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                  <XAxis dataKey="workshop" stroke="#64748B" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#64748B" fontSize={11} tickLine={false} domain={[0, 100]} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#D9E3ED', borderRadius: '6px', fontSize: '11px', color: '#19324D', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                  />
+                  <Bar dataKey="oee" fill="#1677D2" radius={[2, 2, 0, 0]} barSize={9} />
+                  <Bar dataKey="runtime" fill="#16A36A" radius={[2, 2, 0, 0]} barSize={9} />
+                  <Bar dataKey="plannedStop" fill="#F2A51A" radius={[2, 2, 0, 0]} barSize={9} />
+                  <Bar dataKey="unplannedStop" fill="#E5484D" radius={[2, 2, 0, 0]} barSize={9} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT STACKED: PANEL 3 (CẢNH BÁO MỚI NHẤT) & PANEL 4 (ĐỀ XUẤT AI CHẨN ĐOÁN) (3 COLS) */}
+        <div className="lg:col-span-3 flex flex-col gap-3">
+          {/* PANEL 3: CẢNH BÁO MỚI NHẤT */}
+          <div className="bg-white rounded-lg border border-[#D9E3ED] p-3 shadow-sm flex flex-col justify-between flex-1">
+            <div>
+              <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
+                <h2 className="text-xs font-bold text-[#19324D] flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-[#E5484D]" />
+                  Cảnh báo mới nhất
+                </h2>
+                <button
+                  onClick={() => onNavigateToTab?.('notifications')}
+                  className="text-[11px] text-[#1677D2] hover:underline font-semibold flex items-center gap-0.5"
+                >
+                  Xem tất cả →
+                </button>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto mt-1.5">
+                <table className="w-full text-left text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[#E2E8F0] text-[#64748B]">
+                      <th className="py-1 px-1 font-medium">Thời gian</th>
+                      <th className="py-1 px-1 font-medium">Thiết bị</th>
+                      <th className="py-1 px-1 font-medium">Nội dung cảnh báo</th>
+                      <th className="py-1 px-1 font-medium text-right">Mức độ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F1F5F9]">
+                    {recentAlerts.map((alt, i) => (
+                      <tr
+                        key={i}
+                        onClick={() => {
+                          const dev = devices.find((d) => d.code === alt.deviceCode) || devices[0];
+                          if (dev) onOpenDiagnosis(dev);
+                        }}
+                        className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
+                      >
+                        <td className="py-1 px-1 font-mono text-[#64748B] flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-[#F2A51A]" />
+                          {alt.time}
+                        </td>
+                        <td className="py-1 px-1 font-bold text-[#19324D]">{alt.deviceCode}</td>
+                        <td className="py-1 px-1 text-[#19324D] truncate max-w-[110px]" title={alt.message}>
+                          {alt.message}
+                        </td>
+                        <td className="py-1 px-1 text-right">
+                          <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold ${alt.levelColor}`}>
+                            {alt.level}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
-          {/* Legend */}
-          <div className="flex items-center gap-3 text-[11px] my-2 flex-wrap">
-            <span className="flex items-center gap-1 text-[#00C8F0]">
-              <span className="w-2 h-2 rounded-full bg-[#00C8F0]"></span>
-              OEE
-            </span>
-            <span className="flex items-center gap-1 text-[#16D9A0]">
-              <span className="w-2 h-2 rounded-full bg-[#16D9A0]"></span>
-              Thời gian chạy
-            </span>
-            <span className="flex items-center gap-1 text-[#FFB547]">
-              <span className="w-2 h-2 rounded-full bg-[#FFB547]"></span>
-              Dừng kế hoạch
-            </span>
-            <span className="flex items-center gap-1 text-[#FF5263]">
-              <span className="w-2 h-2 rounded-full bg-[#FF5263]"></span>
-              Dừng sự cố
-            </span>
-          </div>
+          {/* PANEL 4: ĐỀ XUẤT AI CHẨN ĐOÁN */}
+          <div className="bg-white rounded-lg border border-[#D9E3ED] p-3 shadow-sm flex flex-col justify-between flex-1">
+            <div>
+              <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
+                <h2 className="text-xs font-bold text-[#19324D] flex items-center gap-1.5">
+                  <Brain className="w-3.5 h-3.5 text-[#7C3AED]" />
+                  Đề xuất AI chẩn đoán
+                </h2>
+                <button
+                  onClick={() => onNavigateToTab?.('ai-diagnosis')}
+                  className="text-[11px] text-[#1677D2] hover:underline font-semibold flex items-center gap-0.5"
+                >
+                  Xem tất cả →
+                </button>
+              </div>
 
-          {/* Bar Chart */}
-          <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={workshopPerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#15324C" vertical={false} />
-                <XAxis dataKey="workshop" stroke="#9CB4C8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#9CB4C8" fontSize={11} tickLine={false} domain={[0, 100]} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#081B2B', borderColor: '#15324C', borderRadius: '8px', fontSize: '11px', color: '#EAF5FF' }}
-                  itemStyle={{ color: '#EAF5FF' }}
-                />
-                <Bar dataKey="oee" name="OEE %" fill="#00C8F0" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="runtime" name="Chạy %" fill="#16D9A0" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="plannedStop" name="Dừng KH %" fill="#FFB547" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="text-[11px] text-[#9CB4C8] text-center pt-2 border-t border-[#15324C]/60 flex items-center justify-between">
-            <span>Dữ liệu OEE tính toán tự động từ telemetry máy</span>
-            <span className="text-[#16D9A0] font-semibold">TB Toàn xưởng: 76%</span>
+              {/* Table */}
+              <div className="overflow-x-auto mt-1.5">
+                <table className="w-full text-left text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[#E2E8F0] text-[#64748B]">
+                      <th className="py-1 px-1 font-medium">Thiết bị</th>
+                      <th className="py-1 px-1 font-medium">Triệu chứng</th>
+                      <th className="py-1 px-1 font-medium">Nguyên nhân đề xuất</th>
+                      <th className="py-1 px-1 font-medium">Độ tin cậy</th>
+                      <th className="py-1 px-1 font-medium text-right">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F1F5F9]">
+                    {aiRecommendations.map((rec, i) => (
+                      <tr
+                        key={i}
+                        onClick={() => {
+                          const dev = devices.find((d) => d.code === rec.deviceCode) || devices[0];
+                          if (dev) onOpenDiagnosis(dev);
+                        }}
+                        className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
+                      >
+                        <td className="py-1 px-1 font-bold text-[#19324D]">{rec.deviceCode}</td>
+                        <td className="py-1 px-1 text-[#64748B]">{rec.symptom}</td>
+                        <td className="py-1 px-1 text-[#19324D] font-medium truncate max-w-[90px]" title={rec.rootCause}>
+                          {rec.rootCause}
+                        </td>
+                        <td className="py-1 px-1 font-mono font-bold text-[#16A36A]">{rec.confidence}</td>
+                        <td className="py-1 px-1 text-right">
+                          <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold ${rec.statusColor}`}>
+                            {rec.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ============================================================== */}
-      {/* ROW 2: PANEL 3 (CẢNH BÁO MỚI NHẤT) & PANEL 4 (AI CHẨN ĐOÁN ĐỀ XUẤT) */}
+      {/* ROW 3: PANEL 5 (DANH SÁCH THIẾT BỊ 48), PANEL 6 (LỆNH BẢO TRÌ 28) & PANEL 7 (KỸ THUẬT VIÊN 12) */}
       {/* ============================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        {/* PANEL 3: CẢNH BÁO MỚI NHẤT (6 COLS) */}
-        <div className="lg:col-span-6 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          <div className="flex items-center justify-between border-b border-[#15324C]/80 pb-3">
-            <h2 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4 text-[#FF5263]" />
-              Cảnh báo mới nhất
-            </h2>
-            <button
-              onClick={() => onNavigateToTab?.('notifications')}
-              className="text-xs text-[#00C8F0] hover:underline font-semibold"
-            >
-              Xem tất cả (3)
-            </button>
-          </div>
+        {/* PANEL 5: DANH SÁCH THIẾT BỊ (48) (5 COLS) */}
+        <div className="lg:col-span-5 bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-[#E2E8F0] pb-2.5">
+              <h2 className="text-sm font-bold text-[#19324D]">
+                Danh sách thiết bị (48)
+              </h2>
 
-          <div className="overflow-x-auto my-2 custom-tower-scrollbar">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-[#15324C] text-[#9CB4C8]">
-                  <th className="py-2 px-2 font-medium">Thời gian</th>
-                  <th className="py-2 px-2 font-medium">Thiết bị</th>
-                  <th className="py-2 px-2 font-medium">Nội dung cảnh báo</th>
-                  <th className="py-2 px-2 font-medium text-right">Mức độ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#15324C]/60">
-                {/* Alert 1 */}
-                <tr
-                  onClick={() => {
-                    const dev = devices.find((d) => d.code === 'EDM-03') || devices[0];
-                    if (dev) onOpenDiagnosis(dev);
-                  }}
-                  className="hover:bg-[#0D2940] cursor-pointer transition-colors"
+              {/* Search & Filters */}
+              <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-36">
+                  <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+                  <input
+                    type="text"
+                    value={deviceSearchTerm}
+                    onChange={(e) => setDeviceSearchTerm(e.target.value)}
+                    placeholder="Tìm thiết bị, mã máy..."
+                    className="w-full pl-6 pr-2 py-1 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded text-[#19324D] placeholder-[#94A3B8] focus:border-[#1677D2] focus:outline-none"
+                  />
+                </div>
+                <select
+                  value={selectedTypeFilter}
+                  onChange={(e) => setSelectedTypeFilter(e.target.value)}
+                  className="py-1 px-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded text-[#19324D] focus:outline-none"
                 >
-                  <td className="py-2.5 px-2 font-mono text-[#FF5263] flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    10:24
-                  </td>
-                  <td className="py-2.5 px-2 font-bold text-[#EAF5FF]">EDM-03</td>
-                  <td className="py-2.5 px-2 text-[#EAF5FF]">Nhiệt độ trục chính tăng bất thường...</td>
-                  <td className="py-2.5 px-2 text-right">
-                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-[#FF5263]/20 text-[#FF5263] border border-[#FF5263]/40">
-                      Cao
-                    </span>
-                  </td>
-                </tr>
-
-                {/* Alert 2 */}
-                <tr
-                  onClick={() => {
-                    const dev = devices.find((d) => d.code === 'CNC-02') || devices[1];
-                    if (dev) onOpenDiagnosis(dev);
-                  }}
-                  className="hover:bg-[#0D2940] cursor-pointer transition-colors"
+                  <option value="ALL">Tất cả loại ⌄</option>
+                  <option value="EDM">EDM</option>
+                  <option value="CNC">CNC</option>
+                </select>
+                <select
+                  value={selectedStatusFilter}
+                  onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                  className="py-1 px-1.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded text-[#19324D] focus:outline-none"
                 >
-                  <td className="py-2.5 px-2 font-mono text-[#FFB547] flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    09:18
-                  </td>
-                  <td className="py-2.5 px-2 font-bold text-[#EAF5FF]">CNC-02</td>
-                  <td className="py-2.5 px-2 text-[#EAF5FF]">Rò rỉ áp lực thủy lực</td>
-                  <td className="py-2.5 px-2 text-right">
-                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-[#FFB547]/20 text-[#FFB547] border border-[#FFB547]/40">
-                      Trung bình
-                    </span>
-                  </td>
-                </tr>
-
-                {/* Alert 3 */}
-                <tr
-                  onClick={() => {
-                    const dev = devices.find((d) => d.code === 'EDM-01') || devices[0];
-                    if (dev) onOpenDiagnosis(dev);
-                  }}
-                  className="hover:bg-[#0D2940] cursor-pointer transition-colors"
-                >
-                  <td className="py-2.5 px-2 font-mono text-[#FFB547] flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    08:45
-                  </td>
-                  <td className="py-2.5 px-2 font-bold text-[#EAF5FF]">EDM-01</td>
-                  <td className="py-2.5 px-2 text-[#EAF5FF]">Áp suất nước thấp 0.8 MPa</td>
-                  <td className="py-2.5 px-2 text-right">
-                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-[#FFB547]/20 text-[#FFB547] border border-[#FFB547]/40">
-                      Trung bình
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="pt-2 border-t border-[#15324C]/60 flex items-center justify-between text-xs text-[#9CB4C8]">
-            <span>Đã kết nối cảm biến IoT thời gian thực</span>
-            <button
-              onClick={() => onNavigateToTab?.('notifications')}
-              className="text-[#00C8F0] hover:underline flex items-center gap-1 font-semibold"
-            >
-              Mở trung tâm cảnh báo <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* PANEL 4: AI CHẨN ĐOÁN ĐỀ XUẤT (6 COLS) */}
-        <div className="lg:col-span-6 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          <div className="flex items-center justify-between border-b border-[#15324C]/80 pb-3">
-            <h2 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-1.5">
-              <Brain className="w-4 h-4 text-[#00C8F0]" />
-              AI chẩn đoán đề xuất
-            </h2>
-            <button
-              onClick={() => onNavigateToTab?.('ai-diagnosis')}
-              className="text-xs text-[#00C8F0] hover:underline font-semibold"
-            >
-              Xem tất cả
-            </button>
-          </div>
-
-          {/* 3 AI Recommendations matching reference */}
-          <div className="space-y-2.5 my-2">
-            {/* Recommendation 1 */}
-            <div className="bg-[#081B2B] border border-[#15324C] hover:border-[#00C8F0]/60 rounded-lg p-2.5 flex items-center justify-between gap-3 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#0A2032] border border-[#15324C] flex items-center justify-center text-[#00C8F0] overflow-hidden">
-                  <Cpu className="w-5 h-5 text-[#FF5263]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-[#EAF5FF]">EDM-03</span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-[#16D9A0]/20 text-[#16D9A0] border border-[#16D9A0]/40">
-                      Độ tin cậy: Cao
-                    </span>
-                  </div>
-                  <div className="text-xs text-[#9CB4C8] mt-0.5">Nhiệt độ trục chính tăng bất thường</div>
-                </div>
+                  <option value="ALL">Tất cả trạng thái ⌄</option>
+                  <option value="RUNNING">Đang chạy</option>
+                  <option value="MAINTENANCE">Bảo trì</option>
+                  <option value="ALARM">Lỗi / Cảnh báo</option>
+                </select>
               </div>
-              <button
-                onClick={() => {
-                  const dev = devices.find((d) => d.code === 'EDM-03') || devices[0];
-                  if (dev) onOpenDiagnosis(dev);
-                }}
-                className="px-2.5 py-1 text-xs font-semibold rounded bg-[#00C8F0]/10 hover:bg-[#00C8F0]/20 text-[#00C8F0] border border-[#00C8F0]/40 transition-colors whitespace-nowrap"
-              >
-                Xem chi tiết
-              </button>
             </div>
 
-            {/* Recommendation 2 */}
-            <div className="bg-[#081B2B] border border-[#15324C] hover:border-[#00C8F0]/60 rounded-lg p-2.5 flex items-center justify-between gap-3 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#0A2032] border border-[#15324C] flex items-center justify-center text-[#00C8F0] overflow-hidden">
-                  <Zap className="w-5 h-5 text-[#FFB547]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-[#EAF5FF]">CNC-02</span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-[#FFB547]/20 text-[#FFB547] border border-[#FFB547]/40">
-                      Độ tin cậy: Trung bình
-                    </span>
-                  </div>
-                  <div className="text-xs text-[#9CB4C8] mt-0.5">Dòng điện vượt ngưỡng cho phép</div>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  const dev = devices.find((d) => d.code === 'CNC-02') || devices[1];
-                  if (dev) onOpenDiagnosis(dev);
-                }}
-                className="px-2.5 py-1 text-xs font-semibold rounded bg-[#00C8F0]/10 hover:bg-[#00C8F0]/20 text-[#00C8F0] border border-[#00C8F0]/40 transition-colors whitespace-nowrap"
-              >
-                Xem chi tiết
-              </button>
-            </div>
-
-            {/* Recommendation 3 */}
-            <div className="bg-[#081B2B] border border-[#15324C] hover:border-[#00C8F0]/60 rounded-lg p-2.5 flex items-center justify-between gap-3 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#0A2032] border border-[#15324C] flex items-center justify-center text-[#00C8F0] overflow-hidden">
-                  <Activity className="w-5 h-5 text-[#00C8F0]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-[#EAF5FF]">EDM-01</span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-[#FFB547]/20 text-[#FFB547] border border-[#FFB547]/40">
-                      Độ tin cậy: Trung bình
-                    </span>
-                  </div>
-                  <div className="text-xs text-[#9CB4C8] mt-0.5">Xu hướng rung động tăng dần theo thời gian</div>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  const dev = devices.find((d) => d.code === 'EDM-01') || devices[0];
-                  if (dev) onOpenDiagnosis(dev);
-                }}
-                className="px-2.5 py-1 text-xs font-semibold rounded bg-[#00C8F0]/10 hover:bg-[#00C8F0]/20 text-[#00C8F0] border border-[#00C8F0]/40 transition-colors whitespace-nowrap"
-              >
-                Xem chi tiết
-              </button>
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-[#15324C]/60 flex items-center justify-between text-xs text-[#9CB4C8]">
-            <span>Mô hình Gemini AI suy luận từ 5.000+ ca sự cố</span>
-            <button
-              onClick={() => onNavigateToTab?.('ai-diagnosis')}
-              className="text-[#00C8F0] hover:underline flex items-center gap-1 font-semibold"
-            >
-              Mở RCA chẩn đoán <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ============================================================== */}
-      {/* ROW 3: PANEL 5 (DANH SÁCH THIẾT BỊ 18)                         */}
-      {/* ============================================================== */}
-      <div className="bg-[#0A2032] border border-[#15324C] rounded-xl p-4 shadow-xl">
-        {/* Header & Filter Controls */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[#15324C]/80 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#00C8F0]"></span>
-            <h2 className="text-sm font-bold text-[#EAF5FF]">
-              Danh sách thiết bị ({filteredDevices.length})
-            </h2>
-          </div>
-
-          {/* Filters Bar */}
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            {/* Search Input */}
-            <div className="relative min-w-[200px] flex-1 sm:flex-none">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CB4C8]" />
-              <input
-                type="text"
-                value={deviceSearchTerm}
-                onChange={(e) => setDeviceSearchTerm(e.target.value)}
-                placeholder="Tìm thiết bị, mã thiết bị..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#081B2B] border border-[#15324C] rounded-lg text-[#EAF5FF] placeholder-[#9CB4C8] focus:border-[#00C8F0] focus:outline-none"
-              />
-            </div>
-
-            {/* Workshop Dropdown */}
-            <select
-              value={selectedWorkshopFilter}
-              onChange={(e) => setSelectedWorkshopFilter(e.target.value as any)}
-              className="py-1.5 px-2.5 text-xs bg-[#081B2B] border border-[#15324C] rounded-lg text-[#EAF5FF] focus:border-[#00C8F0] focus:outline-none"
-            >
-              <option value="ALL">Tất cả xưởng</option>
-              <option value="Xưởng 1 EDM">Xưởng 1 EDM</option>
-              <option value="Xưởng 2 CNC">Xưởng 2 CNC</option>
-              <option value="Xưởng 3 Khác">Xưởng 3 Khác</option>
-              <option value="Xưởng 4 Lắp ráp">Xưởng 4 Lắp ráp</option>
-            </select>
-
-            {/* Status Dropdown */}
-            <select
-              value={selectedStatusFilter}
-              onChange={(e) => setSelectedStatusFilter(e.target.value as any)}
-              className="py-1.5 px-2.5 text-xs bg-[#081B2B] border border-[#15324C] rounded-lg text-[#EAF5FF] focus:border-[#00C8F0] focus:outline-none"
-            >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="RUNNING">Đang chạy</option>
-              <option value="ALARM_STOPPED">Cảnh báo / Dừng sự cố</option>
-              <option value="IDLE">Dừng kế hoạch</option>
-              <option value="MAINTENANCE">Bảo trì</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Table of 18 devices */}
-        <div className="overflow-x-auto mt-3 custom-tower-scrollbar max-h-[340px]">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-[#0A2032] z-10">
-              <tr className="border-b border-[#15324C] text-[#9CB4C8]">
-                <th className="py-2.5 px-3 font-semibold">Thiết bị</th>
-                <th className="py-2.5 px-3 font-semibold">Xưởng</th>
-                <th className="py-2.5 px-3 font-semibold">Loại</th>
-                <th className="py-2.5 px-3 font-semibold">Trạng thái</th>
-                <th className="py-2.5 px-3 font-semibold">Nhiệt độ</th>
-                <th className="py-2.5 px-3 font-semibold">Dòng điện</th>
-                <th className="py-2.5 px-3 font-semibold">Rung động</th>
-                <th className="py-2.5 px-3 font-semibold">OEE</th>
-                <th className="py-2.5 px-3 font-semibold text-center">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#15324C]/50">
-              {filteredDevices.map((device) => {
-                const isAlarm = device.status === 'ALARM_STOPPED';
-                const isRunning = device.status === 'RUNNING';
-                const isIdle = device.status === 'IDLE' || device.status === 'MAINTENANCE_SCHEDULED';
-
-                return (
-                  <tr
-                    key={device.id}
-                    className="hover:bg-[#0D2940] transition-colors group cursor-pointer"
-                    onClick={() => onOpenMachineDetails(device)}
-                  >
-                    {/* Machine Name & Code */}
-                    <td className="py-2.5 px-3 font-bold text-[#EAF5FF] flex items-center gap-2">
-                      <div className="w-7 h-7 rounded bg-[#081B2B] border border-[#15324C] flex items-center justify-center text-[#00C8F0]">
-                        <Cpu className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="font-mono text-[#00C8F0] group-hover:underline">{device.code}</div>
-                        <div className="text-[10px] text-[#9CB4C8] font-normal">{device.name}</div>
-                      </div>
-                    </td>
-
-                    {/* Workshop */}
-                    <td className="py-2.5 px-3 text-[#9CB4C8] font-medium">{getDeviceWorkshop(device)}</td>
-
-                    {/* Machine Type */}
-                    <td className="py-2.5 px-3 text-[#EAF5FF]">{device.type}</td>
-
-                    {/* Status Badge */}
-                    <td className="py-2.5 px-3">
-                      {isRunning ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-[#16D9A0]/20 text-[#16D9A0] border border-[#16D9A0]/40">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#16D9A0] animate-pulse"></span>
-                          Đang chạy
-                        </span>
-                      ) : isAlarm ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-[#FF5263]/20 text-[#FF5263] border border-[#FF5263]/40">
-                          <AlertTriangle className="w-3 h-3" />
-                          Cảnh báo
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-[#168BFF]/20 text-[#168BFF] border border-[#168BFF]/40">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#168BFF]"></span>
-                          Dừng KH
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Telemetry Temp */}
-                    <td className="py-2.5 px-3 font-mono font-medium">
-                      <span className={device.telemetry?.dielectricTemp && device.telemetry.dielectricTemp > 45 ? 'text-[#FF5263] font-bold' : 'text-[#EAF5FF]'}>
-                        {device.telemetry?.dielectricTemp || 42}°C
-                      </span>
-                    </td>
-
-                    {/* Current */}
-                    <td className="py-2.5 px-3 font-mono font-medium text-[#EAF5FF]">
-                      {device.telemetry?.peakCurrent || 12.4} A
-                    </td>
-
-                    {/* Vibration */}
-                    <td className="py-2.5 px-3 font-mono font-medium text-[#EAF5FF]">
-                      {device.telemetry?.vibration || 0.6} mm/s
-                    </td>
-
-                    {/* OEE */}
-                    <td className="py-2.5 px-3 font-mono font-bold">
-                      <span className={device.telemetry?.oee && device.telemetry.oee < 60 ? 'text-[#FF5263]' : 'text-[#16D9A0]'}>
-                        {device.telemetry?.oee || 82}%
-                      </span>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => onOpenTelemetryHistory(device)}
-                          className="p-1 rounded bg-[#081B2B] hover:bg-[#00C8F0]/20 text-[#00C8F0] border border-[#15324C]"
-                          title="Lịch sử đo đạc & Biểu đồ"
-                        >
-                          <LineChartIcon className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => onOpenRepairReport(device)}
-                          className="p-1 rounded bg-[#081B2B] hover:bg-[#FFB547]/20 text-[#FFB547] border border-[#15324C]"
-                          title="Ghi chú sửa chữa / Lệnh bảo trì"
-                        >
-                          <Wrench className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => onOpenDiagnosis(device)}
-                          className="p-1 rounded bg-[#081B2B] hover:bg-[#16D9A0]/20 text-[#16D9A0] border border-[#15324C]"
-                          title="AI Chẩn đoán"
-                        >
-                          <Brain className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+            {/* Table */}
+            <div className="overflow-x-auto mt-2 custom-tower-scrollbar max-h-[260px]">
+              <table className="w-full text-left text-xs">
+                <thead className="sticky top-0 bg-[#F8FAFC] z-10">
+                  <tr className="border-b border-[#E2E8F0] text-[#64748B]">
+                    <th className="py-2 px-2 font-medium">Mã máy</th>
+                    <th className="py-2 px-2 font-medium">Tên thiết bị</th>
+                    <th className="py-2 px-2 font-medium">Xưởng</th>
+                    <th className="py-2 px-2 font-medium">Loại</th>
+                    <th className="py-2 px-2 font-medium">Trạng thái</th>
+                    <th className="py-2 px-2 font-medium">Nhiệt độ</th>
+                    <th className="py-2 px-2 font-medium">Dòng điện</th>
+                    <th className="py-2 px-2 font-medium">OEE</th>
+                    <th className="py-2 px-2 font-medium text-center">Thao tác</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </thead>
+                <tbody className="divide-y divide-[#F1F5F9]">
+                  {filteredDevices.slice(0, 8).map((device) => {
+                    const isAlarm = device.status === 'ALARM_STOPPED';
+                    const isRunning = device.status === 'RUNNING';
+                    const isMaintenance = device.status === 'MAINTENANCE' || device.status === 'MAINTENANCE_SCHEDULED';
 
-      {/* ============================================================== */}
-      {/* ROW 4: PANEL 6 (LỆNH BẢO TRÌ & CÔNG VIỆC) & PANEL 7 (KỸ THUẬT VIÊN HIỆN TRƯỜNG) */}
-      {/* ============================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        {/* PANEL 6: LỆNH BẢO TRÌ & CÔNG VIỆC (7 COLS) */}
-        <div className="lg:col-span-7 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#15324C]/80 pb-3">
-            <h2 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-[#168BFF]" />
-              Lệnh bảo trì & công việc
-            </h2>
-
-            {/* Tabs */}
-            <div className="flex items-center gap-1 bg-[#061522] p-1 rounded-lg border border-[#15324C]">
-              <button
-                onClick={() => setWorkOrderTab('IN_PROGRESS')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${
-                  workOrderTab === 'IN_PROGRESS'
-                    ? 'bg-[#168BFF] text-white shadow-sm'
-                    : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
-                }`}
-              >
-                Đang xử lý (5)
-              </button>
-              <button
-                onClick={() => setWorkOrderTab('PENDING_APPROVAL')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${
-                  workOrderTab === 'PENDING_APPROVAL'
-                    ? 'bg-[#168BFF] text-white shadow-sm'
-                    : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
-                }`}
-              >
-                Chờ duyệt (4)
-              </button>
-              <button
-                onClick={() => setWorkOrderTab('COMPLETED')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${
-                  workOrderTab === 'COMPLETED'
-                    ? 'bg-[#168BFF] text-white shadow-sm'
-                    : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
-                }`}
-              >
-                Hoàn thành (3)
-              </button>
-            </div>
-
-            <button
-              onClick={() => onNavigateToTab?.('maintenance')}
-              className="text-xs text-[#00C8F0] hover:underline font-semibold"
-            >
-              Xem tất cả
-            </button>
-          </div>
-
-          <div className="overflow-x-auto my-2 custom-tower-scrollbar">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-[#15324C] text-[#9CB4C8]">
-                  <th className="py-2 px-2 font-medium">Ưu tiên</th>
-                  <th className="py-2 px-2 font-medium">Thiết bị</th>
-                  <th className="py-2 px-2 font-medium">Nội dung công việc</th>
-                  <th className="py-2 px-2 font-medium">Người phụ trách</th>
-                  <th className="py-2 px-2 font-medium">Hạn hoàn thành</th>
-                  <th className="py-2 px-2 font-medium text-right">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#15324C]/60">
-                {filteredWorkOrders.map((wo) => (
-                  <tr
-                    key={wo.id}
-                    onClick={() => {
-                      const dev = devices.find((d) => d.code === wo.deviceCode) || devices[0];
-                      if (dev) onOpenRepairReport(dev);
-                    }}
-                    className="hover:bg-[#0D2940] cursor-pointer transition-colors"
-                  >
-                    <td className="py-2 px-2">
-                      <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${wo.priorityColor}`}>
-                        {wo.priorityLabel}
-                      </span>
-                    </td>
-                    <td className="py-2 px-2 font-bold font-mono text-[#EAF5FF]">{wo.deviceCode}</td>
-                    <td className="py-2 px-2 text-[#EAF5FF]">{wo.title}</td>
-                    <td className="py-2 px-2 text-[#9CB4C8] flex items-center gap-1">
-                      <User className="w-3 h-3 text-[#00C8F0]" />
-                      {wo.technician}
-                    </td>
-                    <td className="py-2 px-2 font-mono text-[#9CB4C8]">{wo.deadline}</td>
-                    <td className="py-2 px-2 text-right">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${wo.statusColor}`}>
-                        {wo.statusLabel}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="pt-2 border-t border-[#15324C]/60 flex items-center justify-between text-xs text-[#9CB4C8]">
-            <span>Tổng cộng 12 lệnh bảo trì trong hệ thống</span>
-            <button
-              onClick={() => onNavigateToTab?.('maintenance')}
-              className="text-[#00C8F0] hover:underline flex items-center gap-1 font-semibold"
-            >
-              Mở sổ lịch sử bảo trì <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* PANEL 7: KỸ THUẬT VIÊN HIỆN TRƯỜNG (5 COLS) */}
-        <div className="lg:col-span-5 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          <div className="flex items-center justify-between border-b border-[#15324C]/80 pb-3">
-            <h2 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-[#16D9A0]" />
-              Kỹ thuật viên hiện trường
-            </h2>
-            <button
-              onClick={() => onNavigateToTab?.('technician-eval')}
-              className="text-xs text-[#00C8F0] hover:underline font-semibold"
-            >
-              Xem tất cả (8)
-            </button>
-          </div>
-
-          {/* Search bar */}
-          <div className="my-2 relative">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CB4C8]" />
-            <input
-              type="text"
-              value={techSearchTerm}
-              onChange={(e) => setTechSearchTerm(e.target.value)}
-              placeholder="Tìm kỹ thuật viên..."
-              className="w-full pl-8 pr-3 py-1 text-xs bg-[#081B2B] border border-[#15324C] rounded-lg text-[#EAF5FF] placeholder-[#9CB4C8] focus:border-[#00C8F0] focus:outline-none"
-            />
-          </div>
-
-          {/* Techs list */}
-          <div className="overflow-x-auto custom-tower-scrollbar max-h-[220px]">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-[#15324C] text-[#9CB4C8]">
-                  <th className="py-1.5 px-2 font-medium">Tên</th>
-                  <th className="py-1.5 px-2 font-medium">Trạng thái</th>
-                  <th className="py-1.5 px-2 font-medium">Hiệu suất tuần</th>
-                  <th className="py-1.5 px-2 font-medium text-right">Số công việc</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#15324C]/60">
-                {filteredTechs.map((tech, idx) => {
-                  const isOnDuty = tech.activeStatus === 'ON_DUTY';
-                  const isBusy = tech.activeStatus === 'BUSY';
-                  const weeklyScore = idx === 0 ? 80 : idx === 1 ? 60 : idx === 2 ? 0 : idx === 3 ? 40 : idx === 4 ? 75 : idx === 5 ? 90 : idx === 6 ? 85 : 0;
-                  const jobsCount = isOnDuty ? (idx === 0 || idx === 5 ? 2 : 1) : 0;
-
-                  return (
-                    <tr
-                      key={tech.id}
-                      onClick={() => onToast?.(`Kỹ thuật viên ${tech.name} - Chức vụ: ${tech.role}`)}
-                      className="hover:bg-[#0D2940] cursor-pointer transition-colors"
-                    >
-                      <td className="py-2 px-2 font-semibold text-[#EAF5FF] flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-[#168BFF]/20 border border-[#168BFF]/40 flex items-center justify-center text-[10px] text-[#00C8F0] font-bold">
-                          {tech.name.charAt(tech.name.lastIndexOf(' ') + 1) || 'K'}
-                        </div>
-                        <span>{tech.name}</span>
-                      </td>
-                      <td className="py-2 px-2">
-                        {isOnDuty ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#16D9A0]/20 text-[#16D9A0] border border-[#16D9A0]/40">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#16D9A0]"></span>
-                            Đang làm việc
-                          </span>
-                        ) : isBusy ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#FFB547]/20 text-[#FFB547] border border-[#FFB547]/40">
-                            Bận việc
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#00C8F0]/20 text-[#00C8F0] border border-[#00C8F0]/40">
-                            Sẵn sàng
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2 font-mono font-bold">
-                        <div className="flex items-center gap-1.5">
-                          <span className={weeklyScore > 70 ? 'text-[#16D9A0]' : 'text-[#EAF5FF]'}>{weeklyScore}%</span>
-                          <div className="w-12 h-1.5 bg-[#081B2B] rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-[#16D9A0] rounded-full"
-                              style={{ width: `${weeklyScore}%` }}
-                            ></div>
+                    return (
+                      <tr
+                        key={device.id}
+                        className="hover:bg-[#F8FAFC] transition-colors cursor-pointer"
+                        onClick={() => onOpenMachineDetails(device)}
+                      >
+                        <td className="py-2 px-2 font-bold font-mono text-[#1677D2]">{device.code}</td>
+                        <td className="py-2 px-2 font-medium text-[#19324D]">{device.name}</td>
+                        <td className="py-2 px-2 text-[#64748B]">{getDeviceWorkshop(device)}</td>
+                        <td className="py-2 px-2 text-[#19324D]">{device.code.startsWith('EDM') ? 'EDM' : 'CNC'}</td>
+                        <td className="py-2 px-2">
+                          {isRunning ? (
+                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]">
+                              Đang chạy
+                            </span>
+                          ) : isMaintenance ? (
+                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]">
+                              Bảo trì
+                            </span>
+                          ) : isAlarm ? (
+                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]">
+                              Lỗi
+                            </span>
+                          ) : (
+                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]">
+                              Cảnh báo
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 font-mono text-[#19324D]">
+                          {device.telemetry?.dielectricTemp || 42}°C
+                        </td>
+                        <td className="py-2 px-2 font-mono text-[#19324D]">
+                          {device.telemetry?.peakCurrent || 12.4} A
+                        </td>
+                        <td className="py-2 px-2 font-mono font-bold text-[#16A36A]">
+                          {device.telemetry?.oee || 82}%
+                        </td>
+                        <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1 text-[#64748B]">
+                            <button
+                              onClick={() => {
+                                if (onOpenFailurePrediction) {
+                                  onOpenFailurePrediction(device);
+                                } else {
+                                  setSelectedD3Device(device);
+                                }
+                              }}
+                              className="p-1 hover:text-[#1677D2] hover:bg-[#F1F5F9] rounded"
+                              title="Dự báo bảo trì AI (D3.js)"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" />
+                            </button>
+                            <button
+                              onClick={() => onOpenTelemetryHistory(device)}
+                              className="p-1 hover:text-[#1677D2] hover:bg-[#F1F5F9] rounded"
+                              title="Lịch sử dữ liệu"
+                            >
+                              <LineChartIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => onOpenRepairReport(device)}
+                              className="p-1 hover:text-[#1677D2] hover:bg-[#F1F5F9] rounded"
+                              title="Lệnh bảo trì"
+                            >
+                              <Wrench className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                        </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* PANEL 6: LỆNH BẢO TRÌ & CÔNG VIỆC (28) (4 COLS) */}
+        <div className="lg:col-span-4 bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2.5">
+              <h2 className="text-sm font-bold text-[#19324D]">
+                Lệnh bảo trì & công việc (28)
+              </h2>
+              <button
+                onClick={() => onNavigateToTab?.('maintenance')}
+                className="text-xs text-[#1677D2] hover:underline font-semibold flex items-center gap-0.5"
+              >
+                Xem tất cả →
+              </button>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto mt-2">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[#E2E8F0] text-[#64748B]">
+                    <th className="py-2 px-1.5 font-medium">Mã lệnh</th>
+                    <th className="py-2 px-1.5 font-medium">Thiết bị</th>
+                    <th className="py-2 px-1.5 font-medium">Nội dung công việc</th>
+                    <th className="py-2 px-1.5 font-medium">Ưu tiên</th>
+                    <th className="py-2 px-1.5 font-medium">Hạn hoàn thành</th>
+                    <th className="py-2 px-1.5 font-medium text-right">Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F1F5F9]">
+                  {workOrdersList.map((wo) => (
+                    <tr
+                      key={wo.id}
+                      onClick={() => {
+                        const dev = devices.find((d) => d.code === wo.deviceCode) || devices[0];
+                        if (dev) onOpenRepairReport(dev);
+                      }}
+                      className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
+                    >
+                      <td className="py-2 px-1.5 font-mono text-[#19324D]">{wo.id}</td>
+                      <td className="py-2 px-1.5 font-bold font-mono text-[#1677D2]">{wo.deviceCode}</td>
+                      <td className="py-2 px-1.5 text-[#19324D] truncate max-w-[100px]" title={wo.title}>
+                        {wo.title}
                       </td>
-                      <td className="py-2 px-2 text-right font-mono text-[#EAF5FF] font-bold">
-                        {jobsCount}
+                      <td className={`py-2 px-1.5 text-[11px] ${wo.priorityColor}`}>
+                        {wo.priority}
+                      </td>
+                      <td className="py-2 px-1.5 font-mono text-[#64748B] text-[11px]">{wo.deadline}</td>
+                      <td className="py-2 px-1.5 text-right">
+                        <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold ${wo.statusColor}`}>
+                          {wo.status}
+                        </span>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="pt-2 border-t border-[#15324C]/60 flex items-center justify-between text-xs text-[#9CB4C8]">
-            <span>6 đang xử lý ca trực • 2 đang chờ điều phối</span>
-            <button
-              onClick={() => onNavigateToTab?.('technician-eval')}
-              className="text-[#00C8F0] hover:underline flex items-center gap-1 font-semibold"
-            >
-              Xem ma trận kỹ năng <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ============================================================== */}
-      {/* ROW 5: PANEL 8 (XU HƯỚNG VẬN HÀNH), PANEL 9 (PHÂN BỐ TRẠNG THÁI), PANEL 10 (TOP SỰ CỐ) & PANEL 11 (THÔNG BÁO) */}
-      {/* ============================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        {/* PANEL 8: XU HƯỚNG VẬN HÀNH (4 COLS) */}
-        <div className="lg:col-span-4 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          <div className="flex items-center justify-between border-b border-[#15324C]/80 pb-2.5">
-            <h2 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-1.5">
-              <Activity className="w-4 h-4 text-[#00C8F0]" />
-              Xu hướng vận hành
-            </h2>
-            <select
-              value={trendTimeRange}
-              onChange={(e) => setTrendTimeRange(e.target.value)}
-              className="py-0.5 px-2 text-[10px] bg-[#081B2B] border border-[#15324C] rounded text-[#EAF5FF] focus:outline-none"
-            >
-              <option value="24h">24 giờ ⌄</option>
-              <option value="7d">7 ngày</option>
-              <option value="30d">30 ngày</option>
-            </select>
-          </div>
-
-          {/* Metric Selector Tabs */}
-          <div className="flex items-center gap-1 my-2 bg-[#061522] p-1 rounded-lg border border-[#15324C]">
-            <button
-              onClick={() => setTrendMetric('temp')}
-              className={`flex-1 py-1 text-center text-xs font-semibold rounded ${
-                trendMetric === 'temp' ? 'bg-[#168BFF] text-white' : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
-              }`}
-            >
-              Nhiệt độ
-            </button>
-            <button
-              onClick={() => setTrendMetric('current')}
-              className={`flex-1 py-1 text-center text-xs font-semibold rounded ${
-                trendMetric === 'current' ? 'bg-[#168BFF] text-white' : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
-              }`}
-            >
-              Dòng điện
-            </button>
-            <button
-              onClick={() => setTrendMetric('vibration')}
-              className={`flex-1 py-1 text-center text-xs font-semibold rounded ${
-                trendMetric === 'vibration' ? 'bg-[#168BFF] text-white' : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
-              }`}
-            >
-              Rung động
-            </button>
-            <button
-              onClick={() => setTrendMetric('oee')}
-              className={`flex-1 py-1 text-center text-xs font-semibold rounded ${
-                trendMetric === 'oee' ? 'bg-[#168BFF] text-white' : 'text-[#9CB4C8] hover:text-[#EAF5FF]'
-              }`}
-            >
-              OEE
-            </button>
-          </div>
-
-          {/* Line Chart */}
-          <div className="h-[180px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#15324C" vertical={false} />
-                <XAxis dataKey="time" stroke="#9CB4C8" fontSize={10} tickLine={false} />
-                <YAxis stroke="#9CB4C8" fontSize={10} tickLine={false} domain={[20, 60]} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#081B2B', borderColor: '#15324C', borderRadius: '8px', fontSize: '11px', color: '#EAF5FF' }}
-                />
-                <Line type="monotone" dataKey="EDM-01" stroke="#00C8F0" strokeWidth={2} dot={{ r: 2 }} />
-                <Line type="monotone" dataKey="EDM-02" stroke="#16D9A0" strokeWidth={2} dot={{ r: 2 }} />
-                <Line type="monotone" dataKey="CNC-02" stroke="#FFB547" strokeWidth={2} dot={{ r: 2 }} />
-                <Line type="monotone" dataKey="CNC-01" stroke="#E83D84" strokeWidth={2} dot={{ r: 2 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Chart Legend */}
-          <div className="flex items-center justify-center gap-3 pt-2 border-t border-[#15324C]/60 text-[10px] text-[#9CB4C8] flex-wrap">
-            <span className="flex items-center gap-1 text-[#00C8F0]">
-              <span className="w-2 h-0.5 bg-[#00C8F0]"></span> EDM-01
-            </span>
-            <span className="flex items-center gap-1 text-[#16D9A0]">
-              <span className="w-2 h-0.5 bg-[#16D9A0]"></span> EDM-02
-            </span>
-            <span className="flex items-center gap-1 text-[#FFB547]">
-              <span className="w-2 h-0.5 bg-[#FFB547]"></span> CNC-02
-            </span>
-            <span className="flex items-center gap-1 text-[#E83D84]">
-              <span className="w-2 h-0.5 bg-[#E83D84]"></span> CNC-01
-            </span>
-          </div>
-        </div>
-
-        {/* PANEL 9: PHÂN BỐ TRẠNG THÁI THIẾT BỊ (3 COLS) */}
-        <div className="lg:col-span-3 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          <div className="flex items-center justify-between border-b border-[#15324C]/80 pb-2.5">
-            <h2 className="text-sm font-bold text-[#EAF5FF] flex items-center gap-1.5">
-              <Server className="w-4 h-4 text-[#00C8F0]" />
-              Phân bố trạng thái thiết bị
-            </h2>
-            <button className="text-[10px] text-[#9CB4C8]">✕</button>
-          </div>
-
-          <div className="flex items-center justify-between my-2">
-            {/* Donut Chart with center label */}
-            <div className="relative w-32 h-32 flex-shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusDistributionData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={36}
-                    outerRadius={54}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {statusDistributionData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-lg font-bold font-mono text-[#EAF5FF]">18</span>
-                <span className="text-[9px] text-[#9CB4C8] uppercase tracking-wider font-semibold">Thiết bị</span>
-              </div>
-            </div>
-
-            {/* Legend list */}
-            <div className="space-y-1.5 text-[11px] text-[#9CB4C8] flex-1 pl-2">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[#16D9A0]">
-                  <span className="w-2 h-2 rounded-full bg-[#16D9A0]"></span>
-                  Đang chạy
-                </span>
-                <span className="font-mono font-bold text-[#EAF5FF]">14 (78%)</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[#168BFF]">
-                  <span className="w-2 h-2 rounded-full bg-[#168BFF]"></span>
-                  Dừng kế hoạch
-                </span>
-                <span className="font-mono font-bold text-[#EAF5FF]">3 (17%)</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[#FF5263]">
-                  <span className="w-2 h-2 rounded-full bg-[#FF5263]"></span>
-                  Dừng sự cố
-                </span>
-                <span className="font-mono font-bold text-[#EAF5FF]">1 (5%)</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[#FFB547]">
-                  <span className="w-2 h-2 rounded-full bg-[#FFB547]"></span>
-                  Bảo trì
-                </span>
-                <span className="font-mono font-bold text-[#EAF5FF]">0 (0%)</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[#64748B]">
-                  <span className="w-2 h-2 rounded-full bg-[#64748B]"></span>
-                  Ngoại tuyến
-                </span>
-                <span className="font-mono font-bold text-[#EAF5FF]">0 (0%)</span>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-
-          <div className="pt-2 border-t border-[#15324C]/60 text-center text-[10px] text-[#9CB4C8]">
-            Đồng bộ dữ liệu cảm biến PLC/SCADA mỗi 30s
-          </div>
         </div>
 
-        {/* PANEL 10: TOP 5 SỰ CỐ THƯỜNG GẶP (2.5 COLS ~ 2 COLS) & PANEL 11 (3 COLS) */}
-        <div className="lg:col-span-2 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          <div className="flex items-center justify-between border-b border-[#15324C]/80 pb-2.5">
-            <h2 className="text-xs font-bold text-[#EAF5FF] flex items-center gap-1">
-              <Flame className="w-3.5 h-3.5 text-[#FFB547]" />
-              Top 5 sự cố
-            </h2>
-            <span className="text-[10px] text-[#00C8F0] font-semibold">30 ngày ⌄</span>
-          </div>
+        {/* PANEL 7: TÌNH TRẠNG KỸ THUẬT VIÊN (12) (3 COLS) */}
+        <div className="lg:col-span-3 bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2.5">
+              <h2 className="text-sm font-bold text-[#19324D]">
+                Tình trạng kỹ thuật viên (12)
+              </h2>
+              <button
+                onClick={() => onNavigateToTab?.('technician-eval')}
+                className="text-xs text-[#1677D2] hover:underline font-semibold flex items-center gap-0.5"
+              >
+                Xem tất cả →
+              </button>
+            </div>
 
-          {/* Progress Bars */}
-          <div className="space-y-2.5 my-2">
-            {frequentFaults.map((f, idx) => (
-              <div key={idx}>
-                <div className="flex items-center justify-between text-[10px] mb-1">
-                  <span className="text-[#9CB4C8] truncate max-w-[100px]">{f.title}</span>
-                  <span className="font-mono font-bold text-[#00C8F0]">{f.count}</span>
-                </div>
-                <div className="w-full h-2 bg-[#081B2B] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#168BFF] to-[#00C8F0] rounded-full"
-                    style={{ width: `${(f.count / f.max) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="pt-2 border-t border-[#15324C]/60 text-center text-[10px] text-[#9CB4C8]">
-            Thống kê từ hệ thống AI RCA
-          </div>
-        </div>
-
-        {/* PANEL 11: THÔNG BÁO HỆ THỐNG (3 COLS) */}
-        <div className="lg:col-span-3 bg-[#0A2032] border border-[#15324C] rounded-xl p-4 flex flex-col justify-between shadow-xl">
-          <div className="flex items-center justify-between border-b border-[#15324C]/80 pb-2.5">
-            <h2 className="text-xs font-bold text-[#EAF5FF] flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-[#00C8F0]" />
-              Thông báo hệ thống
-            </h2>
-            <button
-              onClick={() => onNavigateToTab?.('notifications')}
-              className="text-[10px] text-[#00C8F0] hover:underline font-semibold"
-            >
-              Xem tất cả
-            </button>
-          </div>
-
-          <div className="overflow-x-auto my-1 custom-tower-scrollbar max-h-[190px]">
-            <table className="w-full text-left text-[11px]">
-              <thead>
-                <tr className="border-b border-[#15324C] text-[#9CB4C8]">
-                  <th className="py-1 px-1 font-medium">Thời gian</th>
-                  <th className="py-1 px-1 font-medium">Nội dung</th>
-                  <th className="py-1 px-1 font-medium text-right">Mức độ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#15324C]/50">
-                {systemNotifications.map((sn, i) => (
-                  <tr key={i} className="hover:bg-[#0D2940] transition-colors">
-                    <td className="py-1.5 px-1 font-mono text-[#9CB4C8] whitespace-nowrap">{sn.time}</td>
-                    <td className="py-1.5 px-1 text-[#EAF5FF] truncate max-w-[140px]" title={sn.message}>
-                      {sn.message}
-                    </td>
-                    <td className="py-1.5 px-1 text-right">
-                      <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold border ${sn.levelColor}`}>
-                        {sn.level}
-                      </span>
-                    </td>
+            {/* Table */}
+            <div className="overflow-x-auto mt-2">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[#E2E8F0] text-[#64748B]">
+                    <th className="py-2 px-1.5 font-medium">Tên</th>
+                    <th className="py-2 px-1.5 font-medium">Kỹ năng chính</th>
+                    <th className="py-2 px-1.5 font-medium">Trạng thái</th>
+                    <th className="py-2 px-1.5 font-medium text-right">Công việc</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="pt-2 border-t border-[#15324C]/60 text-center text-[10px] text-[#9CB4C8]">
-            5 thông báo mới nhất trong ca trực
+                </thead>
+                <tbody className="divide-y divide-[#F1F5F9]">
+                  {techniciansList.map((t, idx) => (
+                    <tr
+                      key={idx}
+                      onClick={() => onToast?.(`Kỹ thuật viên ${t.name} • Kỹ năng: ${t.skill}`)}
+                      className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
+                    >
+                      <td className="py-2 px-1.5 font-medium text-[#19324D] flex items-center gap-1.5">
+                        <img
+                          src={t.avatar}
+                          alt={t.name}
+                          className="w-5 h-5 rounded-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        <span>{t.name}</span>
+                      </td>
+                      <td className="py-2 px-1.5 text-[#64748B]">{t.skill}</td>
+                      <td className="py-2 px-1.5">
+                        <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold ${t.statusColor}`}>
+                          {t.status}
+                        </span>
+                      </td>
+                      <td className="py-2 px-1.5 text-right font-mono font-bold text-[#19324D]">
+                        {t.jobsCount}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* ============================================================== */}
+      {/* ROW 4: PANEL 8 (XU HƯỚNG THÔNG SỐ), PANEL 9 (PHÂN BỔ TRẠNG THÁI), PANEL 10 (TOP SỰ CỐ) & PANEL 11 (TÌNH TRẠNG HỆ THỐNG) */}
+      {/* ============================================================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* PANEL 8: XU HƯỚNG THÔNG SỐ THIẾT BỊ (EDM-01) */}
+        <div className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
+              <h2 className="text-xs font-bold text-[#19324D] flex items-center gap-1">
+                <Activity className="w-3.5 h-3.5 text-[#1677D2]" />
+                Xu hướng thông số thiết bị (EDM-01)
+              </h2>
+              <select
+                value={trendDays}
+                onChange={(e) => setTrendDays(e.target.value as any)}
+                className="py-0.5 px-1.5 text-[10px] bg-[#F8FAFC] border border-[#CBD5E1] rounded text-[#19324D] focus:outline-none"
+              >
+                <option value="7">7 ngày ⌄</option>
+                <option value="14">14 ngày</option>
+                <option value="30">30 ngày</option>
+              </select>
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-2 text-[10px] my-2 text-[#64748B] flex-wrap">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-0.5 bg-[#1677D2]"></span>
+                Nhiệt độ (°C)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-0.5 bg-[#F2A51A]"></span>
+                Dòng điện (A)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-0.5 bg-[#E5484D]"></span>
+                Độ rung (mm/s)
+              </span>
+            </div>
+
+            {/* Multi-line chart */}
+            <div className="h-[140px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData7Days} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                  <XAxis dataKey="date" stroke="#64748B" fontSize={10} tickLine={false} />
+                  <YAxis stroke="#64748B" fontSize={10} tickLine={false} domain={[0, 60]} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#D9E3ED', borderRadius: '6px', fontSize: '10px', color: '#19324D' }}
+                  />
+                  <Line type="monotone" dataKey="temp" stroke="#1677D2" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="current" stroke="#F2A51A" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="vibration" stroke="#E5484D" strokeWidth={2} dot={{ r: 2 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* PANEL 9: PHÂN BỔ TRẠNG THÁI THIẾT BỊ */}
+        <div className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
+              <h2 className="text-xs font-bold text-[#19324D] flex items-center gap-1">
+                <Server className="w-3.5 h-3.5 text-[#1677D2]" />
+                Phân bổ trạng thái thiết bị
+              </h2>
+            </div>
+
+            <div className="flex items-center justify-between my-2">
+              {/* Donut Chart */}
+              <div className="relative w-28 h-28 flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusDistributionData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={30}
+                      outerRadius={45}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {statusDistributionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-base font-bold font-mono text-[#19324D]">48</span>
+                  <span className="text-[9px] text-[#64748B]">Thiết bị</span>
+                </div>
+              </div>
+
+              {/* Legend List */}
+              <div className="space-y-1 text-[11px] text-[#64748B] flex-1 pl-2">
+                {statusDistributionData.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></span>
+                      <span className="text-[#19324D]">{item.name}</span>
+                    </span>
+                    <span className="font-mono text-[#64748B]">{item.value} ({item.percentage})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* PANEL 10: TOP 5 SỰ CỐ THƯỜNG GẶP (30 NGÀY) */}
+        <div className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
+              <h2 className="text-xs font-bold text-[#19324D] flex items-center gap-1">
+                <Flame className="w-3.5 h-3.5 text-[#F2A51A]" />
+                Top 5 sự cố thường gặp (30 ngày)
+              </h2>
+            </div>
+
+            {/* Horizontal progress bars */}
+            <div className="space-y-2 mt-2">
+              {topFrequentFaults.map((f, idx) => (
+                <div key={idx}>
+                  <div className="flex items-center justify-between text-[11px] mb-0.5">
+                    <span className="text-[#19324D] truncate">{f.name}</span>
+                    <span className="font-mono font-bold text-[#1677D2]">{f.count}</span>
+                  </div>
+                  <div className="w-full h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#1677D2] rounded-full"
+                      style={{ width: `${(f.count / f.max) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* PANEL 11: TÌNH TRẠNG DỮ LIỆU VÀ HỆ THỐNG */}
+        <div className="bg-white rounded-lg border border-[#D9E3ED] p-3.5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
+              <h2 className="text-xs font-bold text-[#19324D] flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#16A36A]" />
+                Tình trạng dữ liệu và hệ thống
+              </h2>
+              <button
+                onClick={() => onNavigateToTab?.('data-trust')}
+                className="text-[11px] text-[#1677D2] hover:underline font-semibold flex items-center gap-0.5"
+              >
+                Xem chi tiết →
+              </button>
+            </div>
+
+            {/* Rows list */}
+            <div className="divide-y divide-[#F1F5F9] mt-1 text-xs">
+              {systemStatusItems.map((item, idx) => (
+                <div key={idx} className="py-1.5 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#16A36A]" />
+                    <span className="text-[#19324D] font-medium">{item.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-right">
+                    <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold ${item.statusBadge}`}>
+                      {item.status}
+                    </span>
+                    <span className="text-[10px] text-[#64748B] hidden sm:inline">{item.note}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* D3 AI VIBRATION FAILURE PROBABILITY MODAL */}
+      <AIVibrationFailurePredictionModal
+        device={selectedD3Device}
+        isOpen={Boolean(selectedD3Device)}
+        onClose={() => setSelectedD3Device(null)}
+        onScheduleMaintenance={(d, reason) => {
+          onToast?.(`Đã lên lịch bảo dưỡng máy ${d.code}: ${reason}`);
+          onOpenRepairReport(d);
+        }}
+      />
     </div>
   );
 };
